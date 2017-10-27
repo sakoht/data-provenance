@@ -1,0 +1,24 @@
+
+<configuration>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <!--
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+        -->
+
+        <encoder>
+            <pattern>%msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="ERROR">
+        <appender-ref ref="STDOUT" />
+    </root>
+    <!-- Set to info -->
+    <logger name="com.cibo.continuum.algorithms.interpolation" level="trace" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+</configuration>
