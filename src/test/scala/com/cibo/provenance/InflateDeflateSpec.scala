@@ -1,4 +1,4 @@
-package com.cibo.provenance.InflateDeflateSpec
+package com.cibo.provenance
 
 import java.io.File
 
