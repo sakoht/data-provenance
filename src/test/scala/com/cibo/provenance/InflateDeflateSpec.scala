@@ -32,8 +32,8 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       s1c shouldEqual s1a
     }
 
-    it("works on compound provenance") {
-      val testDataDir = f"$baseTestDir/deflate-simple"
+    it("works on nested provenance") {
+      val testDataDir = f"$baseTestDir/deflate-nested"
       FileUtils.deleteDirectory(new File(testDataDir))
       
       implicit val bi: BuildInfo = DummyBuildInfo
@@ -48,12 +48,12 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       val s4b: multMe.Call = multMe(multMe(addMe(2,2), addMe(5,7)), 2)
       s4b shouldEqual s4a
 
-      // Rount-trip through delfation/inflation loses some type information.
-      val d1: FunctionCallWithProvenanceDeflated[Int] = s4b.deflate
-      val i1: FunctionCallWithProvenance[Int] = d1.inflate
+      // Rount-trip through deflation/inflation loses some type information.
+      val s4bDeflated: FunctionCallWithProvenanceDeflated[Int] = s4b.deflate
+      val s4bInflated: FunctionCallWithProvenance[Int] = s4bDeflated.inflate
 
       // But the inflated object is of the correct type, where the code is prepared to recognize it.
-      val s4c: multMe.Call = i1 match {
+      val s4c: multMe.Call = s4bInflated match {
         case i1withTypeKnown: multMe.Call => i1withTypeKnown
         case other => throw new RuntimeException("Re-inflated object does not match expectred class.") 
       }
