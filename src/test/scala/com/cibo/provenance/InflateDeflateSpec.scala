@@ -18,10 +18,10 @@ class InflateDeflateSpec extends FunSpec with Matchers {
 
     it("work on simple provenance.") {
 
-      implicit val bi: BuildInfo = DummyBuildInfo
-
-      val testDataDir = f"$baseTestDir/deflate1"
+      val testDataDir = f"$baseTestDir/deflate-simple"
       FileUtils.deleteDirectory(new File(testDataDir))
+      
+      implicit val bi: BuildInfo = DummyBuildInfo
       implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
 
       val s1a = addMe(2, 2)
@@ -30,28 +30,39 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       val s1b = s1a.deflate
       val s1c = s1b.inflate
       s1c shouldEqual s1a
+    }
 
-      /*
+    it("works on compound provenance") {
+      val testDataDir = f"$baseTestDir/deflate-simple"
+      FileUtils.deleteDirectory(new File(testDataDir))
+      
+      implicit val bi: BuildInfo = DummyBuildInfo
+      implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
+      
+      val s1 = addMe(2, 2) 
       val s2 = addMe(5, 7)
       val s3 = multMe(s1, s2)
-      val s4 = multMe(s3, 2)
+      
+      val s4a: multMe.Call = multMe(s3, 2)
 
-      val s5 = multMe(multMe(addMe(2,2), addMe(5,7)), 2)
-      */
+      val s4b: multMe.Call = multMe(multMe(addMe(2,2), addMe(5,7)), 2)
+      s4b shouldEqual s4a
 
+      // Rount-trip through delfation/inflation loses some type information.
+      val d1: FunctionCallWithProvenanceDeflated[Int] = s4b.deflate
+      val i1: FunctionCallWithProvenance[Int] = d1.inflate
+
+      // But the inflated object is of the correct type, where the code is prepared to recognize it.
+      val s4c: multMe.Call = i1 match {
+        case i1withTypeKnown: multMe.Call => i1withTypeKnown
+        case other => throw new RuntimeException("Re-inflated object does not match expectred class.") 
+      }
+      s4c shouldEqual s4b
     }
   }
 }
 
 object addMe extends Function2WithProvenance[Int, Int, Int] {
   val currentVersion: Version = Version("1.0")
-
-  // NOTE: This public var is reset during tests, and is a cheat to peek-inside whether or no impl(),
-  // which is encapsulated, actually runs.
-  var runCount: Int = 0
-
-  def impl(a: Int, b: Int): Int = {
-    runCount += 1
-    a + b
-  }
+  def impl(a: Int, b: Int): Int = a + b
 }
