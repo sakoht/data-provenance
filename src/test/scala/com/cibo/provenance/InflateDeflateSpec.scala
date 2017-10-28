@@ -48,7 +48,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       val s4b: multMe.Call = multMe(multMe(addMe(2,2), addMe(5,7)), 2)
       s4b shouldEqual s4a
 
-      // Rount-trip through deflation/inflation loses some type information.
+      // Round-trip through deflation/inflation loses some type information.
       val s4bDeflated: FunctionCallWithProvenanceDeflated[Int] = s4b.deflate
       val s4bInflated: FunctionCallWithProvenance[Int] = s4bDeflated.inflate
 
@@ -58,6 +58,10 @@ class InflateDeflateSpec extends FunSpec with Matchers {
         case other => throw new RuntimeException("Re-inflated object does not match expectred class.") 
       }
       s4c shouldEqual s4b
+
+      // Deflate anonymously.
+      val s4bDeflatedAnon: FunctionCallWithProvenanceDeflated[_] = s4b.deflate
+      val s4bInflatedAnon: FunctionCallWithProvenance[_] = s4bDeflatedAnon.inflate
     }
   }
 }
@@ -65,4 +69,9 @@ class InflateDeflateSpec extends FunSpec with Matchers {
 object addMe extends Function2WithProvenance[Int, Int, Int] {
   val currentVersion: Version = Version("1.0")
   def impl(a: Int, b: Int): Int = a + b
+}
+
+object multMe extends Function2WithProvenance[Int, Int, Int] {
+  val currentVersion: Version = Version("1.0")
+  def impl(a: Int, b: Int): Int = a * b
 }

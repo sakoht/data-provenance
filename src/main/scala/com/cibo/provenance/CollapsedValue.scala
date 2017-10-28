@@ -10,34 +10,19 @@ import scala.reflect.ClassTag
   *
   */
 
-abstract class CollapsedValue[O : ClassTag] { // extends ValueWithProvenance[O] {
-  def getOutputClassTag = implicitly[ClassTag[O]]
+abstract class CollapsedValue[O : ClassTag] {
+  def getOutputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
 
   val outputDigest: Digest
-
-  /*
-  def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
-    ???
-
-  def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
-    ???
-
-  // This transitions an object from a collapsed state to an uncollapsed one.
-  def uncollapse(implicit rt: ResultTracker): ValueWithProvenance[O] = {
-    val ct = implicitly[ClassTag[O]]
-    rt.loadValueOption(outputDigest)(ct) match {
-      case Some(obj) =>
-        obj
-      case None =>
-        throw new RuntimeException(f"Failed to find object of type $ct for $outputDigest in $rt!")
-    }
-  }
-
-  def collapse(implicit rt: ResultTracker) = this
-  */
 }
 
-case class CollapsedCallResult[O : ClassTag](outputDigest: Digest, functionName: String, functionVersion: Version, functionCallDigest: Digest, inputGroupDigest: Digest) extends CollapsedValue[O] {
+case class CollapsedCallResult[O : ClassTag](
+  outputDigest: Digest,
+  functionName: String,
+  functionVersion: Version,
+  functionCallDigest: Digest,
+  inputGroupDigest: Digest
+) extends CollapsedValue[O] {
   val isResolved: Boolean = true
 }
 

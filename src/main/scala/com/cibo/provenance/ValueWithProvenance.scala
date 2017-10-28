@@ -147,7 +147,7 @@ abstract class FunctionCallResultWithProvenance[O](
 
   def getOutputClassTag: ClassTag[O] = provenance.getOutputClassTag
 
-  def getOutputBuildInfo = outputBuildDetail
+  def getOutputBuildInfo: BuildInfo = outputBuildDetail
 
   override def toString: String =
     provenance match {
@@ -209,11 +209,11 @@ class IdentityCall[O : ClassTag](value: O) extends Function0CallWithProvenance[O
   val functionName: String = toString
 
   // Note: this takes a version of "null" and explicitly sets getVersion to NoVersion.
-  // Using NoVersion directly causes problems with Serialization.
-  override def getVersion = NoVersion
+  // Using NoVersion in the signature directly causes problems with Serialization.
+  override def getVersion: ValueWithProvenance[Version] = NoVersion
 
   private lazy val cachedResult = new IdentityResult(this, Deflatable(value).resolveDigest)
-  def newResult(o: Deflatable[O])(implicit bi: BuildInfo) = cachedResult
+  def newResult(o: Deflatable[O])(implicit bi: BuildInfo): IdentityResult[O] = cachedResult
 
   def duplicate(vv: ValueWithProvenance[Version]): Function0CallWithProvenance[O] =
     new IdentityCall(value)(implicitly[ClassTag[O]])
@@ -261,12 +261,12 @@ class IdentityValueForBootstrap[O : ClassTag](value: O) extends ValueWithProvena
   override def getCollapsedSummary(implicit rt: ResultTracker): CollapsedValue[O] =
     resultVar.getCollapsedSummary(rt)
 
-  def inflate(implicit rt: ResultTracker) = resolve.inflate(rt)
+  def inflate(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = resolve.inflate(rt)
 
-  def deflate(implicit rt: ResultTracker) = this
+  def deflate(implicit rt: ResultTracker): IdentityValueForBootstrap[O] = this
 }
 
-object NoVersion extends IdentityValueForBootstrap[Version](new Version("-")) with Serializable
+object NoVersion extends IdentityValueForBootstrap[Version](Version("-")) with Serializable
 
 
 case class UnknownProvenance[O : ClassTag](value: O) extends IdentityCall[O](value) {

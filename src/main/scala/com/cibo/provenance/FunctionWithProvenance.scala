@@ -42,7 +42,7 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
 
   def apply(v: ValueWithProvenance[Version] = currentVersion)(implicit outputClassTag: ClassTag[O]): Call = Call(v)(outputClassTag)
 
-  protected def implVersion(v: Version) = {
+  protected def implVersion(v: Version): O = {
     if (v != currentVersion)
       throw new RuntimeException(f"Cannot run old version $v!  Current version is $currentVersion")
     impl()
@@ -73,7 +73,7 @@ trait Function1WithProvenance[O, I1] extends FunctionWithProvenance[O] with Seri
 
   def apply(i1: ValueWithProvenance[I1], v: ValueWithProvenance[Version] = currentVersion)(implicit outputClassTag: ClassTag[O]): Call = Call(i1, v)
 
-  protected def implVersion(i1: I1, v: Version) = {
+  protected def implVersion(i1: I1, v: Version): O = {
     if (v != currentVersion)
       throwInvalidVersionException(v)
     impl(i1)
@@ -108,7 +108,7 @@ trait Function2WithProvenance[O, I1, I2] extends FunctionWithProvenance[O] with 
   def apply(i1: ValueWithProvenance[I1], i2: ValueWithProvenance[I2], v: ValueWithProvenance[Version] = currentVersion)(implicit outputClassTag: ClassTag[O]): Call =
     Call(i1, i2, v)(outputClassTag)
 
-  protected def implVersion(i1: I1, i2: I2, v: Version) = {
+  protected def implVersion(i1: I1, i2: I2, v: Version): O = {
     if (v != currentVersion)
       throwInvalidVersionException(v)
     impl(i1, i2)
@@ -144,7 +144,7 @@ trait Function3WithProvenance[O, I1, I2, I3] extends FunctionWithProvenance[O] {
   def apply(i1: ValueWithProvenance[I1], i2: ValueWithProvenance[I2], i3: ValueWithProvenance[I3], v: ValueWithProvenance[Version] = currentVersion)(implicit outputClassTag: ClassTag[O]): Call =
     Call(i1, i2, i3, v)
 
-  protected def implVersion(i1: I1, i2: I2, i3: I3, v: Version) = {
+  protected def implVersion(i1: I1, i2: I2, i3: I3, v: Version): O = {
     if (v != currentVersion)
       throwInvalidVersionException(v)
     impl(i1, i2, i3)
@@ -180,7 +180,7 @@ trait Function4WithProvenance[O, I1, I2, I3, I4] extends FunctionWithProvenance[
   def apply(i1: ValueWithProvenance[I1], i2: ValueWithProvenance[I2], i3: ValueWithProvenance[I3], i4: ValueWithProvenance[I4], v: ValueWithProvenance[Version] = currentVersion)(implicit outputClassTag: ClassTag[O]): Call =
     Call(i1, i2, i3, i4, v)
 
-  protected def implVersion(i1: I1, i2: I2, i3: I3, i4: I4, v: Version) = {
+  protected def implVersion(i1: I1, i2: I2, i3: I3, i4: I4, v: Version): O = {
     if (v != currentVersion)
       throwInvalidVersionException(v)
     impl(i1, i2, i3, i4)

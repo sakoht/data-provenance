@@ -49,7 +49,7 @@ case class Deflatable[T](
 
   def resolveSerialization(implicit rt: ResultTracker): Deflatable[T] =
     serializedDataOption match {
-      case Some(serialization) =>
+      case Some(_) =>
         this
       case None =>
         val serialization = valueOption match {
@@ -59,7 +59,7 @@ case class Deflatable[T](
             digestOption match {
               case Some(digest) =>
                 rt.loadValueSerializedDataOption(digest) match {
-                  case Some(serialization) => serialization
+                  case Some(s) => s
                   case None => throw new RuntimeException(f"Failed to load serialized data for digest $digest")
                 }
               case None =>
@@ -70,12 +70,12 @@ case class Deflatable[T](
     }
 
   def resolveDigest: Deflatable[T] = digestOption match {
-    case Some(digest) =>
+    case Some(_) =>
       this
     case None =>
       val bytes = serializedDataOption match {
-        case Some(bytes) =>
-          bytes
+        case Some(b) =>
+          b
         case None =>
           valueOption match {
             case Some(value) =>
