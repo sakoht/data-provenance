@@ -25,7 +25,7 @@ val extraResolvers = List(
   Resolver.sonatypeRepo("releases")
 )
 
-scalacOptions ++= Seq("-unchecked", "-deprecation")
+scalacOptions ++= Seq("-unchecked", "-deprecation", "-Xfatal-warnings")
 
 
 import de.heikoseeberger.sbtheader.HeaderPattern
