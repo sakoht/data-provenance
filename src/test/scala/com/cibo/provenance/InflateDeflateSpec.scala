@@ -24,7 +24,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       implicit val bi: BuildInfo = DummyBuildInfo
       implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
 
-      val s1a = addMe(2, 2)
+      val s1a = multMe(2, 2)
       val r1a = s1a.resolve
 
       val s1b = s1a.deflate
@@ -49,7 +49,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       s4b shouldEqual s4a
 
       // Round-trip through deflation/inflation loses some type information.
-      val s4bDeflated: FunctionCallWithProvenanceDeflated[Int] = s4b.deflate
+      val s4bDeflated: FunctionCallWithProvenanceDeflated[Int] = rt.saveCall(s4b)
       val s4bInflated: FunctionCallWithProvenance[Int] = s4bDeflated.inflate
 
       // But the inflated object is of the correct type, where the code is prepared to recognize it.
@@ -59,9 +59,6 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       }
       s4c shouldEqual s4b
 
-      // Deflate anonymously.
-      val s4bDeflatedAnon: FunctionCallWithProvenanceDeflated[_] = s4b.deflate
-      val s4bInflatedAnon: FunctionCallWithProvenance[_] = s4bDeflatedAnon.inflate
     }
   }
 }
@@ -75,3 +72,6 @@ object multMe extends Function2WithProvenance[Int, Int, Int] {
   val currentVersion: Version = Version("1.0")
   def impl(a: Int, b: Int): Int = a * b
 }
+
+
+

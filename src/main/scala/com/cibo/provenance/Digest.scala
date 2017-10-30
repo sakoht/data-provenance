@@ -8,4 +8,4 @@ package com.cibo.provenance
   *
   */
 
-case class Digest(value: String)
+case class Digest(id: String)

@@ -4,8 +4,6 @@ import com.cibo.io.s3.{S3DB, SyncablePath}
 import com.cibo.provenance._
 import com.typesafe.scalalogging.LazyLogging
 
-import scala.reflect.ClassTag
-
 /**
   * Created by ssmith on 5/16/17.
   *
@@ -25,14 +23,15 @@ import scala.reflect.ClassTag
 
 case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuildInfo: BuildInfo) extends ResultTracker with LazyLogging {
 
-  def getCurrentBuildInfo: BuildInfo = currentBuildInfo
-
+  import scala.reflect.ClassTag
   import org.apache.commons.codec.digest.DigestUtils
 
   private val s3db = S3DB.fromSyncablePath(basePath)
-  protected val  overwrite: Boolean = false
+  protected val overwrite: Boolean = false
 
   // public interface
+
+  def getCurrentBuildInfo: BuildInfo = currentBuildInfo
 
   def saveResult[O](result: FunctionCallResultWithProvenance[O]): FunctionCallResultWithProvenanceDeflated[O] = {
     implicit val rt: ResultTracker = this
@@ -55,69 +54,113 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
     val outputClassTag = result.getOutputClassTag
     val outputClassName = outputClassTag.runtimeClass.getName
     val outputDigest = saveValue(outputValue)(outputClassTag)
-    val outputKey = outputDigest.value
+    val outputKey = outputDigest.id
 
     // Save the sequence of input digests.
     // This is what prevents us from re-running the same code on the same data,
     // even when the inputs have different provenance.
-    val inputDigestsWithSource: Vector[CollapsedValue[_]] = provenance.getInputsDigestWithSourceFunctionAndVersion(this)
+    val inputDigestsWithSource: Vector[FunctionCallResultWithProvenanceDeflated[_]] = provenance.getInputsDigestWithSourceFunctionAndVersion(this)
     val inputDigests = inputDigestsWithSource.map(_.outputDigest).toList
     val inputGroupDigest = saveObjectToSubPathByDigest(f"$prefix/input-group-values", inputDigests)
-    val inputGroupKey = inputGroupDigest.value
+    val inputGroupKey = inputGroupDigest.id
 
     // Save the provenance.  This recursively decomposes the call into DeflatedCall objects.
-    val provenanceClean: FunctionCallWithProvenance[O] = provenance.unresolve
-    val provenanceDeflated = saveCall(provenanceClean)
-    val provenanceKey = provenanceDeflated.callDigest.value
+    val provenanceDeflated: FunctionCallWithProvenanceDeflated[O] = saveCall(provenance)
+    val provenanceDeflatedSerialized = Util.serialize(provenanceDeflated)
+    val provenanceDeflatedKey = Util.digest(provenanceDeflatedSerialized).id
 
     // Link each of the above.
-    saveObjectToPath(f"$prefix/provenance-to-inputs/$provenanceKey/$inputGroupKey", "")
+    saveObjectToPath(f"$prefix/provenance-to-inputs/$provenanceDeflatedKey/$inputGroupKey", "")
     saveObjectToPath(f"$prefix/inputs-to-output/$inputGroupKey/$outputKey/$commitId/$buildId", "")
-    saveObjectToPath(f"$prefix/output-to-provenance/$outputKey/$inputGroupKey/$provenanceKey", "")
+    saveObjectToPath(f"$prefix/output-to-provenance/$outputKey/$inputGroupKey/$provenanceDeflatedKey", "")
 
     // Offer a primary entry point on the value to get to the things that produce it.
     // This key could be shorter, but since it is immutable and zero size, we do it just once here now.
     // Refactor to be more brief as needed.
-    saveObjectToPath(f"data-provenance/$outputKey/from/$functionName/$versionId/with-inputs/$inputGroupKey/with-provenance/$provenanceKey/at/$commitId/$buildId", "")
+    saveObjectToPath(f"data-provenance/$outputKey/from/$functionName/$versionId/with-inputs/$inputGroupKey/with-provenance/$provenanceDeflatedKey/at/$commitId/$buildId", "")
 
     // Make each of the up-stream functions behind the inputs link to this one as progeny.
     inputDigestsWithSource.indices.map {
       n =>
-        inputDigestsWithSource(n) match {
-          case _: CollapsedIdentityValue[_] =>
+        val inputResult: FunctionCallResultWithProvenanceDeflated[_] = inputDigestsWithSource(n)
+        val inputCall = inputResult.deflatedCall
+        inputCall match {
+          case _: FunctionCallWithUnknownProvenanceDeflated[_] =>
             // Identity values do not link to all places they are used.
             // If we did this, values like "true" and "1" would point to every function that took them as inputs.
-          case i: CollapsedCallResult[_] =>
+          case i: FunctionCallWithKnownProvenanceDeflated[_] =>
             val path =
               f"functions/${i.functionName}/${i.functionVersion.id}/output-uses/" +
-              f"${i.outputDigest.value}/from-input-group/${inputGroupDigest.value}/with-prov/${i.functionCallDigest.value}/" +
+              f"${inputResult.outputDigest.id}/from-input-group/${inputGroupDigest.id}/with-prov/${i.inflatedCallDigest.id}/" +
               f"went-to/$functionName/$versionId/input-group/$inputGroupKey/arg/$n"
             saveObjectToPath(path, "")
         }
     }
 
     // Return a deflated result.  This should re-constitute to match the original.
-    FunctionCallResultWithProvenanceDeflated(
+    FunctionCallResultWithProvenanceDeflated[O](
       deflatedCall = provenanceDeflated,
-      outputClassName = outputClassName,
+      inputGroupDigest = inputGroupDigest,
       outputDigest = outputDigest,
       buildInfo = buildInfo
-    )(ct = result.getOutputClassTag)
+    )(outputClassTag)
   }
 
-  def saveCall[O](call: FunctionCallWithProvenance[O]): FunctionCallWithProvenanceDeflated[O] = {
-    val functionName = call.functionName
-    val version = call.getVersionValue(rt = this)
-    val versionId = version.id
-    val prefix = f"functions/$functionName/$versionId"
-    val provenanceCleanDigest = saveObjectToSubPathByDigest(f"$prefix/provenance-values", call)
-    FunctionCallWithProvenanceDeflated(functionName, version, provenanceCleanDigest)(call.getOutputClassTag)
-  }
+  def saveCall[O](call: FunctionCallWithProvenance[O]): FunctionCallWithProvenanceDeflated[O] =
+    call match {
+      case unknown: UnknownProvenance[O] =>
+        // Skip saving calls with unknown provenance.
+        // Whatever uses them can re-constitute the value from the input values.
+        // But ensure the raw input value is saved as data.
+        if (!hasValue(unknown))
+          saveValue(unknown.value)(unknown.getOutputClassTag)
+        // Return a deflated object.
+        FunctionCallWithProvenanceDeflated(call)(rt=this)
+
+      case known =>
+        // Save and let the saver produce the deflated version it saves.
+        implicit val rt: ResultTracker = this
+        implicit val ct: ClassTag[O] = known.getOutputClassTag
+
+        // Deflate the current call, saving upstream calls as needed.
+        // This will stop decomposing when it encounters an already deflated call.
+        val deflatedInputs: FunctionCallWithProvenance[O] =
+          try {
+            known.deflateInputs
+          } catch {
+            case _ : AmbiguousVersionException[_] =>
+              // An upstream call used a version that was not a raw value.  Don't collapse further in this corner case.
+              known
+          }
+        val deflatedInputsBlob: Array[Byte] = Util.serialize(deflatedInputs)
+        val deflatedInputsDigest = Util.digest(deflatedInputsBlob)
+
+        // Extract
+        val versionValue: Version = known.getVersionValueAlreadyResolved match {
+          case Some(value) => value
+          case None => throw new AmbiguousVersionException(known)
+        }
+
+        val functionName = known.functionName
+        val versionId = versionValue.id
+        val prefix = f"functions/$functionName/$versionId"
+
+        saveSerializedDataToPath(f"$prefix/provenance-values/${deflatedInputsDigest.id}", deflatedInputsBlob)
+
+        // A fully deflated call, referencing the non-deflated one.
+        // This is suitable as input in the current app/lib and downstream apps that understand the return type.
+        FunctionCallWithKnownProvenanceDeflated[O](
+          functionName = known.functionName,
+          functionVersion = versionValue,
+          inflatedCallDigest = deflatedInputsDigest,
+          outputClassName = known.getOutputClassTag.runtimeClass.getName
+        )
+    }
 
   def saveValue[T : ClassTag](obj: T): Digest = {
     val bytes = Util.serialize(obj)
     val digest = Util.digestBytes(bytes)
-    s3db.putObject(f"data/${digest.value}", bytes)
+    s3db.putObject(f"data/${digest.id}", bytes)
     digest
   }
 
@@ -128,23 +171,29 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
   }
 
   def hasValue(digest: Digest): Boolean = {
-    val path: SyncablePath = basePath.extendPath(f"data/${digest.value}")
+    val path: SyncablePath = basePath.extendPath(f"data/${digest.id}")
     path.exists
   }
 
   def hasResultFor[O](f: FunctionCallWithProvenance[O]): Boolean =
-    loadResultIdOption(f).nonEmpty
+    loadOutputIdForCallOption(f).nonEmpty
+
+  def loadCallDeflatedOption[O : ClassTag](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
+    loadCallSerializedDataOption(functionName, version, digest) map {
+      bytes => bytesToObject[FunctionCallWithProvenanceDeflated[O]](bytes)
+    }
 
   def loadCallOption[O : ClassTag](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] =
     loadCallSerializedDataOption(functionName, version, digest) map {
-      bytes => loadValue[FunctionCallWithProvenance[O]](bytes)
+      bytes =>
+        bytesToObject[FunctionCallWithProvenance[O]](bytes)
     }
 
   def loadCallSerializedDataOption(functionName: String, version: Version, digest: Digest): Option[Array[Byte]] =
-    loadSerializedDataForPath(f"functions/$functionName/${version.id}/provenance-values/${digest.value}")
+    loadSerializedDataForPath(f"functions/$functionName/${version.id}/provenance-values/${digest.id}")
 
   def loadResultForCallOption[O](f: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] =
-    loadResultIdOption(f).map {
+    loadOutputIdForCallOption(f).map {
       outputId =>
         val ct = f.getOutputClassTag
         val output: O = loadValue[O](outputId)(ct)
@@ -154,12 +203,12 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
 
   def loadValueOption[T : ClassTag](digest: Digest): Option[T] = {
     loadValueSerializedDataOption(digest) map {
-      bytes => loadValue[T](bytes)
+      bytes => bytesToObject[T](bytes)
     }
   }
 
   def loadValueSerializedDataOption(className: String, digest: Digest): Option[Array[Byte]] =
-    loadSerializedDataForPath(f"data/${digest.value}")
+    loadSerializedDataForPath(f"data/${digest.id}")
 
   private def loadSerializedDataForPath(path: String) = {
     try {
@@ -173,13 +222,10 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
     }
   }
 
-
-  // private methods
-
-  private def loadResultIdOption[O](f: FunctionCallWithProvenance[O]): Option[Digest] = {
-    val callDigest = f.getCallDigest(this)
+  def loadOutputIdForCallOption[O](f: FunctionCallWithProvenance[O]): Option[Digest] = {
+    val inputGroupValuesDigest = f.getInputGroupValuesDigest(this)
     implicit val outputClassTag: ClassTag[O] = f.getOutputClassTag
-    loadOutputDigest(f.functionName, f.getVersionValue(this), callDigest)(f.getOutputClassTag) match {
+    loadOutputIdForInputGroupIdOption(f.functionName, f.getVersionValue(this), inputGroupValuesDigest)(f.getOutputClassTag) match {
       case Some(outputId) =>
         Some(outputId)
       case None =>
@@ -188,27 +234,39 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
     }
   }
 
+  // private methods
+
   private def saveObjectToPath[T : ClassTag](path: String, obj: T): String = {
-    val bytes = Util.serialize(obj)
-    val digest = DigestUtils.sha1Hex(bytes)
+    obj match {
+      case _ : Array[Byte] =>
+        throw new RuntimeException("Attempt to save pre-serialized data?")
+      case _ =>
+        val bytes = Util.serialize(obj)
+        val digest = DigestUtils.sha1Hex(bytes)
+        saveSerializedDataToPath(path, bytes)
+        digest
+
+    }
+  }
+
+  private def saveSerializedDataToPath(path: String, serializedData: Array[Byte]): Unit = {
     val fullPath: SyncablePath = basePath.extendPath(path)
     if (overwrite || !fullPath.exists)
-      Util.serialize(obj, fullPath.getFile)
-    digest
+      Util.saveBytes(serializedData, fullPath.getFile)
   }
 
   private def saveObjectToSubPathByDigest[T : ClassTag](path: String, obj: T): Digest = {
     val bytes = Util.serialize(obj)
     val digest = Util.digestBytes(bytes)
-    s3db.putObject(f"$path/${digest.value}", bytes)
+    s3db.putObject(f"$path/${digest.id}", bytes)
     digest
   }
 
   private def loadObjectFromPath[T : ClassTag](path: String): T =
-    loadValue[T](basePath.extendPath(path).getFile)
+    loadObjectFromFile[T](basePath.extendPath(path).getFile)
 
-  private def loadOutputDigest[O : ClassTag](fname: String, fversion: Version, inputGroupId: Digest): Option[Digest] = {
-      s3db.getSuffixesForPrefix(f"functions/$fname/${fversion.id}/inputs-to-output/${inputGroupId.value}/").toList match {
+  private def loadOutputIdForInputGroupIdOption[O : ClassTag](fname: String, fversion: Version, inputGroupId: Digest): Option[Digest] = {
+      s3db.getSuffixesForPrefix(f"functions/$fname/${fversion.id}/inputs-to-output/${inputGroupId.id}/").toList match {
       case Nil =>
         None
       case head :: Nil =>
@@ -262,3 +320,8 @@ object ResultTrackerSimple {
     ResultTrackerSimple(SyncablePath(basePath))(currentAppBuildInfo)
 }
 
+class AmbiguousVersionException[O](call: FunctionCallWithProvenance[O])
+  extends RuntimeException(f"Cannot deflate calls with an unresolved version: $call") {
+
+  def getCall = call
+}

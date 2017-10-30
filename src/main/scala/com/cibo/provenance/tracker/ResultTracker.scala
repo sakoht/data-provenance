@@ -20,17 +20,32 @@ trait ResultTracker {
 
   // core method
 
-  def resolve[O](f: FunctionCallWithProvenance[O]): FunctionCallResultWithProvenance[O] = {
-    val sigWithDigests = f.resolveInputs(rt=this)
-    loadResultForCallOption[O](sigWithDigests) match {
+  def resolve2[O](f: FunctionCallWithProvenance[O]): FunctionCallResultWithProvenance[O] = {
+    val f2 = f.resolveInputs(rt=this)
+    val f3 = f2.deflateInputs(rt=this)
+    loadResultForCallOption[O](f3) match {
       case Some(existingResult) =>
         existingResult
       case None =>
-        val newResult = sigWithDigests.run(this)
+        val newResult = f2.run(this)
         saveResult(newResult)
         newResult
     }
   }
+
+  def resolve[O](f: FunctionCallWithProvenance[O]): FunctionCallResultWithProvenance[O] = {
+    val callWithInputDigests = f.resolveInputs(rt=this)
+    loadResultForCallOption[O](callWithInputDigests) match {
+      case Some(existingResult) =>
+        existingResult
+      case None =>
+        val newResult = callWithInputDigests.run(this)
+        saveResult(newResult)
+        newResult
+    }
+  }
+
+
 
   // abstract interface
 
@@ -77,10 +92,10 @@ trait ResultTracker {
 
   // protected methods
 
-  protected def loadValue[T](f: File): T =
+  protected def loadObjectFromFile[T](f: File): T =
     new ObjectInputStream(new FileInputStream(f)).readObject.asInstanceOf[T]
 
-  protected def loadValue[T](a: Array[Byte]): T = {
+  protected def bytesToObject[T](a: Array[Byte]): T = {
     val ois = new ObjectInputStream(new ByteArrayInputStream(a))
     val o = ois.readObject
     o.asInstanceOf[T]

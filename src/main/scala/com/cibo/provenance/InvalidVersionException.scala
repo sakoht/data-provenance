@@ -9,17 +9,20 @@ class InvalidVersionException[O](
   msg: String
 ) extends RuntimeException(msg)
 
+
 class UnknownVersionException[O](
   requestedVersion: Version,
   function: FunctionWithProvenance[O],
   msg: String
 ) extends InvalidVersionException(requestedVersion, function, msg)
 
+
 class UnrunnableVersionException[O](
   requestedVersion: Version,
   function: FunctionWithProvenance[O],
   msg: String
 ) extends InvalidVersionException(requestedVersion, function, msg)
+
 
 object InvalidVersionException {
   def apply[O](v: Version, f: FunctionWithProvenance[O]): InvalidVersionException[O] = {

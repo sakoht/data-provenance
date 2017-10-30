@@ -96,10 +96,10 @@ object Deflatable {
   def unapply[T : ClassTag](v: Deflatable[T])(implicit rt: ResultTracker): T =
     v.resolveValue.valueOption.get
 
-  implicit def virtualize[T : ClassTag](obj: T): Deflatable[T] =
+  implicit def toDeflatable[T : ClassTag](obj: T): Deflatable[T] =
     apply(obj)
 
-  implicit def unvirtualize[T : ClassTag](v: Deflatable[T])(implicit rt: ResultTracker): T =
+  implicit def fromDeflatable[T : ClassTag](v: Deflatable[T])(implicit rt: ResultTracker): T =
     unapply(v)
 
 }

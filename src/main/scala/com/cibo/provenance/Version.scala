@@ -11,7 +11,7 @@ package com.cibo.provenance
   */
 
 case class Version(id: String) {
-  override def toString = f"v$id"
+  override def toString: String = f"v$id"
 }
 
 

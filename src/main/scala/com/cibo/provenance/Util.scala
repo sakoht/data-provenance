@@ -21,17 +21,16 @@ object Util {
   def serialize[T](obj: T): Array[Byte] = {
     val baos = new ByteArrayOutputStream
     val oos = new ObjectOutputStream(baos)
-    try {
-      oos.writeObject(obj)
-    } catch {
-      case e: Exception =>
-        oos.writeObject(obj)
-    }
+    oos.writeObject(obj)
     oos.close()
     baos.toByteArray
   }
 
   def serialize[T](obj: T, file: File): Unit = {
+    obj match {
+      case _: Array[Byte] => throw new RuntimeException("Input object is already byte array?")
+      case _ =>
+    }
     val parentDir = file.getParentFile
     if (!parentDir.exists)
       parentDir.mkdirs()
@@ -39,6 +38,15 @@ object Util {
     val oos = new ObjectOutputStream(baos)
     oos.writeObject(obj)
     oos.close()
+  }
+
+  def saveBytes(bytes: Array[Byte], file: File): Unit = {
+    val parentDir = file.getParentFile
+    if (!parentDir.exists)
+      parentDir.mkdirs()
+    val fos = new FileOutputStream(file)
+    fos.write(bytes)
+    fos.close()
   }
 
   def deserialize[T](bytes: Array[Byte]): T = {

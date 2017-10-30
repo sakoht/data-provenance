@@ -30,8 +30,9 @@ package com.cibo.provenance
   *
   */
 
-import com.cibo.provenance.tracker.ResultTracker
+import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone}
 
+import scala.collection.immutable
 import scala.language.implicitConversions
 import scala.reflect.ClassTag
 
@@ -43,7 +44,12 @@ sealed trait ValueWithProvenance[O] extends Serializable {
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
   def deflate(implicit rt: ResultTracker): ValueWithProvenance[O]
   def inflate(implicit rt: ResultTracker): ValueWithProvenance[O]
-  def getCollapsedSummary(implicit rt: ResultTracker): CollapsedValue[O]
+
+  protected def nocopy[T](newObj: T, prevObj: T): T =
+    if (newObj == prevObj)
+      prevObj
+    else
+      newObj
 }
 
 
@@ -77,6 +83,10 @@ abstract class FunctionCallWithProvenance[O : ClassTag](var version: ValueWithPr
 
   def unresolveInputs(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
 
+  def deflateInputs(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
+
+  def inflateInputs(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
+
   def run(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O]
 
   protected[provenance] def newResult(value: Deflatable[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
@@ -87,6 +97,15 @@ abstract class FunctionCallWithProvenance[O : ClassTag](var version: ValueWithPr
   }
 
   def getVersionValue(implicit rt: ResultTracker): Version = getVersion.resolve.getOutputValue
+
+  def getVersionValueAlreadyResolved: Option[Version] = {
+    // This returns a version but only if it is already resolved.
+    getVersion match {
+      case u: UnknownProvenance[Version] => Some(u.value)
+      case r: FunctionCallResultWithProvenance[Version] => r.getOutputValueOption
+      case _ => None
+    }
+  }
 
   def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
     rt.resolve(this)
@@ -106,28 +125,29 @@ abstract class FunctionCallWithProvenance[O : ClassTag](var version: ValueWithPr
         val resolvedInput = input.resolve
         val inputValue = resolvedInput.getOutputValue
         val id = Util.digest(inputValue)
-        val inputValueDigest = id.value
+        val inputValueDigest = id.id
         inputValueDigest
     }
   }
 
-  def getInputsDigestWithSourceFunctionAndVersion(implicit rt: ResultTracker): Vector[CollapsedValue[_]] = {
+  def getInputsDigestWithSourceFunctionAndVersion(implicit rt: ResultTracker): Vector[FunctionCallResultWithProvenanceDeflated[_]] = {
     val inputs = getInputs.toVector
     inputs.indices.map {
-      i => inputs(i).resolve.getCollapsedSummary
+      i => inputs(i).resolve.deflate
     }.toVector
   }
 
-  def getCollapsedSummary(implicit rt: ResultTracker): CollapsedValue[O] = resolve.getCollapsedSummary
-
-  def getCallDigest(implicit rt: ResultTracker): Digest = {
-    val digests = getInputsDigestWithSourceFunctionAndVersion.map(_.outputDigest).toList
-    Digest(Util.digest(digests).value)
+  def getInputGroupValuesDigest(implicit rt: ResultTracker): Digest = {
+    val inputsDeflated: immutable.Seq[FunctionCallResultWithProvenanceDeflated[_]] = getInputsDigestWithSourceFunctionAndVersion
+    val digests = inputsDeflated.map(_.outputDigest).toList
+    Digest(Util.digest(digests).id)
   }
 
-  def deflate(implicit rt: ResultTracker): FunctionCallWithProvenanceDeflated[O] = rt.saveCall(this)
+  def deflate(implicit rt: ResultTracker): FunctionCallWithProvenanceDeflated[O] =
+    rt.saveCall(this)
 
-  def inflate(implicit rt: ResultTracker): FunctionCallWithProvenance[O] = this
+  def inflate(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
+    this
 }
 
 
@@ -175,26 +195,12 @@ abstract class FunctionCallResultWithProvenance[O](
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     this.getProvenanceValue.unresolve
 
-  def deflate(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] = rt.saveResult(this)
+  def deflate(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] =
+    rt.saveResult(this)
 
-  def inflate(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = this
+  def inflate(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
+    this
 
-  def getCollapsedSummary(implicit rt: ResultTracker): CollapsedValue[O] = {
-    implicit val ct: ClassTag[O] = getOutputClassTag
-    val value = getOutputValue
-    val digest = Util.digest(value)
-    val provenance = getProvenanceValue
-    val provenanceClean = provenance.unresolve
-    val provenanceCleanDigest: Digest = provenanceClean.getNormalizedDigest
-    val provenanceInputDigest = provenance.getInputGroupDigest
-    CollapsedCallResult(
-      digest,
-      provenance.functionName,
-      provenance.getVersionValue(rt),
-      provenanceCleanDigest,
-      provenanceInputDigest
-    )
-  }
 }
 
 /*
@@ -212,37 +218,54 @@ class IdentityCall[O : ClassTag](value: O) extends Function0CallWithProvenance[O
   // Using NoVersion in the signature directly causes problems with Serialization.
   override def getVersion: ValueWithProvenance[Version] = NoVersion
 
+  private lazy implicit val rt: ResultTracker = ResultTrackerNone()(NoBuildInfo)
+
+
   private lazy val cachedResult = new IdentityResult(this, Deflatable(value).resolveDigest)
-  def newResult(o: Deflatable[O])(implicit bi: BuildInfo): IdentityResult[O] = cachedResult
+
+  def newResult(o: Deflatable[O])(implicit bi: BuildInfo): IdentityResult[O] =
+    cachedResult
 
   def duplicate(vv: ValueWithProvenance[Version]): Function0CallWithProvenance[O] =
     new IdentityCall(value)(implicitly[ClassTag[O]])
 
   private lazy val cachedDigest = Util.digest(value)
-  override def getCallDigest(implicit db: ResultTracker): Digest = {
+
+  override def getInputGroupValuesDigest(implicit rt: ResultTracker): Digest =
     cachedDigest
+
+  private lazy val cachedCollapsedDigests: Vector[FunctionCallResultWithProvenanceDeflated[O]] =
+    Vector(cachedResultDeflated)
+
+  private lazy val cachedResultDeflated = {
+    FunctionCallResultWithProvenanceDeflated[O](
+      deflatedCall = FunctionCallWithKnownProvenanceDeflated[O](
+        functionName = functionName,
+        functionVersion = getVersionValue,
+        inflatedCallDigest = Util.digest(this),
+        outputClassName = getOutputClassTag.runtimeClass.getName
+      ),
+      inputGroupDigest = getInputGroupDigest,
+      outputDigest = cachedResult.getOutput.resolveDigest.digestOption.get,
+      buildInfo = cachedResult.getOutputBuildInfo
+    )
   }
 
-  private lazy val cachedCollapsedDigests = Vector(CollapsedIdentityValue(cachedDigest))
-  override def getInputsDigestWithSourceFunctionAndVersion(implicit rt: ResultTracker): Vector[CollapsedValue[_]] = {
+  override def getInputsDigestWithSourceFunctionAndVersion(implicit rt: ResultTracker): Vector[FunctionCallResultWithProvenanceDeflated[_]] =
     cachedCollapsedDigests
-  }
 
   override def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = cachedResult
 
   override def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] = this
 
-  override def getCollapsedSummary(implicit rt: ResultTracker): CollapsedValue[O] =
-    cachedResult.getCollapsedSummary(rt)
 }
 
 
-class IdentityResult[O : ClassTag](sig: IdentityCall[O], output: Deflatable[O]) extends Function0CallResultWithProvenance[O](sig, output)(NoBuildInfo) with Serializable {
-  private lazy val digest: Digest = Util.digest(output)
+class IdentityResult[O : ClassTag](
+  call: IdentityCall[O],
+  output: Deflatable[O]
+) extends Function0CallResultWithProvenance[O](call, output)(NoBuildInfo) with Serializable
 
-  override def getCollapsedSummary(implicit rt: ResultTracker): CollapsedValue[O] =
-    CollapsedIdentityValue(digest)
-}
 
 class IdentityValueForBootstrap[O : ClassTag](value: O) extends ValueWithProvenance[O] with Serializable {
   // This bootstraps the system by wrapping a value as a virtual value.
@@ -258,34 +281,58 @@ class IdentityValueForBootstrap[O : ClassTag](value: O) extends ValueWithProvena
   private lazy val callVar: IdentityCall[O] = new IdentityCall(value)
   def unresolve(implicit s: ResultTracker): IdentityCall[O] = callVar
 
-  override def getCollapsedSummary(implicit rt: ResultTracker): CollapsedValue[O] =
-    resultVar.getCollapsedSummary(rt)
+  override def deflate(implicit rt: ResultTracker): ValueWithProvenanceDeflated[O] =
+    resultVar.deflate(rt)
 
-  def inflate(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = resolve.inflate(rt)
-
-  def deflate(implicit rt: ResultTracker): IdentityValueForBootstrap[O] = this
+  def inflate(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = this.resolve
 }
+
+
+/*
+ * UnknownProvenance[T] represents raw values that lack provenance tracking.
+ *
+ */
+
+case class UnknownProvenance[O : ClassTag](value: O) extends IdentityCall[O](value) {
+
+  override def toString: String = f"raw($value)"
+
+  override def newResult(value: Deflatable[O])(implicit bi: BuildInfo): UnknownProvenanceValue[O] =
+    new UnknownProvenanceValue[O](this, value)
+
+}
+
+
+case class UnknownProvenanceValue[O : ClassTag](prov: UnknownProvenance[O], output: Deflatable[O]) extends IdentityResult[O](prov, output) {
+  // Note: This class is present to complete the API, but nothing in the system instantiates it.
+  // THe newResult method is never called for an UnknownProvenance[T].
+  override def toString: String = f"rawv($output)"
+}
+
+
+/*
+ * The second type of IdentityValue is used to represent a null version number.
+ *
+ */
+
 
 object NoVersion extends IdentityValueForBootstrap[Version](Version("-")) with Serializable
 
 
-case class UnknownProvenance[O : ClassTag](value: O) extends IdentityCall[O](value) {
-  override def toString: String = f"raw($value)"
-  override def newResult(value: Deflatable[O])(implicit bi: BuildInfo): UnknownProvenanceValue[O] = new UnknownProvenanceValue[O](this, value)
-}
+/*
+ * Deflated equivalents of the above classes are still functional as ValueWithProvenance[O],
+ * but require conversion to instantiate fully.
+ *
+ * This allows history to extends across software made by disconnected libs,
+ * and also lets us save an object graph with small incremental pieces.
+ *
+ */
 
-case class UnknownProvenanceValue[O : ClassTag](prov: UnknownProvenance[O], output: Deflatable[O]) extends IdentityResult[O](prov, output) {
-  // This is typically never "seen".
-  override def toString: String = f"rawv($output)"
-}
 
-case class FunctionCallWithProvenanceDeflated[O](
-  functionName: String,
-  functionVersion: Version,
-  callDigest: Digest
-)(implicit ct: ClassTag[O]) extends ValueWithProvenance[O] {
+sealed trait ValueWithProvenanceDeflated[O] extends ValueWithProvenance[O] with Serializable
 
-  def getOutputClassTag: ClassTag[O] = ct
+
+sealed trait FunctionCallWithProvenanceDeflated[O] extends ValueWithProvenanceDeflated[O] with Serializable {
 
   def isResolved: Boolean = false
 
@@ -300,22 +347,77 @@ case class FunctionCallWithProvenanceDeflated[O](
   def inflate(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     inflateOption match {
       case Some(value) => value
-      case None => throw new RuntimeException(f"Failed to serialized data in $rt for $this")
+      case None =>
+        throw new RuntimeException(f"Failed to inflate serialized data in $rt for $this")
     }
 
-  def inflateOption(implicit rt: ResultTracker): Option[FunctionCallWithProvenance[O]] =
-    rt.loadCallOption[O](functionName, functionVersion, callDigest)
+  def inflateOption(implicit rt: ResultTracker): Option[FunctionCallWithProvenance[O]]
 
-  def getCollapsedSummary(implicit rt: ResultTracker): CollapsedValue[O] =
-    inflate.resolve(rt).getCollapsedSummary // todo: replace this
 }
+
+case class FunctionCallWithKnownProvenanceDeflated[O](
+  functionName: String,
+  functionVersion: Version,
+  outputClassName: String,
+  inflatedCallDigest: Digest
+)(implicit ct: ClassTag[O]) extends FunctionCallWithProvenanceDeflated[O] with Serializable {
+
+  def getOutputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
+
+  def inflateOption(implicit rt: ResultTracker): Option[FunctionCallWithProvenance[O]] = {
+    inflateNoRecurse.map {
+      inflated => inflated.inflateInputs(rt)
+    }
+  }
+
+  def inflateNoRecurse(implicit rt: ResultTracker): Option[FunctionCallWithProvenance[O]] = {
+    rt.loadCallOption[O](functionName, functionVersion, inflatedCallDigest)
+  }
+
+}
+
+
+case class FunctionCallWithUnknownProvenanceDeflated[O : ClassTag](
+  outputClassName: String,
+  valueDigest: Digest
+) extends FunctionCallWithProvenanceDeflated[O] {
+
+  def getOutputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
+
+  def inflateOption(implicit rt: ResultTracker): Option[FunctionCallWithProvenance[O]] =
+    rt.loadValueOption[O](valueDigest).map(v => UnknownProvenance(v))
+}
+
+
+object FunctionCallWithProvenanceDeflated {
+
+  def apply[O](call: FunctionCallWithProvenance[O])(implicit rt: ResultTracker): FunctionCallWithProvenanceDeflated[O] = {
+    implicit val outputClassTag: ClassTag[O] = call.getOutputClassTag
+    val outputClassName: String = outputClassTag.runtimeClass.getName
+    call match {
+      case valueWithUnknownProvenance : UnknownProvenance[O] =>
+        FunctionCallWithUnknownProvenanceDeflated[O](
+          outputClassName = outputClassName,
+          Util.digest(valueWithUnknownProvenance.value)
+        )
+      case _ =>
+        FunctionCallWithKnownProvenanceDeflated[O](
+          functionName = call.functionName,
+          functionVersion = call.getVersionValue,
+          inflatedCallDigest = Util.digest(call.deflateInputs(rt)),
+          outputClassName = outputClassName
+        )
+    }
+  }
+}
+
 
 case class FunctionCallResultWithProvenanceDeflated[O](
   deflatedCall: FunctionCallWithProvenanceDeflated[O],
-  outputClassName: String,
+  inputGroupDigest: Digest,
   outputDigest: Digest,
   buildInfo: BuildInfo
-)(implicit ct: ClassTag[O]) extends ValueWithProvenance[O] {
+)(implicit ct: ClassTag[O]) extends ValueWithProvenanceDeflated[O] with Serializable {
 
   def getOutputClassTag: ClassTag[O] = ct
 
@@ -331,41 +433,52 @@ case class FunctionCallResultWithProvenanceDeflated[O](
   def deflate(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] =
     this
 
-  def inflate(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = {
-    val call = deflatedCall.inflate
+  def inflate(implicit rt: ResultTracker): ValueWithProvenance[O] = {
     val output = rt.loadValue[O](outputDigest)
-    call.newResult(Deflatable(output))(buildInfo)
-  }
-
-
-  def getCollapsedSummary(implicit rt: ResultTracker): CollapsedValue[O] =
-    inflate.resolve(rt).getCollapsedSummary // todo: replace this
-}
-
-
-object FunctionCallWithProvenanceDeflated {
-  lazy val unresolvedVersion = new RuntimeException("Cannot deflate a function call with an unresolved version!")
-  def apply[O](call: FunctionCallWithProvenance[O])(implicit rt: ResultTracker): FunctionCallWithProvenanceDeflated[O] = {
-    implicit val ct: ClassTag[O] = call.getOutputClassTag
-    FunctionCallWithProvenanceDeflated[O](
-      functionName = call.functionName,
-      functionVersion = call.getVersionValue,
-      callDigest = call.getCallDigest
-    )
+    deflatedCall.inflate match {
+      case unk: UnknownProvenance[O] =>
+        unk
+      case call =>
+        call.newResult(Deflatable(output))(buildInfo)
+    }
   }
 }
+
 
 object FunctionCallResultWithProvenanceDeflated {
+
   def apply[O](result: FunctionCallResultWithProvenance[O])(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] = {
     val provenance = result.getProvenanceValue
     implicit val outputClassTag: ClassTag[O] = provenance.getOutputClassTag
     FunctionCallResultWithProvenanceDeflated[O](
       deflatedCall = FunctionCallWithProvenanceDeflated(provenance),
-      outputClassName = outputClassTag.runtimeClass.getName,
+      inputGroupDigest = provenance.getInputGroupDigest,
       outputDigest = result.getOutput.resolveDigest.digestOption.get,
       buildInfo = result.getOutputBuildInfo
     )
   }
-}
 
+  def apply[O : ClassTag](
+    functionName: String,
+    functionVersion: Version,
+    functionCallDigest: Digest,
+    inputGroupDigest: Digest,
+    outputDigest: Digest,
+    outputClassName: String,
+    buildInfo: BuildInfo
+  ): FunctionCallResultWithProvenanceDeflated[O] = {
+
+    FunctionCallResultWithProvenanceDeflated(
+      deflatedCall = FunctionCallWithKnownProvenanceDeflated[O](
+        functionName = functionName,
+        functionVersion = functionVersion,
+        outputClassName = outputClassName,
+        inflatedCallDigest = functionCallDigest
+      ),
+      inputGroupDigest = inputGroupDigest,
+      outputDigest = outputDigest,
+      buildInfo = buildInfo
+    )
+  }
+}
 

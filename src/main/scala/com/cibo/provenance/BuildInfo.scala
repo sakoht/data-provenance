@@ -25,7 +25,7 @@ trait GitBuildInfo extends BuildInfo with Serializable {
   def gitDescribe: String
 
   def commitId: String = gitHeadRev
-  def buildId: String = "DUMMY-BUILD"
+  def buildId: String
 }
 
 object NoBuildInfo extends BuildInfo with Serializable {

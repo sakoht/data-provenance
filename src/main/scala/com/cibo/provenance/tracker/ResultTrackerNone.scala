@@ -14,6 +14,7 @@ import scala.reflect.ClassTag
 case class ResultTrackerNone()(implicit val currentBuildInfo: BuildInfo) extends ResultTracker {
 
   def getCurrentBuildInfo = currentBuildInfo
+
   implicit val bi: BuildInfo = currentBuildInfo
 
   def saveResult[O](v: FunctionCallResultWithProvenance[O]): FunctionCallResultWithProvenanceDeflated[O] = {
