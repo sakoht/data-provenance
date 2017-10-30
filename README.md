@@ -6,6 +6,49 @@ Data Provenance
 - Prevent duplicate work.
 - Manage storage.
 
+Example:
+--------
+
+```scala
+
+import com.cibo.provenance._
+
+object addMe extends Function2WithProvenance[Int, Int, Int] {
+    val currentVersion = Version("0.1")
+    def impl(a: Int, b: Int): Int = a + b
+}
+
+object MyApp extends App {
+    // Replace with your actual SbtBuildInfo object.  Steal info.sbt from this repo to have it autogenerate.
+    implicit val bi: BuildInfo = NoBuildInfo
+    
+    // Replace with an s3:// path for real things.  Use a resources/ path for test cases.
+    implicit val rt: ResultTracker = ResultTrackerSimple("/tmp/mydata")
+    
+    val c1 = addMe(2, 3)
+    val r1 = c1.resolve()
+    println(r1.getOutputValue)          // 5
+    println(r1.getProvenanceValue)      // c1!
+
+    // Find it later
+    rt.hasResult(c1)                    // true
+    
+    // This pulls the answer from storage instead of running:
+    val r1copy2 = addMe(2, 3).resolve()
+    
+    // Compose arbitarily:
+    addMe(addMe(addMe(2, 2), addMe(10, addMe(r1, c1)), addMe(5, 5))
+    
+    // Don't repeat any call with the same inputs even with different provenance:
+    c2 = addMe(1, 1)                    // (? <- addMe(raw(1), raw(1)))
+    c3 = addMe(2, 1)                    // (? <- addMe(raw(2), raw(1)))
+    c4 = addMe(c2, c3)                  // (? <- addMe(addMe(raw(1), raw(1)), addMe(raw(2), raw(1)))
+    c4.resolve()                        // runs 1+1, then 2+1, but shortcuts past running 2+3 because we r1 was saved above.
+    assert(c4.getOutputValue == c1.getOutputValue)      // same answer
+    assert(c4.getProvenanceValue != c1)                 // different provenance
+}
+```
+
 Overview:
 ---------
 
