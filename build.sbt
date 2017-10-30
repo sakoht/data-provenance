@@ -22,7 +22,8 @@ val extraResolvers = List(
   Resolver.bintrayRepo("scalaz", "releases"),
   Resolver.bintrayRepo("dwhjames", "maven"),
   Resolver.bintrayRepo("timeoutdigital", "releases"),
-  Resolver.sonatypeRepo("releases")
+  Resolver.sonatypeRepo("releases"),
+  Resolver.bintrayRepo("mingchuno", "maven")
 )
 
 scalacOptions ++= Seq("-unchecked", "-deprecation", "-Xfatal-warnings")
@@ -55,3 +56,5 @@ testOptions in Test ++= Seq(Tests.Argument("-oDF"), Tests.Argument("-h", "target
 Defaults.itSettings
 fork in IntegrationTest := true
 testOptions in IntegrationTest ++= Seq(Tests.Argument("-oDF"))
+
+ensimeScalaVersion in ThisBuild := "2.12.4"
