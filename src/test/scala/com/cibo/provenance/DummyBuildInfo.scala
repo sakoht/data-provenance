@@ -14,6 +14,9 @@ object DummyBuildInfo extends BuildInfo {
   def scalaVersion: String = "DUMMY-SCALA-VERSION"
   def sbtVersion: String = "DUMMY-SBT-VERSION"
 
+  lazy val builtAtString: String = "DUMMY-BUILT-AT"
+  lazy val builtAtMillis: Long = 0L
+
   def commitId: String = "DUMMY-COMMIT"
-  def buildId: String = "DUMMY-BUILD"
+  override def buildId: String = "DUMMY-BUILD"
 }
