@@ -49,7 +49,7 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
     // The result links the provenance to an output produced at a given build.
     val provenance: FunctionCallWithProvenance[O] = result.getProvenanceValue
     val outputValue: O = result.getOutputValue
-    val buildInfo: BuildInfo = result.getOutputBuildInfo
+    val buildInfo: BuildInfo = result.getOutputBuildInfoBrief
 
     provenance match {
       case _: UnknownProvenance[O] =>
