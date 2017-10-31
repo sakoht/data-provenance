@@ -11,14 +11,24 @@ import com.typesafe.scalalogging.LazyLogging
   *
   * It is shaped to be idempotent, contention-free, and to retroactively correct versioning errors.
   *
-  * All data goes under:
-  *   objects/$digest
+  * All data is at paths like this, stored as serialized objects.
+  *   data/VALUE_DIGEST
   *
-  * Per-function provenance metadata goes under:
-  *   functions/$function-name/$version/
+  * A master index of provenance data is stored in this form:
+  *   data-provenance/VALUE_DIGEST/from/FUNCTION_NAME/VERSION/with-inputs/INPUT_GROUP_DIGEST/with-provenance/PROVENANCE_DIGEST/at/COMMIT_ID/BUILD_ID
   *
-  * An index from data backward is at:
-  *   object-provenance/
+  * Per-function provenance metadata lives under:
+  *   functions/FUNCTION_NAME/VERSION/
+  *
+  * These paths under a function/version hold serialized data:
+  *   - input-group-values/INPUT_GROUP_DIGEST
+  *   - provenance/PROVENANCE_DIGEST
+  *
+  * These these paths under a function/version record associations as they are made (zero-size: info is in the placement):
+  *   - provenance-to-inputs/PROVENANCE_DIGEST/INPUT_GROUP_DIGEST
+  *   - inputs-to-output/INPUT_GROUP_DIGEST/OUTPUT_DIGEST/COMMIT_ID/BUILD_ID
+  *   - output-to-provenance/OUTPUT_DIGEST/INPUT_GROUP_DIGEST/PROVENANCE_DIGEST
+  *
   */
 
 case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuildInfo: BuildInfo) extends ResultTracker with LazyLogging {
