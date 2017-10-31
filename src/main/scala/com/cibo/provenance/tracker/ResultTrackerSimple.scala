@@ -51,6 +51,12 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
     val outputValue: O = result.getOutputValue
     val buildInfo: BuildInfo = result.getOutputBuildInfo
 
+    provenance match {
+      case _: UnknownProvenance[O] =>
+        throw new RuntimeException("Attempting to save the result of a dummy stub for unknown provenance!")
+      case _ =>
+    }
+
     // Unpack the provenance and build information for clarity below.
     val functionName = provenance.functionName
     val version = provenance.getVersionValue
@@ -284,7 +290,7 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
         val outputId = words.head
         val commitId = words(1)
         val buildId = words(2)
-        logger.info(f"Got $outputId at commit $commitId from $buildId")
+        logger.debug(f"Got $outputId at commit $commitId from $buildId")
         Some(Digest(outputId))
       case tooMany =>
         flagConflict(
