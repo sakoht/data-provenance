@@ -12,8 +12,11 @@ trait BuildInfo extends Serializable {
   def scalaVersion: String
   def sbtVersion: String
 
+  def builtAtString: String
+  def builtAtMillis: Long
+
   def commitId: String
-  def buildId: String
+  def buildId: String = builtAtString.replace(":",".").replace(" ",".").replace("-",".")
 }
 
 trait GitBuildInfo extends BuildInfo with Serializable {
@@ -25,16 +28,18 @@ trait GitBuildInfo extends BuildInfo with Serializable {
   def gitDescribe: String
 
   def commitId: String = gitHeadRev
-  def buildId: String
 }
 
 object NoBuildInfo extends BuildInfo with Serializable {
   // This is used by objects of UnknownProvenance as a placeholder for when BuildInfo does not apply.
-  def name: String = "-"
-  def version: String = "-"
-  def scalaVersion: String = "-"
-  def sbtVersion: String = "-"
+  lazy val name: String = "-"
+  lazy val version: String = "-"
+  lazy val scalaVersion: String = "-"
+  lazy val sbtVersion: String = "-"
 
-  def commitId: String = "-"
-  def buildId: String = "-"
+  lazy val builtAtString: String = "-"
+  lazy val builtAtMillis: Long = 0L
+
+  lazy val commitId: String = "-"
+  override lazy val buildId: String = "-"
 }

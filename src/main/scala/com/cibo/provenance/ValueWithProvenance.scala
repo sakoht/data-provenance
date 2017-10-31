@@ -264,7 +264,10 @@ class IdentityCall[O : ClassTag](value: O) extends Function0CallWithProvenance[O
 class IdentityResult[O : ClassTag](
   call: IdentityCall[O],
   output: Deflatable[O]
-) extends Function0CallResultWithProvenance[O](call, output)(NoBuildInfo) with Serializable
+) extends Function0CallResultWithProvenance[O](call, output)(NoBuildInfo) with Serializable {
+  override def deflate(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] =
+    FunctionCallResultWithProvenanceDeflated(this)
+}
 
 
 class IdentityValueForBootstrap[O : ClassTag](value: O) extends ValueWithProvenance[O] with Serializable {
