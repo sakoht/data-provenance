@@ -181,8 +181,7 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
   }
 
   def hasValue[T : ClassTag](obj: T): Boolean = {
-    val bytes = Util.serialize(obj)
-    val digest = Util.digest(bytes)
+    val digest = Util.digest(obj)
     hasValue(digest)
   }
 

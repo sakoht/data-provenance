@@ -84,7 +84,7 @@ case class Deflatable[T](
               throw noDataException
           }
       }
-      val digest = Util.digest(bytes)
+      val digest = Util.digestBytes(bytes)
       copy(digestOption = Some(digest)) // do not save the serialization as it is heavey and can be remade on the fly
   }
 }
