@@ -1,5 +1,5 @@
 libraryDependencies ++= Seq(
-  "com.cibo"                   %% "shared"                      % "0.4-SNAPSHOT"
+  "com.cibo"                   %% "shared"                      % "0.4"
 )
 
 libraryDependencies ++= Seq(
