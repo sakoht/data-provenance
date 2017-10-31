@@ -80,14 +80,8 @@ trait ResultTracker {
     loadValueSerializedDataOption(ct.runtimeClass.getName, digest)
   }
 
-  def loadValue[T : ClassTag](id: Digest): T = {
-    try {
-      loadValueOption[T](id).get
-    } catch {
-      case e: Exception =>
-        loadValueOption[T](id).get
-    }
-  }
+  def loadValue[T : ClassTag](id: Digest): T =
+    loadValueOption[T](id).get
 
 
   // protected methods
