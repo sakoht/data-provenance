@@ -1,5 +1,7 @@
 package com.cibo.provenance.tracker
 
+import java.io.{ByteArrayInputStream, ObjectInputStream}
+
 import com.cibo.io.s3.{S3DB, SyncablePath}
 import com.cibo.provenance._
 import com.typesafe.scalalogging.LazyLogging
@@ -197,7 +199,7 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
   }
 
   def hasResultFor[O](f: FunctionCallWithProvenance[O]): Boolean =
-    loadOutputIdForCallOption(f).nonEmpty
+    loadOutputIdsForCallOption(f).nonEmpty
 
   def loadCallDeflatedOption[O : ClassTag](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
     loadCallSerializedDataOption(functionName, version, digest) map {
@@ -214,12 +216,13 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
     loadSerializedDataForPath(f"functions/$functionName/${version.id}/provenance-values/${digest.id}")
 
   def loadResultForCallOption[O](f: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] =
-    loadOutputIdForCallOption(f).map {
-      outputId =>
+    loadOutputIdsForCallOption(f).map {
+      case (outputId, commitId, buildId) =>
         val ct = f.getOutputClassTag
         val output: O = loadValue[O](outputId)(ct)
-        val tobj = Deflatable(valueOption = Some(output), digestOption = Some(outputId), serializedDataOption = None)(ct)
-        f.newResult(tobj)
+        val outputWrapped = Deflatable(valueOption = Some(output), digestOption = Some(outputId), serializedDataOption = None)(ct)
+        val bi = BuildInfoBrief(commitId, buildId)
+        f.newResult(outputWrapped)(bi)
     }
 
   def loadValueOption[T : ClassTag](digest: Digest): Option[T] = {
@@ -237,18 +240,17 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
       Some(bytes)
     } catch {
       case e: Exception =>
-        val ee = e
-        logger.error(f"Failed to load data from $path")
+        logger.error(f"Failed to load data from $path: $e")
         None
     }
   }
 
-  def loadOutputIdForCallOption[O](f: FunctionCallWithProvenance[O]): Option[Digest] = {
+  def loadOutputIdsForCallOption[O](f: FunctionCallWithProvenance[O]): Option[(Digest, String, String)] = {
     val inputGroupValuesDigest = f.getInputGroupValuesDigest(this)
     implicit val outputClassTag: ClassTag[O] = f.getOutputClassTag
-    loadOutputIdForInputGroupIdOption(f.functionName, f.getVersionValue(this), inputGroupValuesDigest)(f.getOutputClassTag) match {
-      case Some(outputId) =>
-        Some(outputId)
+    loadOutputCommitAndBuildIdForInputGroupIdOption(f.functionName, f.getVersionValue(this), inputGroupValuesDigest)(f.getOutputClassTag) match {
+      case Some(ids) =>
+        Some(ids)
       case None =>
         logger.debug(f"Failed to find value for $f")
         None
@@ -286,7 +288,7 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
   private def loadObjectFromPath[T : ClassTag](path: String): T =
     loadObjectFromFile[T](basePath.extendPath(path).getFile)
 
-  private def loadOutputIdForInputGroupIdOption[O : ClassTag](fname: String, fversion: Version, inputGroupId: Digest): Option[Digest] = {
+  private def loadOutputCommitAndBuildIdForInputGroupIdOption[O : ClassTag](fname: String, fversion: Version, inputGroupId: Digest): Option[(Digest,String, String)] = {
       s3db.getSuffixesForPrefix(f"functions/$fname/${fversion.id}/inputs-to-output/${inputGroupId.id}/").toList match {
       case Nil =>
         None
@@ -296,9 +298,9 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
         val commitId = words(1)
         val buildId = words(2)
         logger.debug(f"Got $outputId at commit $commitId from $buildId")
-        Some(Digest(outputId))
+        Some((Digest(outputId), commitId, buildId))
       case tooMany =>
-        flagConflict(
+        flagConflict[O](
           fname,
           fversion,
           inputGroupId,
@@ -308,19 +310,36 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
     }
   }
 
-  def flagConflict(fname: String, fversion: Version, inputGroupId: Digest, conflictingOutputKeys: Seq[String]): Unit = {
+  def loadInputs[O : ClassTag](fname: String, fversion: Version, inputGroupId: Digest): Seq[Any] = {
+    val digests = loadObjectFromPath[List[Digest]](f"functions/$fname/${fversion.id}/input-group-values/${inputGroupId.id}")
+    digests.map {
+      digest =>
+        loadValueSerializedDataOption(digest) match {
+          case Some(bytes) =>
+            val ois = new ObjectInputStream(new ByteArrayInputStream(bytes))
+            ois.readObject
+          case None =>
+            throw new RuntimeException(f"Failed to find data for input digest $digest for $fname $fversion!")
+        }
+    }
+  }
+
+  def flagConflict[O : ClassTag](fname: String, fversion: Version, inputGroupId: Digest, conflictingOutputKeys: Seq[String]): Unit = {
     // When this happens we recognize that there was, previously, a failure to set the version correctly.
     // This hopefully happens during testing, and the error never gets committed.
     // If it ends up in production data, we can compensate after the fact.
     saveObjectToPath(f"functions/$fname/${fversion.id}/conflicted", "")
     saveObjectToPath(f"functions/$fname/${fversion.id}/conflict/$inputGroupId", "")
+    val inputSeq = loadInputs(fname, fversion, inputGroupId)
     conflictingOutputKeys.foreach {
       s =>
         val words = s.split("/")
         val outputId = words.head
         val commitId = words(1)
         val buildId = words(2)
-        logger.error(f"Found $outputId at $commitId/$buildId for input $inputGroupId for $fname at $fversion!")
+        val output: O = loadValue(Digest(outputId))
+        val inputSeq = loadInputs(fname, fversion, inputGroupId)
+        logger.error(f"Inconsistent output for $fname at $fversion: at $commitId/$buildId inputs ($inputSeq) return $output.")
     }
 
     /*
@@ -344,5 +363,5 @@ object ResultTrackerSimple {
 class AmbiguousVersionException[O](call: FunctionCallWithProvenance[O])
   extends RuntimeException(f"Cannot deflate calls with an unresolved version: $call") {
 
-  def getCall = call
+  def getCall: FunctionCallWithProvenance[O] = call
 }
