@@ -1,0 +1,50 @@
+#!/bin/bash
+
+realpath () {
+(
+  TARGET_FILE="$1"
+
+  cd "$(dirname "$TARGET_FILE")"
+  TARGET_FILE=$(basename "$TARGET_FILE")
+
+  COUNT=0
+  while [ -L "$TARGET_FILE" -a $COUNT -lt 100 ]
+  do
+      TARGET_FILE=$(readlink "$TARGET_FILE")
+      cd "$(dirname "$TARGET_FILE")"
+      TARGET_FILE=$(basename "$TARGET_FILE")
+      COUNT=$(($COUNT + 1))
+  done
+
+  if [ "$TARGET_FILE" == "." -o "$TARGET_FILE" == ".." ]; then
+    cd "$TARGET_FILE"
+    TARGET_FILEPATH=
+  else
+    TARGET_FILEPATH=/$TARGET_FILE
+  fi
+
+  echo "$(pwd -P)/$TARGET_FILE"
+)
+}
+
+# Loads a configuration file full of default command line options for this script.
+loadConfigFile() {
+  cat "$1" | sed '/^\#/d'
+}
+
+
+real_script_path="$(realpath "$0")"
+app_home="$(realpath "$(dirname "$real_script_path")")"
+lib_dir="$(realpath "${app_home}/../lib")"
+
+${{template_declares}}
+
+# if configuration files exist, prepend their contents to $@ so it can be processed by this runner
+[ -f "$script_conf_file" ] && set -- $(loadConfigFile "$script_conf_file") "$@"
+
+if [ "$QUEUEABLE_JVM_ARGS" == "" ]; then
+  QUEUEABLE_JVM_ARGS="-Xms1G -Xmx3500M -XX:+UseG1GC"
+  echo "No QUEUEABLE_JVM_ARGS set.  Using: $QUEUEABLE_JVM_ARGS"
+fi
+
+java $QUEUEABLE_JVM_ARGS -classpath $app_classpath "$@"
