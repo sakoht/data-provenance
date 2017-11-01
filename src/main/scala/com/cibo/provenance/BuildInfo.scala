@@ -1,5 +1,7 @@
 package com.cibo.provenance
 
+import com.cibo.provenance.tracker.ResultTracker
+
 /**
   * Created by ssmith on 10/22/17.
   *
@@ -17,6 +19,10 @@ trait BuildInfo extends Serializable {
 
   def commitId: String
   def buildId: String = builtAtString.replace(":",".").replace(" ",".").replace("-",".")
+
+  override def toString: String = f"BuildInfo($commitId@$buildId)"
+
+  lazy val abbreviate: BuildInfoBrief = BuildInfoBrief(commitId, buildId)
 }
 
 trait GitBuildInfo extends BuildInfo with Serializable {
@@ -42,4 +48,18 @@ object NoBuildInfo extends BuildInfo with Serializable {
 
   lazy val commitId: String = "-"
   override lazy val buildId: String = "-"
+}
+
+case class BuildInfoBrief(commitId: String, override val buildId: String) extends BuildInfo {
+  lazy val impl: BuildInfo = NoBuildInfo
+
+  def name: String = impl.name
+  def version: String = impl.version
+  def scalaVersion: String = impl.scalaVersion
+  def sbtVersion: String = impl.sbtVersion
+
+  def builtAtString: String = impl.builtAtString
+  def builtAtMillis: Long = impl.builtAtMillis
+
+  override lazy val abbreviate: BuildInfoBrief = this
 }

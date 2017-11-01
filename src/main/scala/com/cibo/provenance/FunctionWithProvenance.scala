@@ -58,7 +58,7 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
 
   case class Result(provenance: Call, data: Deflatable[O])(implicit bi: BuildInfo) extends Function0CallResultWithProvenance(provenance, data)(bi)
 
-  implicit private def convertResult(r: Function0CallResultWithProvenance[O]): Result = Result(r.getProvenanceValue, r.getOutput)(r.getOutputBuildInfo)
+  implicit private def convertResult(r: Function0CallResultWithProvenance[O]): Result = Result(r.getProvenanceValue, r.getOutput)(r.getOutputBuildInfoBrief)
 
   implicit private def convertProvenance(f: Function0CallWithProvenance[O]): Call = Call(f.getVersion)(f.getOutputClassTag)
 }
@@ -89,7 +89,7 @@ trait Function1WithProvenance[O, I1] extends FunctionWithProvenance[O] with Seri
 
   case class Result(provenance: Call, data: Deflatable[O])(implicit bi: BuildInfo) extends Function1CallResultWithProvenance(provenance, data)(bi)
 
-  implicit private def convertResult(r: Function1CallResultWithProvenance[O, I1]): Result = Result(r.getProvenanceValue, r.getOutput)(r.getOutputBuildInfo)
+  implicit private def convertResult(r: Function1CallResultWithProvenance[O, I1]): Result = Result(r.getProvenanceValue, r.getOutput)(r.getOutputBuildInfoBrief)
 
   implicit private def convertProvenance(f: Function1CallWithProvenance[O, I1]): Call = {
     val i = f.inputTuple
@@ -125,7 +125,7 @@ trait Function2WithProvenance[O, I1, I2] extends FunctionWithProvenance[O] with 
   case class Result(provenance: Call, data: Deflatable[O])(implicit bi: BuildInfo) extends Function2CallResultWithProvenance(provenance, data)(bi)
   
   implicit private def convertResultWithVersion(r: Function2CallResultWithProvenance[O, I1, I2]): Result =
-    Result(r.getProvenanceValue, r.getOutput)(r.getOutputBuildInfo)
+    Result(r.getProvenanceValue, r.getOutput)(r.getOutputBuildInfoBrief)
 
   implicit private def convertProvenanceWithVersion(f: Function2CallWithProvenance[O, I1, I2]): Call = {
     val i = f.inputTuple
@@ -161,7 +161,7 @@ trait Function3WithProvenance[O, I1, I2, I3] extends FunctionWithProvenance[O] {
   case class Result(provenance: Call, data: Deflatable[O])(implicit bi: BuildInfo) extends Function3CallResultWithProvenance(provenance, data)(bi)
 
   implicit private def convertResult(r: Function3CallResultWithProvenance[O, I1, I2, I3]): Result =
-    Result(r.getProvenanceValue, r.getOutput)(r.getOutputBuildInfo)
+    Result(r.getProvenanceValue, r.getOutput)(r.getOutputBuildInfoBrief)
 
   implicit private def convertProvenance(f: Function3CallWithProvenance[O, I1, I2, I3]): Call = {
     val i = f.inputTuple
@@ -197,7 +197,7 @@ trait Function4WithProvenance[O, I1, I2, I3, I4] extends FunctionWithProvenance[
   case class Result(provenance: Call, data: Deflatable[O])(implicit bi: BuildInfo) extends Function4CallResultWithProvenance(provenance, data)(bi)
 
   implicit private def convertResult(r: Function4CallResultWithProvenance[O, I1, I2, I3, I4]): Result =
-    Result(r.getProvenanceValue, r.getOutput)(r.getOutputBuildInfo)
+    Result(r.getProvenanceValue, r.getOutput)(r.getOutputBuildInfoBrief)
 
   implicit private def convertProvenance(f: Function4CallWithProvenance[O, I1, I2, I3, I4]): Call = {
     val i = f.inputTuple

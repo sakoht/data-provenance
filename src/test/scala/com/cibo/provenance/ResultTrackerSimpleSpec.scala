@@ -4,36 +4,17 @@ package com.cibo.provenance
   * Created by ssmith on 9/20/17.
   */
 
-import java.io.File
-
-import com.cibo.io.s3.SyncablePath
-import com.cibo.provenance.tracker.{ResultTrackerNone, ResultTrackerSimple}
-import org.apache.commons.io.FileUtils
 import org.scalatest.{FunSpec, Matchers}
 
 
-object Add extends Function2WithProvenance[Int, Int, Int] {
-  val currentVersion: Version = Version("1.0")
+class ResultTrackerSimpleSpec extends FunSpec with Matchers {
+  import java.io.File
+  import org.apache.commons.io.FileUtils
 
-  // NOTE: This public var is reset during tests, and is a cheat to peek-inside whether or no impl(),
-  // which is encapsulated, actually runs.
-  var runCount: Int = 0
+  import com.cibo.io.s3.SyncablePath
+  import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone, ResultTrackerSimple}
 
-  def impl(a: Int, b: Int): Int = {
-    runCount += 1
-    a + b
-  }
-}
-
-object Multiply extends Function2WithProvenance[Int, Int, Int] {
-  val currentVersion: Version = Version("1.0")
-
-  def impl(a: Int, b: Int): Int = a * b
-}
-
-class ResultTrackerSimpleSpec(
-  baseTestDir: String = f"/tmp/" + sys.env.getOrElse("USER", "anonymous") + "/rt"
-) extends FunSpec with Matchers {
+  val baseTestDir: String = f"/tmp/" + sys.env.getOrElse("USER", "anonymous") + "/rt"
 
   // This dummy build info is used by all ResultTrackers below.
   implicit val buildInfo: BuildInfo = DummyBuildInfo
@@ -204,4 +185,131 @@ class ResultTrackerSimpleSpec(
       r3b.getProvenanceValue.unresolve shouldEqual s3b
     }
   }
+
+  describe("Across different commits and builds") {
+    val build1 = BuildInfoBrief("commit1", "build1")
+    val build2 = BuildInfoBrief("commit1", "build2")
+    val build3 = BuildInfoBrief("commit2", "build3")
+
+    it("results should be found from a previous run") {
+      val testDataDir = f"$baseTestDir/collision"
+      FileUtils.deleteDirectory(new File(testDataDir))
+
+      {
+        implicit val rt1 = ResultTrackerSimple(SyncablePath(testDataDir))(build1)
+        val r1 = Add(1, 1).resolve
+        r1.getOutputBuildInfoBrief shouldEqual build1
+      }
+
+      {
+        implicit val rt2 = ResultTrackerSimple(SyncablePath(testDataDir))(build2)
+        val r2 = Add(1, 1).resolve
+        r2.getOutputBuildInfoBrief shouldEqual build1 // still build1
+      }
+
+      {
+        implicit val rt3 = ResultTrackerSimple(SyncablePath(testDataDir))(build3)
+        val r3 = Add(1, 1).resolve
+        r3.getOutputBuildInfoBrief == build1 // still build1
+      }
+
+      FileUtils.deleteDirectory(new File(testDataDir))
+
+      {
+        implicit val rt2 = ResultTrackerSimple(SyncablePath(testDataDir))(build2)
+        val r2 = Add(1, 1).resolve
+        r2.getOutputBuildInfoBrief == build2 // now build 2!
+      }
+
+      FileUtils.deleteDirectory(new File(testDataDir))
+
+      {
+        implicit val rt3 = ResultTrackerSimple(SyncablePath(testDataDir))(build2)
+        val r3 = Add(1, 1).resolve
+        r3.getOutputBuildInfoBrief == build3 // now build 3!
+      }
+    }
+
+    it("should detect inconsistent output for the same commit/build") {
+      val testDataDir = f"$baseTestDir/same-build-inconsistency"
+      FileUtils.deleteDirectory(new File(testDataDir))
+
+      val call = Add(1, 1)
+
+      {
+        implicit val rt1 = ResultTrackerSimple(SyncablePath(testDataDir))(build1)
+        val r1 = call.resolve
+        r1.getOutputValue shouldEqual 2
+        r1.getOutputBuildInfoBrief shouldEqual build1
+      }
+
+      {
+        implicit val rt2 = ResultTrackerSimple(SyncablePath(testDataDir))(build2)
+
+        val r2 = call.resolve                             // The resolver finds a previous result
+        r2.getOutputBuildInfoBrief shouldEqual build1     // from the last build
+        r2.getOutputValue shouldEqual 2                   // and has the correct output.
+
+        val r3 = call.newResult(3)(build1)                // Make a fake result.
+        r3.getOutputBuildInfoBrief shouldEqual build1     // On the same build.
+        r3.getOutputValue shouldEqual 3                   // That has an inconsistent value for 1+1
+        rt2.saveResult(r3)                                // And save it.
+
+        intercept[com.cibo.provenance.InconsistentVersionException] {
+          // Detect the collision on load.
+          // We will eventually flag the bad commit and detect further attempts to use it.
+          call.resolve
+        }
+      }
+    }
+
+    it("should detect inconsistent output for the same declared version across commit/builds") {
+      val testDataDir = f"$baseTestDir/cross-build-inconsistency"
+      FileUtils.deleteDirectory(new File(testDataDir))
+
+      val call = Add(1, 1)
+
+      {
+        implicit val rt1: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))(build1)
+        val r1 = call.resolve
+        r1.getOutputValue shouldEqual 2
+        r1.getOutputBuildInfoBrief shouldEqual build1
+      }
+
+      {
+        implicit val rt2: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))(build2)
+
+        val r4 = call.newResult(4)(build2)            // Make a fake result.
+        r4.getOutputBuildInfoBrief shouldEqual build2 // On a new commit and build.
+        r4.getOutputValue shouldEqual 4               // That has an inconsistent value for 1+1
+        rt2.saveResult(r4)                            // And save it.
+
+        intercept[com.cibo.provenance.InconsistentVersionException] {
+          // For now we complain.
+          // Eventually we flag the newer commit as inconsistent, and resolve will load the original value.
+          // If the original value was wrong, the version can/should be bumped.
+          call.resolve
+        }
+      }
+    }
+  }
+}
+
+object Add extends Function2WithProvenance[Int, Int, Int] {
+  val currentVersion: Version = Version("1.0")
+
+  // NOTE: This public var is reset during tests, and is a cheat to peek-inside whether or no impl(),
+  // which is encapsulated, actually runs.
+  var runCount: Int = 0
+
+  def impl(a: Int, b: Int): Int = {
+    runCount += 1
+    a + b
+  }
+}
+
+object Multiply extends Function2WithProvenance[Int, Int, Int] {
+  val currentVersion: Version = Version("1.0")
+
+  def impl(a: Int, b: Int): Int = a * b
 }

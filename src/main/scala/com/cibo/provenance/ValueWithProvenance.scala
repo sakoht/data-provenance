@@ -154,7 +154,7 @@ abstract class FunctionCallWithProvenance[O : ClassTag](var version: ValueWithPr
 abstract class FunctionCallResultWithProvenance[O](
   provenance: FunctionCallWithProvenance[O],
   output: Deflatable[O],
-  outputBuildDetail: BuildInfo
+  outputBuildInfo: BuildInfo
 ) extends ValueWithProvenance[O] with Serializable {
 
   def getOutput: Deflatable[O] = output
@@ -167,7 +167,9 @@ abstract class FunctionCallResultWithProvenance[O](
 
   def getOutputClassTag: ClassTag[O] = provenance.getOutputClassTag
 
-  def getOutputBuildInfo: BuildInfo = outputBuildDetail
+  def getOutputBuildInfo: BuildInfo = outputBuildInfo
+
+  def getOutputBuildInfoBrief: BuildInfoBrief = outputBuildInfo.abbreviate
 
   override def toString: String =
     provenance match {
@@ -247,7 +249,7 @@ class IdentityCall[O : ClassTag](value: O) extends Function0CallWithProvenance[O
       ),
       inputGroupDigest = getInputGroupDigest,
       outputDigest = cachedResult.getOutput.resolveDigest.digestOption.get,
-      buildInfo = cachedResult.getOutputBuildInfo
+      buildInfo = cachedResult.getOutputBuildInfoBrief
     )
   }
 
@@ -457,7 +459,7 @@ object FunctionCallResultWithProvenanceDeflated {
       deflatedCall = FunctionCallWithProvenanceDeflated(provenance),
       inputGroupDigest = provenance.getInputGroupDigest,
       outputDigest = result.getOutput.resolveDigest.digestOption.get,
-      buildInfo = result.getOutputBuildInfo
+      buildInfo = result.getOutputBuildInfoBrief
     )
   }
 

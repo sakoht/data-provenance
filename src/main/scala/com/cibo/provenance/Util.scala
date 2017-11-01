@@ -2,6 +2,7 @@ package com.cibo.provenance
 
 import java.io._
 
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.codec.digest.DigestUtils
 
 import scala.reflect.ClassTag
@@ -16,7 +17,7 @@ import scala.reflect.ClassTag
   *
   */
 
-object Util {
+object Util extends LazyLogging {
 
   def serialize[T](obj: T): Array[Byte] = {
     val baos = new ByteArrayOutputStream
@@ -67,8 +68,15 @@ object Util {
     obj
   }
 
-  def digest[T : ClassTag](value: T): Digest =
+  def digest[T : ClassTag](value: T): Digest = {
+    value match {
+      case _: Array[Byte] =>
+        logger.warn("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
+      case _ =>
+    }
     digestBytes(serialize(value))
+  }
+
 
   def digestBytes(bytes: Array[Byte]): Digest =
     Digest(DigestUtils.sha1Hex(bytes))
