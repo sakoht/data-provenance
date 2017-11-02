@@ -14,7 +14,3 @@ mainClass in Compile := Some("com.cibo.provenance.examples.TrackMe")
 fork in Test := true
 testOptions in Test ++= Seq(Tests.Argument("-oDF"), Tests.Argument("-h", "target/unit-test-reports"))
 
-// Integration test config
-Defaults.itSettings
-fork in IntegrationTest := true
-testOptions in IntegrationTest ++= Seq(Tests.Argument("-oDF"))
