@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# Like cli.sh, but runs commands within the container locally.
+
+PROJECTNAME=queueable-example
+CLASSNAME=com.cibo.queueable.examples.HelloWorldCli
+
+if [ "$TAG" == "" ]; then
+  TAG=latest
+fi
+
+AWS_ACCOUNT_ID=$(aws iam get-user | jq --raw-output .User.Arn | sed "s/arn:aws:iam:://" | sed "s/:.*//")
+AWS_REGION=$(aws configure get region)
+
+# Set this explicitly to "prod" for production.
+if [ "$QUEUEABLE_RUN_ENV" == "" ]; then
+  export QUEUEABLE_RUN_ENV=dev
+fi
+
+SUFFIX=""
+if [ "$QUEUEABLE_RUN_ENV" != "" ]; then
+  if [ "$QUEUEABLE_RUN_ENV" != "prod" ]; then
+    SUFFIX="-$QUEUEABLE_RUN_ENV-$USER"
+  fi
+fi
+
+if [ "$QUEUEABLE_JVM_ARGS" == "" ]; then
+  QUEUEABLE_JVM_ARGS="-Xms1G -Xmx3500M -XX:+UseG1GC"
+fi
+
+docker run -it \
+  -e AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id) \
+  -e AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key) \
+  -e USER="$USER" \
+  -e QUEUEABLE_JVM_ARGS="$QUEUEABLE_JVM_ARGS" \
+  -e QUEUEABLE_RUN_ENV="$QUEUEABLE_RUN_ENV" \
+  $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$PROJECTNAME$SUFFIX:$TAG \
+  $CLASSNAME "$@"

@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# Run the latest CLI locally directly. 
+
+PROJECTNAME=provenance-example
+CLASSNAME=com.cibo.provenance.examples.TrackMe
+
+# The AWS cli will respect AWS_DEFAULT_PROFILE, but the Java SDK will not.
+# Xfer the ids to a more accessible place.
+export AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id)
+export AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key)
+
+DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+EXE=$DIR/target/docker/stage/opt/docker/bin/$PROJECTNAME
+if [ ! -e "$EXE" ]; then
+  echo "Not found: $EXE.  Run \"sbt docker:publishLocal\" first?"
+  exit 1
+fi
+
+if [ "$QUEUEABLE_JVM_ARGS" == "" ]; then
+  export QUEUEABLE_JVM_ARGS="-Xms1G -Xmx3500M -XX:+UseG1GC"
+fi
+
+if [ "$QUEUEABLE_RUN_ENV" == "" ]; then
+  export QUEUEABLE_RUN_ENV=dev
+fi
+
+set -x
+$EXE $CLASSNAME "$@"
