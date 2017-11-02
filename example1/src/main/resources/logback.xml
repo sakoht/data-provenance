@@ -1,0 +1,37 @@
+<configuration>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <!-- encoders are assigned the type
+             ch.qos.logback.classic.encoder.PatternLayoutEncoder by default -->
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="info">
+        <appender-ref ref="STDOUT" />
+    </root>
+
+    <!-- Set to info -->
+    <logger name="com.cibo" level="info" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <!-- Set to error -->
+    <logger name="scalikejdbc" level="error" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.cibo.continuum.datasource.clu.CLUCountyGeoJSON" level="trace" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.cibo.continuum.datasource.clu.CLUCountyGeoJSON" level="trace" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.cibo.continuum.storage.s3" level="trace" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+</configuration>
