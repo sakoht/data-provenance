@@ -15,8 +15,8 @@ trait FunctionWithProvenance[O] extends Serializable {
 
   val currentVersion: Version
 
-  val loadableVersions: Seq[Version] = Seq(currentVersion)
-  val runnableVersions: Seq[Version] = Seq(currentVersion)
+  lazy val loadableVersions: Seq[Version] = Seq(currentVersion)
+  lazy val runnableVersions: Seq[Version] = Seq(currentVersion)
 
   lazy val loadableVersionSet: Set[Version] = loadableVersions.toSet
   lazy val runnableVersionSet: Set[Version] = runnableVersions.toSet

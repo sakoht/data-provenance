@@ -11,6 +11,8 @@ package com.cibo.provenance.examples
 
 import com.cibo.provenance._
 import com.cibo.provenance.tracker.ResultTrackerSimple
+import com.typesafe.scalalogging.LazyLogging
+import org.slf4j.LoggerFactory
 
 case class TrackMeParams(
   dbPath: String = f"/tmp/rtx/" + sys.env.getOrElse("USER","anonymous"),
@@ -18,10 +20,7 @@ case class TrackMeParams(
   b: Int = 5
 )
 
-object TrackMe {
-  import org.slf4j.LoggerFactory
-
-  private lazy val logger = LoggerFactory.getLogger(getClass)
+object TrackMe  {
 
   def main(args: Array[String]): Unit =
     paramsFromArgs(args, "trackme") match {
@@ -45,8 +44,11 @@ object TrackMe {
 
   def run(params : TrackMeParams) : Unit = {
 
+    val logger = LoggerFactory.getLogger(getClass)
+
     // A BuildInfo is required for the ResultTrackers.
-    // Borrow the buildinfo.sbt, project/plugins.sbt and resolvers.sbt from this repo to get it.
+    // The SbtBuildInfo plugin writes an object with build metadata before compiling.
+    // This is configured in buildinfo.sbt in this repo.  The object lives here:
     import com.cibo.provenance.examples.BuildInfo
     implicit val bi: BuildInfo = BuildInfo
     logger.info(f"BUILD INFO: $bi")

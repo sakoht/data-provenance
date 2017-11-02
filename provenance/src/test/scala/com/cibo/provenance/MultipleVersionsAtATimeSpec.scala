@@ -42,7 +42,7 @@ class MultipleVersionsAtATimeSpec extends FunSpec with Matchers {
 
     object myFuncWithOldVersions extends Function2WithProvenance[String, Double, Int] {
       val currentVersion: Version = Version("1.0")
-      override val loadableVersions = Seq("1.0", "0.9", "0.8").map(v => Version(v))
+      override lazy val loadableVersions = Seq("1.0", "0.9", "0.8").map(v => Version(v))
 
       def impl(d: Double, n: Int): String = d.toString + "," + n.toString
     }
@@ -77,8 +77,8 @@ class MultipleVersionsAtATimeSpec extends FunSpec with Matchers {
 
     object myFuncWithOldVersions extends Function2WithProvenance[String, Double, Int] {
       val currentVersion: Version = Version("1.3")
-      override val loadableVersions = Seq("1.0", "1.1", "1.2", "1.3").map(n => Version(n))
-      override val runnableVersions = Seq("1.1", "1.2", "1.3").map(n => Version(n))
+      override lazy val loadableVersions = Seq("1.0", "1.1", "1.2", "1.3").map(n => Version(n))
+      override lazy val runnableVersions = Seq("1.1", "1.2", "1.3").map(n => Version(n))
 
       def impl(d: Double, n: Int): String = d.toString + "," + n.toString
 
