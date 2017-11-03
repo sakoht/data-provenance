@@ -1,6 +1,6 @@
 
 organization := "com.cibo"
-name         := "provenance-example"
+name         := "provenance-example1"
 
 crossScalaVersions := Seq("2.11.11", "2.12.4")
 scalaVersion := crossScalaVersions.value.head
