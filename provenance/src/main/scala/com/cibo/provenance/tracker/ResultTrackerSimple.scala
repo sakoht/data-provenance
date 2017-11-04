@@ -83,15 +83,17 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
     val inputGroupKey = inputGroupDigest.id
 
     provenance.getInputs.map {
-      case u: UnknownProvenance[_] =>
+      case u: IdentityCall[_] =>
         saveCall(u)
+      case u: IdentityResult[_] =>
+        saveCall(u.getProvenanceValue)
       case _ =>
     }
 
     // Save the provenance.  This recursively decomposes the call into DeflatedCall objects.
     val provenanceDeflated: FunctionCallWithProvenanceDeflated[O] = saveCall(provenance)
     val provenanceDeflatedSerialized = Util.serialize(provenanceDeflated)
-    val provenanceDeflatedKey = Util.digest(provenanceDeflatedSerialized).id
+    val provenanceDeflatedKey = Util.digestBytes(provenanceDeflatedSerialized).id
 
     // Link each of the above.
     saveObjectToPath(f"$prefix/provenance-to-inputs/$provenanceDeflatedKey/$inputGroupKey", "")
