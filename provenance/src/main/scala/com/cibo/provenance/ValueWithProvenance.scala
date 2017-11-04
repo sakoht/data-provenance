@@ -114,17 +114,17 @@ abstract class FunctionCallWithProvenance[O : ClassTag](var version: ValueWithPr
     unresolveInputs(rt)
 
   protected[provenance]def getNormalizedDigest(implicit rt: ResultTracker): Digest =
-    Util.digest(unresolve(rt))
+    Util.digestObject(unresolve(rt))
 
   protected[provenance]def getInputGroupDigest(implicit rt: ResultTracker): Digest =
-    Util.digest(getInputDigests(rt))
+    Util.digestObject(getInputDigests(rt))
 
   protected[provenance]def getInputDigests(implicit rt: ResultTracker): List[String] = {
     getInputs.toList.map {
       input =>
         val resolvedInput = input.resolve
         val inputValue = resolvedInput.getOutputValue
-        val id = Util.digest(inputValue)
+        val id = Util.digestObject(inputValue)
         val inputValueDigest = id.id
         inputValueDigest
     }
@@ -140,7 +140,7 @@ abstract class FunctionCallWithProvenance[O : ClassTag](var version: ValueWithPr
   def getInputGroupValuesDigest(implicit rt: ResultTracker): Digest = {
     val inputsDeflated: immutable.Seq[FunctionCallResultWithProvenanceDeflated[_]] = getInputsDigestWithSourceFunctionAndVersion
     val digests = inputsDeflated.map(_.outputDigest).toList
-    Digest(Util.digest(digests).id)
+    Digest(Util.digestObject(digests).id)
   }
 
   def deflate(implicit rt: ResultTracker): FunctionCallWithProvenanceDeflated[O] =
@@ -231,7 +231,7 @@ class IdentityCall[O : ClassTag](value: O) extends Function0CallWithProvenance[O
   def duplicate(vv: ValueWithProvenance[Version]): Function0CallWithProvenance[O] =
     new IdentityCall(value)(implicitly[ClassTag[O]])
 
-  private lazy val cachedDigest = Util.digest(value)
+  private lazy val cachedDigest = Util.digestObject(value)
 
   override def getInputGroupValuesDigest(implicit rt: ResultTracker): Digest =
     cachedDigest
@@ -244,7 +244,7 @@ class IdentityCall[O : ClassTag](value: O) extends Function0CallWithProvenance[O
       deflatedCall = FunctionCallWithKnownProvenanceDeflated[O](
         functionName = functionName,
         functionVersion = getVersionValue,
-        inflatedCallDigest = Util.digest(this),
+        inflatedCallDigest = Util.digestObject(this),
         outputClassName = getOutputClassTag.runtimeClass.getName
       ),
       inputGroupDigest = getInputGroupDigest,
@@ -403,13 +403,13 @@ object FunctionCallWithProvenanceDeflated {
       case valueWithUnknownProvenance : UnknownProvenance[O] =>
         FunctionCallWithUnknownProvenanceDeflated[O](
           outputClassName = outputClassName,
-          Util.digest(valueWithUnknownProvenance.value)
+          Util.digestObject(valueWithUnknownProvenance.value)
         )
       case _ =>
         FunctionCallWithKnownProvenanceDeflated[O](
           functionName = call.functionName,
           functionVersion = call.getVersionValue,
-          inflatedCallDigest = Util.digest(call.deflateInputs(rt)),
+          inflatedCallDigest = Util.digestObject(call.deflateInputs(rt)),
           outputClassName = outputClassName
         )
     }

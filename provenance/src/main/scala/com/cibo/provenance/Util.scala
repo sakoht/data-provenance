@@ -68,10 +68,11 @@ object Util extends LazyLogging {
     obj
   }
 
-  def digest[T : ClassTag](value: T): Digest = {
+  def digestObject[T : ClassTag](value: T): Digest = {
     value match {
       case _: Array[Byte] =>
-        logger.warn("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
+        //logger.warn("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
+        throw new RuntimeException("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
       case _ =>
     }
     digestBytes(serialize(value))
