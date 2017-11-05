@@ -37,7 +37,7 @@ case class ResultTrackerNone()(implicit val currentBuildInfo: BuildInfo) extends
 
   def saveValue[T : ClassTag](obj: T): Digest = {
     // also a no-op that just calculates the ID and returns it
-    Util.digest(obj)
+    Util.digestObject(obj)
   }
 
   def hasValue[T : ClassTag](obj: T): Boolean = false // never

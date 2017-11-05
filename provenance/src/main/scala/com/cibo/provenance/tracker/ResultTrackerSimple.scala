@@ -83,15 +83,17 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
     val inputGroupKey = inputGroupDigest.id
 
     provenance.getInputs.map {
-      case u: UnknownProvenance[_] =>
+      case u: IdentityCall[_] =>
         saveCall(u)
+      case u: IdentityResult[_] =>
+        saveCall(u.getProvenanceValue)
       case _ =>
     }
 
     // Save the provenance.  This recursively decomposes the call into DeflatedCall objects.
     val provenanceDeflated: FunctionCallWithProvenanceDeflated[O] = saveCall(provenance)
     val provenanceDeflatedSerialized = Util.serialize(provenanceDeflated)
-    val provenanceDeflatedKey = Util.digest(provenanceDeflatedSerialized).id
+    val provenanceDeflatedKey = Util.digestBytes(provenanceDeflatedSerialized).id
 
     // Link each of the above.
     saveObjectToPath(f"$prefix/provenance-to-inputs/$provenanceDeflatedKey/$inputGroupKey", "")
@@ -136,11 +138,13 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
         // Skip saving calls with unknown provenance.
         // Whatever uses them can re-constitute the value from the input values.
         // But ensure the raw input value is saved as data.
-        if (!hasValue(unknown))
-          saveValue(unknown.value)(unknown.getOutputClassTag)
+        val digest = Util.digestObject(unknown.value)(unknown.getOutputClassTag)
+        if (!hasValue(digest)) {
+          val digest = saveValue(unknown.value)(unknown.getOutputClassTag)
+          saveObjectToPath(f"data-provenance/${digest.id}/from/-", "")
+        }
         // Return a deflated object.
         FunctionCallWithProvenanceDeflated(call)(rt=this)
-
       case known =>
         // Save and let the saver produce the deflated version it saves.
         implicit val rt: ResultTracker = this
@@ -157,7 +161,7 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
               known
           }
         val deflatedInputsBlob: Array[Byte] = Util.serialize(deflatedInputs)
-        val deflatedInputsDigest = Util.digest(deflatedInputsBlob)
+        val deflatedInputsDigest = Util.digestBytes(deflatedInputsBlob)
 
         // Extract
         val versionValue: Version = known.getVersionValueAlreadyResolved match {
@@ -184,12 +188,16 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
   def saveValue[T : ClassTag](obj: T): Digest = {
     val bytes = Util.serialize(obj)
     val digest = Util.digestBytes(bytes)
-    s3db.putObject(f"data/${digest.id}", bytes)
+    if (!hasValue(digest)) {
+      val path = f"data/${digest.id}"
+        logger.debug(f"Saving raw $obj to $path")
+      s3db.putObject(path, bytes)
+    }
     digest
   }
 
   def hasValue[T : ClassTag](obj: T): Boolean = {
-    val digest = Util.digest(obj)
+    val digest = Util.digestObject(obj)
     hasValue(digest)
   }
 
