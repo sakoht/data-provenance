@@ -4,25 +4,58 @@ package com.cibo.provenance
   * Created by ssmith on 9/20/17.
   */
 
+import java.nio.file.{Files, Paths}
+
+import com.cibo.io.WithResource
+import com.typesafe.scalalogging.LazyLogging
 import org.scalatest.{FunSpec, Matchers}
 
 
-class ResultTrackerSimpleSpec extends FunSpec with Matchers {
+class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
   import java.io.File
   import org.apache.commons.io.FileUtils
 
   import com.cibo.io.s3.SyncablePath
   import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone, ResultTrackerSimple}
+  import com.cibo.io.Shell.getOutputAsBytes
 
   val baseTestDir: String = f"/tmp/" + sys.env.getOrElse("USER", "anonymous") + "/rt"
 
   // This dummy build info is used by all ResultTrackers below.
   implicit val buildInfo: BuildInfo = DummyBuildInfo
 
+  // This is called at the end of each test to regression-test the low-level storage.
+  // We test only the manifests since the SHA1 in the name is the digest of the file,
+  // or the file is a key path, with empty content.
+  def checkDirectory(subdir: String) = {
+    val actualOutputDir = f"$baseTestDir/$subdir"
+    if (!new File(actualOutputDir).exists)
+      throw new RuntimeException(s"Failed to find $actualOutputDir!")
+
+    val expectedManifestFile = new File(f"src/test/resources/expected-output/$subdir.manifest")
+    if (!expectedManifestFile.exists)
+      throw new RuntimeException(s"Failed to find $expectedManifestFile!")
+    val expectedManifestBytes = Files.readAllBytes(Paths.get(expectedManifestFile.getAbsolutePath))
+    val expectedManifestString = new String(expectedManifestBytes)
+
+    val newManifestBytes = getOutputAsBytes(s"cd $actualOutputDir && wc -c `find . -type file | sort`")
+    val newManifestString = new String(newManifestBytes)
+
+    if (newManifestString != expectedManifestString) {
+      // If the test will fail, write the new content in case it needs to replace the old test data.
+      val name = f"$subdir.manifest"
+      logger.error(f"Writing $name to put in src/test/resources/expected-outputs/")
+      Files.write(Paths.get(name), newManifestBytes)
+    }
+
+    newManifestString shouldBe expectedManifestString
+  }
+
   describe("The simple ResultTracker") {
 
     it("has primitives save and reload correctly.") {
-      val testDataDir = f"$baseTestDir/reload1"
+      val testSubdir = "reload1"
+      val testDataDir = f"$baseTestDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
 
@@ -31,7 +64,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
       val obj2 = rt.loadValue[Int](id)
       obj2 shouldEqual obj1
 
-      
+      checkDirectory(testSubdir)
     }
 
     it("has signatures save and reload correctly.") {
@@ -45,7 +78,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
       val obj2 = rt.loadValue[Add.Call](id)
       obj2 shouldEqual obj1
 
-      
+      checkDirectory(testSubdir)
     }
 
     it("lets a result save and be re-loaded by its call signature.") {
@@ -66,7 +99,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
       r2b.provenance shouldEqual r2.provenance
       r2b.output shouldEqual r2.output
 
-      
+      checkDirectory(testSubdir)
     }
 
     it("ensures functions do not re-run") {
@@ -89,7 +122,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
       val rc1b = Add.runCount
       rc1b shouldBe 1
 
-      
+      checkDirectory(testSubdir)
     }
 
     it("ensures functions do not re-run when called with the same inputs") {
@@ -112,7 +145,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
       val rc2 = Add.runCount
       rc2 shouldBe 0 // unchanged
 
-      
+      checkDirectory(testSubdir)
     }
 
     it("should skip calls where the call has been made before with the same input values") {
@@ -154,7 +187,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
       r3.provenance.unresolve shouldBe s3
       rc3 shouldBe 2                                    // only TWO of the four operations actually run: Add(3+5) and the final +7
 
-      
+      checkDirectory(testSubdir)
     }
 
     it("ensures functions method calls return expected values (breakdown)") {
@@ -201,7 +234,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
       r3b.output shouldEqual r3.output
       r3b.provenance.unresolve shouldEqual s3b
 
-      
+      checkDirectory(testSubdir)
     }
   }
 
@@ -249,7 +282,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
         r3.getOutputBuildInfoBrief == build3 // now build 3!
       }
 
-      
+      checkDirectory(testSubdir)
     }
 
     it("should detect inconsistent output for the same commit/build") {
@@ -285,7 +318,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
         }
       }
 
-      
+      checkDirectory(testSubdir)
     }
 
     it("should detect inconsistent output for the same declared version across commit/builds") {
@@ -318,7 +351,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
         }
       }
 
-      
+      checkDirectory(testSubdir)
     }
   }
 }
