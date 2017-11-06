@@ -18,6 +18,8 @@ object addMe extends Function2WithProvenance[Int, Int, Int] {
     def impl(a: Int, b: Int): Int = a + b
 }
 
+
+
 object MyApp extends App {
     // Replace with your actual SbtBuildInfo object.  Steal info.sbt from this repo to have it autogenerate.
     implicit val bi: BuildInfo = NoBuildInfo
@@ -25,29 +27,59 @@ object MyApp extends App {
     // Replace with an s3:// path for real things.  Use a resources/ path for test cases.
     implicit val rt: ResultTracker = ResultTrackerSimple("/tmp/mydata")
     
-    val c1 = addMe(2, 3)
-    val r1 = c1.resolve()
-    println(r1.getOutputValue)          // 5
-    println(r1.getProvenanceValue)      // c1!
-
-    // Find it later
-    rt.hasResult(c1)                    // true
+    val call1 = addMe(2, 3)             // no work is done 
+    val result1 = c1.resolve()          // determine and save the result
+    println(r1.output)                  // 5
+    println(r1.provenance)              // call1
+    rt.hasResult(call1)                 // true
     
     // This pulls the answer from storage instead of running:
-    val r1copy2 = addMe(2, 3).resolve()
-    
+    val result1copy2 = addMe(2, 3).resolve()
+
+    // This calculates 1+2, but then looks-up 2+3 in storage:
+    val sameOutputDifferentProvenance = addMe(2, addMe(1, 2).resolve()
+
     // Compose arbitarily:
-    addMe(addMe(addMe(2, 2), addMe(10, addMe(r1, c1)), addMe(5, 5))
+    val bigPlan = addMe(addMe(addMe(2, 2), addMe(10, addMe(r1, c1)), addMe(5, 5))
     
     // Don't repeat any call with the same inputs even with different provenance:
     c2 = addMe(1, 1)                    // (? <- addMe(raw(1), raw(1)))
     c3 = addMe(2, 1)                    // (? <- addMe(raw(2), raw(1)))
     c4 = addMe(c2, c3)                  // (? <- addMe(addMe(raw(1), raw(1)), addMe(raw(2), raw(1)))
     c4.resolve()                        // runs 1+1, then 2+1, but shortcuts past running 2+3 because we r1 was saved above.
-    assert(c4.getOutputValue == c1.getOutputValue)      // same answer
-    assert(c4.getProvenanceValue != c1)                 // different provenance
+    assert(c4.output == c1.output)      // same answer
+    assert(c4.provenance != c1)         // different provenance
+
+    // Track a list as a single thing.
+    val lst = trioToList(10, 20, 30)    
+    
+    // Dip into results that are sequences and pull out individual values, but keep provenance
+    val call3 = addMe(lst(0), lst(1)).resolve.output == 30
+    val call4 = addMe(lst(1), lst(2)).resolve.output == 50
+
+    // Map over functions with provenance tracking.
+    val bigPlan2 = sumList(lst.map(incrementMe).map(incrementMe))
+    bigPlan2).resolve.output == 66
 }
+
+
+object trioToList extends Function4WithProvenance[List[Int], Int, Int, Int] {
+    val currentVersion = Version("0.1")
+    def impl(a: Int, b: Int, c: Int): List[Int] = List(a, b, c)
+}
+
+object incrementMe extends Function1WithProvenance[Int, Int] {
+    val currentVersion = Version("0.1")
+    def impl(x: Int): Int = x + 1
+}
+
+object sumList extends Function1WithProvenance[Int, List[Int]] {
+    val currentVersion = Version("0.1")
+    def impl(lst: List[Int]): Int = lst.sum 
+}
+
 ```
+
 
 Overview:
 ---------
@@ -79,12 +111,12 @@ Use it:
 ```scala
 val f: foo.Call     = foo(5, 1.23)
 val r: foo.Result   = f.run()
-val o: String       = r.getOutputValue
+val o: String       = r.output
 ```
 
 The result knows where the output value came from:
 ```scala
-val f2: foo.Call    = r.getProvenanceValue
+val f2: foo.Call    = r.provenance
 assert(f2 == f)
 ```
 
