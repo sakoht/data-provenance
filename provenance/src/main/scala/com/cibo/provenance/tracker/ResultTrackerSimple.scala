@@ -81,7 +81,7 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
     // This is what prevents us from re-running the same code on the same data,
     // even when the inputs have different provenance.
     val inputDigestsWithSource: Vector[FunctionCallResultWithProvenanceDeflated[_]] = provenance.getInputsDigestWithSourceFunctionAndVersion(this)
-    val inputDigests = inputDigestsWithSource.map(_.outputDigest).toList
+    val inputDigests = inputDigestsWithSource.map(_.outputDigest).toList //.mkString("\n").toCharArray
     val inputGroupDigest = saveObjectToSubPathByDigest(f"$prefix/input-group-values", inputDigests)
     val inputGroupKey = inputGroupDigest.id
 

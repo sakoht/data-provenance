@@ -6,7 +6,6 @@ package com.cibo.provenance
 
 import java.nio.file.{Files, Paths}
 
-import com.cibo.io.WithResource
 import com.typesafe.scalalogging.LazyLogging
 import org.scalatest.{FunSpec, Matchers}
 
@@ -19,9 +18,14 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
   import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone, ResultTrackerSimple}
   import com.cibo.io.Shell.getOutputAsBytes
 
-  val baseTestDir: String = f"/tmp/" + sys.env.getOrElse("USER", "anonymous") + "/rt"
+  // The this is the BuildInfo _object_ for this library.
+  val libBuildInfo = com.cibo.provenance.internal.BuildInfo
 
-  // This dummy build info is used by all ResultTrackers below.
+  // Use the scala version for the library in this test,
+  // cross-compiled tests can run in parallel.
+  val baseTestDir: String = f"/tmp/" + sys.env.getOrElse("USER", "anonymous") + f"/rt-${libBuildInfo.scalaVersion}"
+
+  // This dummy BuildInfo is used by all ResultTrackers below.
   implicit val buildInfo: BuildInfo = DummyBuildInfo
 
   // This is called at the end of each test to regression-test the low-level storage.
