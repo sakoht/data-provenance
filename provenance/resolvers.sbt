@@ -1,4 +1,5 @@
 val extraResolvers = List(
+   Resolver.defaultLocal,
    "Cibo Libs"          at "https://cibotech.jfrog.io/cibotech/libs-local",
    "Cibo Libs Release"  at "https://cibotech.jfrog.io/cibotech/libs-release-local",
    "Cibo Ext Snapshots" at "https://cibotech.jfrog.io/cibotech/ext-snapshot-local",
