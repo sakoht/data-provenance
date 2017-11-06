@@ -45,8 +45,6 @@ trait ResultTracker {
     }
   }
 
-
-
   // abstract interface
 
   def getCurrentBuildInfo: BuildInfo

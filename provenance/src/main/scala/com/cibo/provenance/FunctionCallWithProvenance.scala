@@ -28,12 +28,11 @@ abstract class Function0CallWithProvenance[O : ClassTag](v: ValueWithProvenance[
     nocopy(duplicate(v.inflate), this)
   def run(implicit rt: ResultTracker): Function0CallResultWithProvenance[O] = {
     val o: O = f(getVersionValue)
-    new Function0CallResultWithProvenance(this, output = Deflatable(o))(rt.getCurrentBuildInfo)
+    new Function0CallResultWithProvenance(this, output = VirtualValue(o))(rt.getCurrentBuildInfo)
   }
-  def newResult(value: Deflatable[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
+  def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
   def duplicate(vv: ValueWithProvenance[Version]): Function0CallWithProvenance[O]
 }
-
 
 abstract class Function1CallWithProvenance[O : ClassTag, I1](i1: ValueWithProvenance[I1], v: ValueWithProvenance[Version])(f: (I1, Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
   val impl = f
@@ -48,10 +47,10 @@ abstract class Function1CallWithProvenance[O : ClassTag, I1](i1: ValueWithProven
   def inflateInputs(implicit rt: ResultTracker): Function1CallWithProvenance[O, I1] =
     nocopy(duplicate(i1.inflate, v.inflate), this)
   def run(implicit rt: ResultTracker): Function1CallResultWithProvenance[O, I1] = {
-    val output: O = f(i1.resolve.getOutputValue, getVersionValue)
-    new Function1CallResultWithProvenance(this, output = Deflatable(output))(rt.getCurrentBuildInfo)
+    val output: O = f(i1.resolve.output, getVersionValue)
+    new Function1CallResultWithProvenance(this, output = VirtualValue(output))(rt.getCurrentBuildInfo)
   }
-  def newResult(value: Deflatable[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
+  def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
   def duplicate(v1: ValueWithProvenance[I1], vv: ValueWithProvenance[Version]): Function1CallWithProvenance[O, I1]
 }
 
@@ -71,10 +70,10 @@ abstract class Function2CallWithProvenance[O : ClassTag, I1, I2](i1: ValueWithPr
   private implicit val i1ct: ClassTag[I1] = i1.getOutputClassTag
   private implicit val i2ct: ClassTag[I2] = i2.getOutputClassTag
   def run(implicit rt: ResultTracker): Function2CallResultWithProvenance[O, I1, I2] = {
-    val output: O = f(i1.resolve.getOutputValue, i2.resolve.getOutputValue, getVersionValue)
-    new Function2CallResultWithProvenance(this, output = Deflatable(output))(rt.getCurrentBuildInfo)
+    val output: O = f(i1.resolve.output, i2.resolve.output, getVersionValue)
+    new Function2CallResultWithProvenance(this, output = VirtualValue(output))(rt.getCurrentBuildInfo)
   }
-  def newResult(value: Deflatable[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
+  def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
   def duplicate(v1: ValueWithProvenance[I1], v2: ValueWithProvenance[I2], vv: ValueWithProvenance[Version]): Function2CallWithProvenance[O, I1, I2]
 }
 
@@ -95,10 +94,10 @@ abstract class Function3CallWithProvenance[O : ClassTag, I1, I2, I3](i1: ValueWi
   private implicit val i2ct: ClassTag[I2] = i2.getOutputClassTag
   private implicit val i3ct: ClassTag[I3] = i3.getOutputClassTag
   def run(implicit rt: ResultTracker): Function3CallResultWithProvenance[O, I1, I2, I3] = {
-    val output: O = f(i1.resolve.getOutputValue, i2.resolve.getOutputValue, i3.resolve.getOutputValue, getVersionValue)
-    new Function3CallResultWithProvenance(this, output = Deflatable(output))(rt.getCurrentBuildInfo)
+    val output: O = f(i1.resolve.output, i2.resolve.output, i3.resolve.output, getVersionValue)
+    new Function3CallResultWithProvenance(this, output = VirtualValue(output))(rt.getCurrentBuildInfo)
   }
-  def newResult(value: Deflatable[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
+  def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
   def duplicate(v1: ValueWithProvenance[I1], v2: ValueWithProvenance[I2], v3: ValueWithProvenance[I3], vv: ValueWithProvenance[Version]): Function3CallWithProvenance[O, I1, I2, I3]
 }
 
@@ -120,9 +119,9 @@ abstract class Function4CallWithProvenance[O : ClassTag, I1, I2, I3, I4](i1: Val
   private implicit val i3ct: ClassTag[I3] = i3.getOutputClassTag
   private implicit val i4ct: ClassTag[I4] = i4.getOutputClassTag
   def run(implicit rt: ResultTracker): Function4CallResultWithProvenance[O, I1, I2, I3, I4] = {
-    val output: O = f(i1.resolve.getOutputValue, i2.resolve.getOutputValue, i3.resolve.getOutputValue, i4.resolve.getOutputValue, getVersionValue)
-    new Function4CallResultWithProvenance(this, output = Deflatable(output))(rt.getCurrentBuildInfo)
+    val output: O = f(i1.resolve.output, i2.resolve.output, i3.resolve.output, i4.resolve.output, getVersionValue)
+    new Function4CallResultWithProvenance(this, output = VirtualValue(output))(rt.getCurrentBuildInfo)
   }
-  def newResult(value: Deflatable[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
+  def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
   def duplicate(v1: ValueWithProvenance[I1], v2: ValueWithProvenance[I2], v3: ValueWithProvenance[I3], v4: ValueWithProvenance[I4], vv: ValueWithProvenance[Version]): Function4CallWithProvenance[O, I1, I2, I3, I4]
 }

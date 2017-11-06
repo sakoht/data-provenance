@@ -3,6 +3,17 @@ package com.cibo.provenance
 /**
   * Created by ssmith on 9/20/17.
   */
+
+class InconsistentVersionException(
+  functionName: String,
+  version: Version,
+  commits: Seq[String],
+  inputGroupIdOption: Option[Digest]
+) extends RuntimeException(
+  f"Function $functionName at version $version has inconsistent results at commits: $commits"
+    + f" (inputs: $inputGroupIdOption)"
+)
+
 class InvalidVersionException[O](
   requestedVersion: Version,
   function: FunctionWithProvenance[O],

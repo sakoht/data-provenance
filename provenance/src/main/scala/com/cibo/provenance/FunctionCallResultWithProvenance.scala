@@ -8,22 +8,22 @@ package com.cibo.provenance
   *
   */
 
-class Function0CallResultWithProvenance[O](f: Function0CallWithProvenance[O], output: Deflatable[O])(implicit bi: BuildInfo) extends  FunctionCallResultWithProvenance(f, output, bi) with Serializable {
-  def getProvenanceValue: Function0CallWithProvenance[O] = f
+class Function0CallResultWithProvenance[O](f: Function0CallWithProvenance[O], output: VirtualValue[O])(implicit bi: BuildInfo) extends  FunctionCallResultWithProvenance(f, output, bi) with Serializable {
+  def provenance: Function0CallWithProvenance[O] = f
 }
 
-class Function1CallResultWithProvenance[O, I1](f: Function1CallWithProvenance[O, I1], output: Deflatable[O])(implicit bi: BuildInfo) extends  FunctionCallResultWithProvenance(f, output, bi) {
-  def getProvenanceValue: Function1CallWithProvenance[O, I1] = f
+class Function1CallResultWithProvenance[O, I1](f: Function1CallWithProvenance[O, I1], output: VirtualValue[O])(implicit bi: BuildInfo) extends  FunctionCallResultWithProvenance(f, output, bi) {
+  def provenance: Function1CallWithProvenance[O, I1] = f
 }
 
-class Function2CallResultWithProvenance[O, I1, I2](f: Function2CallWithProvenance[O, I1, I2], output: Deflatable[O])(implicit bi: BuildInfo) extends  FunctionCallResultWithProvenance(f, output, bi) {
-  def getProvenanceValue: Function2CallWithProvenance[O, I1, I2] = f
+class Function2CallResultWithProvenance[O, I1, I2](f: Function2CallWithProvenance[O, I1, I2], output: VirtualValue[O])(implicit bi: BuildInfo) extends  FunctionCallResultWithProvenance(f, output, bi) {
+  def provenance: Function2CallWithProvenance[O, I1, I2] = f
 }
 
-class Function3CallResultWithProvenance[O, I1, I2, I3](f: Function3CallWithProvenance[O, I1, I2, I3], output: Deflatable[O])(implicit bi: BuildInfo) extends  FunctionCallResultWithProvenance(f, output, bi) {
-  def getProvenanceValue: Function3CallWithProvenance[O, I1, I2, I3] = f
+class Function3CallResultWithProvenance[O, I1, I2, I3](f: Function3CallWithProvenance[O, I1, I2, I3], output: VirtualValue[O])(implicit bi: BuildInfo) extends  FunctionCallResultWithProvenance(f, output, bi) {
+  def provenance: Function3CallWithProvenance[O, I1, I2, I3] = f
 }
 
-class Function4CallResultWithProvenance[O, I1, I2, I3, I4](f: Function4CallWithProvenance[O, I1, I2, I3, I4], output: Deflatable[O])(implicit bi: BuildInfo) extends  FunctionCallResultWithProvenance(f, output, bi) {
-  def getProvenanceValue: Function4CallWithProvenance[O, I1, I2, I3, I4] = f
+class Function4CallResultWithProvenance[O, I1, I2, I3, I4](f: Function4CallWithProvenance[O, I1, I2, I3, I4], output: VirtualValue[O])(implicit bi: BuildInfo) extends  FunctionCallResultWithProvenance(f, output, bi) {
+  def provenance: Function4CallWithProvenance[O, I1, I2, I3, I4] = f
 }
