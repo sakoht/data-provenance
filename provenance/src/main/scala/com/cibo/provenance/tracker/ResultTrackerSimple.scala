@@ -59,6 +59,9 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
       case _ =>
     }
 
+    // This is a lazy value that ensure we only save the BuildInfo once for this ResultTracker.
+    ensureBuildInfoIsSaved
+
     // Unpack the provenance and build information for clarity below.
     val functionName = provenance.functionName
     val version = provenance.getVersionValue
@@ -279,7 +282,31 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
     }
   }
 
+  def loadBuildInfoOption(commitId: String, buildId: String): Option[BuildInfo] = {
+    val basePrefix = f"commits/$commitId/builds/$buildId"
+    val suffixes = s3db.getSuffixesForPrefix(basePrefix).toList
+    suffixes match {
+      case suffix :: Nil =>
+        val bytes = s3db.getBytesForPrefix(f"$basePrefix/$suffix")
+        val build = Util.deserialize[BuildInfo](bytes)
+        Some(build)
+      case Nil =>
+        None
+      case many =>
+        throw new RuntimeException(f"Multiple objects saved for build $commitId/$buildId?: $suffixes")
+    }
+  }
+
   // private methods
+
+  // This is called only once, and only rigth before a given build tries to actually save anything.
+  private lazy val ensureBuildInfoIsSaved: Digest = {
+    val bi = currentBuildInfo
+    val bytes = Util.serialize(bi)
+    val digest = Util.digestBytes(bytes)
+    saveSerializedDataToPath(s"commits/${bi.commitId}/builds/${bi.buildId}/${digest.id}", bytes)
+    digest
+  }
 
   private def saveObjectToPath[T : ClassTag](path: String, obj: T): String = {
     obj match {

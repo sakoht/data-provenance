@@ -3,7 +3,6 @@ package com.cibo.provenance
 import java.io.File
 
 import com.cibo.io.s3.SyncablePath
-import com.cibo.provenance._
 import com.cibo.provenance.tracker.ResultTrackerSimple
 import org.apache.commons.io.FileUtils
 import org.scalatest.{FunSpec, Matchers}
@@ -22,11 +21,11 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       FileUtils.deleteDirectory(new File(testDataDir))
       
       implicit val bi: BuildInfo = DummyBuildInfo
-      implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
+      implicit val rt: ResultTrackerSimple = ResultTrackerSimple(SyncablePath(testDataDir))
 
       val s1a = multMe(2, 2)
-      val r1a = s1a.resolve
-
+      val _ = s1a.resolve
+      
       val s1b = s1a.deflate
       val s1c = s1b.inflate
       s1c shouldEqual s1a
@@ -37,7 +36,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       FileUtils.deleteDirectory(new File(testDataDir))
       
       implicit val bi: BuildInfo = DummyBuildInfo
-      implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
+      implicit val rt: ResultTrackerSimple = ResultTrackerSimple(SyncablePath(testDataDir))
       
       val s1 = addMe(2, 2) 
       val s2 = addMe(5, 7)
@@ -55,7 +54,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       // But the inflated object is of the correct type, where the code is prepared to recognize it.
       val s4c: multMe.Call = s4bInflated match {
         case i1withTypeKnown: multMe.Call => i1withTypeKnown
-        case other => throw new RuntimeException("Re-inflated object does not match expectred class.") 
+        case _ => throw new RuntimeException("Re-inflated object does not match expectred class.")
       }
       s4c shouldEqual s4b
 

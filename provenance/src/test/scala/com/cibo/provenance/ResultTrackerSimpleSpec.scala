@@ -133,11 +133,17 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
 
       Add.runCount = 0
 
+      // Ensure the build has _not_ been saved yet.
+      rt.loadBuildInfoOption(DummyBuildInfo.commitId, DummyBuildInfo.buildId) shouldEqual None
+
       Add.runCount = 0
       val s1 = Add(Add(1,2), Add(3,4))
       val r1 = s1.resolve
       val rc1 = Add.runCount
       rc1 shouldBe 3
+
+      // Verify we saved the build
+      rt.loadBuildInfoOption(DummyBuildInfo.commitId, DummyBuildInfo.buildId) shouldEqual Some(DummyBuildInfo)
 
       Add.runCount = 0
       val s2 = Add(Add(1,2), Add(3,4))
