@@ -25,11 +25,9 @@ class MappableResultsSpec extends FunSpec with Matchers {
       val testDataDir = f"$baseTestDir/mappable-calls-are-dry"
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))
-
       MakeDummyOutputList.runCount = 0
 
       val myCall = MakeDummyOutputList()
-
       MakeDummyOutputList.runCount shouldBe 0
 
       val i0: ApplyWithProvenance[Double]#Call = myCall(0)
