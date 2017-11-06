@@ -30,6 +30,7 @@ package com.cibo.provenance
   *
   */
 
+import com.cibo.provenance.mappable.GatherWithProvenance
 import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone}
 
 import scala.collection.immutable
@@ -54,10 +55,51 @@ sealed trait ValueWithProvenance[O] extends Serializable {
 
 
 object ValueWithProvenance {
+
+  // When a call expects a sequence with provenance, and it gets a sequence without provenance,
+  // but with elements that do have provenance, gather.
+  implicit def convertSeqWithProvenance[E : ClassTag, S <: Seq[ValueWithProvenance[E]]](
+    seq: S
+  )(
+    implicit rt: ResultTracker
+  ): GatherWithProvenance[E, Seq[E], Seq[ValueWithProvenance[E]]]#Call = {
+
+    val g: GatherWithProvenance[E, Seq[E], Seq[ValueWithProvenance[E]]]#Call = GatherWithProvenance[E].apply(seq)
+    g
+  }
+
+
   // Convert any value T to an UnknownProvenance[T] wherever a ValueWithProvenance is expected.
   // This is how "normal" data is passed into FunctionWithProvenance transparently.
   implicit def convertValueWithNoProvenance[T : ClassTag](v: T): ValueWithProvenance[T] =
     UnknownProvenance(v)
+
+  // Add methods to a Call where the output is a Seq.
+  implicit class MappableCall[E: ClassTag](seq: FunctionCallWithProvenance[Seq[E]]) {
+    import com.cibo.provenance.mappable._
+
+    def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[E]#Call = {
+      ApplyWithProvenance[E](seq, n)
+    }
+  }
+
+  // Add methods to a Result where the output is a Seq.
+  implicit class MappableResult[E: ClassTag](seq: FunctionCallResultWithProvenance[Seq[E]]) {
+    import com.cibo.provenance.mappable._
+
+    def scatter(implicit rt: ResultTracker): Seq[ApplyWithProvenance[E]#Result] = {
+      seq.output.indices.map {
+        n => ApplyWithProvenance[E](seq, n).resolve
+      }
+    }
+
+    def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[E]#Call = {
+      ApplyWithProvenance[E](seq, n)
+    }
+
+    def map[E2: ClassTag](f: Function1WithProvenance[E2, E])(implicit rt: ResultTracker): Seq[f.Call] =
+      seq.scatter.map(e => f(e))
+  }
 }
 
 
@@ -154,6 +196,7 @@ abstract class FunctionCallWithProvenance[O : ClassTag](var version: ValueWithPr
 
 
 abstract class FunctionCallResultWithProvenance[O](
+
   call: FunctionCallWithProvenance[O],
   outputVirtual: VirtualValue[O],
   outputBuildInfo: BuildInfo
