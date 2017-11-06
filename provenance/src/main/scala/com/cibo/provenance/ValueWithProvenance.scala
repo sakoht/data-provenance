@@ -56,23 +56,16 @@ sealed trait ValueWithProvenance[O] extends Serializable {
 
 object ValueWithProvenance {
 
-  // When a call expects a sequence with provenance, and it gets a sequence without provenance,
-  // but with elements that do have provenance, gather.
-  implicit def convertSeqWithProvenance[E : ClassTag, S <: Seq[ValueWithProvenance[E]]](
-    seq: S
-  )(
-    implicit rt: ResultTracker
-  ): GatherWithProvenance[E, Seq[E], Seq[ValueWithProvenance[E]]]#Call = {
-
-    val g: GatherWithProvenance[E, Seq[E], Seq[ValueWithProvenance[E]]]#Call = GatherWithProvenance[E].apply(seq)
-    g
-  }
-
-
   // Convert any value T to an UnknownProvenance[T] wherever a ValueWithProvenance is expected.
   // This is how "normal" data is passed into FunctionWithProvenance transparently.
   implicit def convertValueWithNoProvenance[T : ClassTag](v: T): ValueWithProvenance[T] =
     UnknownProvenance(v)
+
+  // Convert Seq[ValueWithProvenance[T]] into a ValueWithProvenance[Seq[T]] implicitly.
+  implicit def convertSeqWithProvenance[E : ClassTag, S <: Seq[ValueWithProvenance[E]]](seq: S)(implicit rt: ResultTracker): GatherWithProvenance[E, Seq[E], Seq[ValueWithProvenance[E]]]#Call = {
+    val gather: GatherWithProvenance[E, Seq[E], Seq[ValueWithProvenance[E]]]#Call = GatherWithProvenance[E].apply(seq)
+    gather
+  }
 
   // Add methods to a Call where the output is a Seq.
   implicit class MappableCall[E: ClassTag](seq: FunctionCallWithProvenance[Seq[E]]) {
@@ -81,6 +74,8 @@ object ValueWithProvenance {
     def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[E]#Call = {
       ApplyWithProvenance[E](seq, n)
     }
+
+    // TODO: make map work w/o scatter, and be sure that chained .map calls do not gather in-between.
   }
 
   // Add methods to a Result where the output is a Seq.
