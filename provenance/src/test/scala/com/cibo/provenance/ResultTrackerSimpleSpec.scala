@@ -30,10 +30,13 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
       val id = rt.saveValue(obj1)
       val obj2 = rt.loadValue[Int](id)
       obj2 shouldEqual obj1
+
+      
     }
 
     it("has signatures save and reload correctly.") {
-      val testDataDir = f"$baseTestDir/reload2"
+      val testSubdir = "reload2"
+      val testDataDir = f"$baseTestDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
 
@@ -41,10 +44,13 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
       val id = rt.saveValue(obj1)
       val obj2 = rt.loadValue[Add.Call](id)
       obj2 shouldEqual obj1
+
+      
     }
 
     it("lets a result save and be re-loaded by its call signature.") {
-      val testDataDir = f"$baseTestDir/reload3"
+      val testSubdir = "reload3"
+      val testDataDir = f"$baseTestDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
       
@@ -57,13 +63,15 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
 
       // Use the signature itself to re-load, ignoring the saved ID.
       val r2b = rt.loadResultForCallOption(s1).get
-      r2b.getProvenanceValue shouldEqual r2.getProvenanceValue
-      r2b.getOutputValue shouldEqual r2.getOutputValue
+      r2b.provenance shouldEqual r2.provenance
+      r2b.output shouldEqual r2.output
+
+      
     }
 
     it("ensures functions do not re-run") {
-
-      val testDataDir = f"$baseTestDir/rerun1"
+      val testSubdir = "rerun1"
+      val testDataDir = f"$baseTestDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
       
@@ -80,10 +88,13 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
       val r1b = s1.resolve
       val rc1b = Add.runCount
       rc1b shouldBe 1
+
+      
     }
 
     it("ensures functions do not re-run when called with the same inputs") {
-      val testDataDir = f"$baseTestDir/rerun2"
+      val testSubdir = "rerun2"
+      val testDataDir = f"$baseTestDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
 
@@ -100,10 +111,13 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
       val r2 = s2.resolve
       val rc2 = Add.runCount
       rc2 shouldBe 0 // unchanged
+
+      
     }
 
     it("should skip calls where the call has been made before with the same input values") {
-      val testDataDir = f"$baseTestDir/rerun3"
+      val testSubdir = "rerun3"
+      val testDataDir = f"$baseTestDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
 
@@ -111,7 +125,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
 
       val c1 = Add(Add(Add(1,2), Add(3,4)), 6)
       val r1 = c1.resolve
-      r1.getOutputValue shouldBe 16
+      r1.output shouldBe 16
 
       val rc1 = Add.runCount
       rc1 shouldBe 4                                    // all 4 calls occur
@@ -120,29 +134,32 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
 
       val c2 = Add(Add(Add(1,2), Add(2,5)), 6)          // replace Add(3,4) w/ Add(2,5) ...
       val r2 = c2.resolve
-      r2.getOutputValue shouldBe 16
+      r2.output shouldBe 16
 
       val rc2 = Add.runCount
 
-      r2.getOutputValue shouldBe r1.getOutputValue      // same output value
-      r2.getProvenanceValue.unresolve shouldBe c2       // correct provenance
+      r2.output shouldBe r1.output                      // same output value
+      r2.provenance.unresolve shouldBe c2               // correct provenance
       rc2 shouldBe 1                                    // only ONE of the four calls has to occur
 
       Add.runCount = 0
 
       val s3 = Add(Add(Add(1,2), Add(1,6)), 7)          // 1+6 == 3+4
       val r3 = s3.resolve
-      r3.getOutputValue shouldBe 17
+      r3.output shouldBe 17
 
       val rc3 = Add.runCount
 
-      r3.getOutputValue shouldBe r1.getOutputValue + 1 // same value
-      r3.getProvenanceValue.unresolve shouldBe s3
-      rc3 shouldBe 2                                   // only TWO of the four operations actually run: Add(3+5) and the final +7
+      r3.output shouldBe r1.output + 1 // same value
+      r3.provenance.unresolve shouldBe s3
+      rc3 shouldBe 2                                    // only TWO of the four operations actually run: Add(3+5) and the final +7
+
+      
     }
 
     it("ensures functions method calls return expected values (breakdown)") {
-      val testDataDir = f"$baseTestDir/breakdown"
+      val testSubdir = "breakdown"
+      val testDataDir = f"$baseTestDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
 
@@ -181,8 +198,10 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
       val r3b = s3b.resolve // does not run anything: different provenance but same final input values
       val rc6 = Add.runCount
       rc6 shouldBe 0
-      r3b.getOutputValue shouldEqual r3.getOutputValue
-      r3b.getProvenanceValue.unresolve shouldEqual s3b
+      r3b.output shouldEqual r3.output
+      r3b.provenance.unresolve shouldEqual s3b
+
+      
     }
   }
 
@@ -192,7 +211,8 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
     val build3 = BuildInfoBrief("commit2", "build3")
 
     it("results should be found from a previous run") {
-      val testDataDir = f"$baseTestDir/collision"
+      val testSubdir = "collision"
+      val testDataDir = f"$baseTestDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
 
       {
@@ -228,10 +248,13 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
         val r3 = Add(1, 1).resolve
         r3.getOutputBuildInfoBrief == build3 // now build 3!
       }
+
+      
     }
 
     it("should detect inconsistent output for the same commit/build") {
-      val testDataDir = f"$baseTestDir/same-build-inconsistency"
+      val testSubdir = "same-build-inconsistency"
+      val testDataDir = f"$baseTestDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
 
       val call = Add(1, 1)
@@ -239,7 +262,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
       {
         implicit val rt1 = ResultTrackerSimple(SyncablePath(testDataDir))(build1)
         val r1 = call.resolve
-        r1.getOutputValue shouldEqual 2
+        r1.output shouldEqual 2
         r1.getOutputBuildInfoBrief shouldEqual build1
       }
 
@@ -248,11 +271,11 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
 
         val r2 = call.resolve                             // The resolver finds a previous result
         r2.getOutputBuildInfoBrief shouldEqual build1     // from the last build
-        r2.getOutputValue shouldEqual 2                   // and has the correct output.
+        r2.output shouldEqual 2                   // and has the correct output.
 
         val r3 = call.newResult(3)(build1)                // Make a fake result.
         r3.getOutputBuildInfoBrief shouldEqual build1     // On the same build.
-        r3.getOutputValue shouldEqual 3                   // That has an inconsistent value for 1+1
+        r3.output shouldEqual 3                   // That has an inconsistent value for 1+1
         rt2.saveResult(r3)                                // And save it.
 
         intercept[com.cibo.provenance.InconsistentVersionException] {
@@ -261,10 +284,13 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
           call.resolve
         }
       }
+
+      
     }
 
     it("should detect inconsistent output for the same declared version across commit/builds") {
-      val testDataDir = f"$baseTestDir/cross-build-inconsistency"
+      val testSubdir = f"cross-build-inconsistency"
+      val testDataDir = f"$baseTestDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
 
       val call = Add(1, 1)
@@ -272,7 +298,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
       {
         implicit val rt1: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))(build1)
         val r1 = call.resolve
-        r1.getOutputValue shouldEqual 2
+        r1.output shouldEqual 2
         r1.getOutputBuildInfoBrief shouldEqual build1
       }
 
@@ -281,7 +307,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
 
         val r4 = call.newResult(4)(build2)            // Make a fake result.
         r4.getOutputBuildInfoBrief shouldEqual build2 // On a new commit and build.
-        r4.getOutputValue shouldEqual 4               // That has an inconsistent value for 1+1
+        r4.output shouldEqual 4               // That has an inconsistent value for 1+1
         rt2.saveResult(r4)                            // And save it.
 
         intercept[com.cibo.provenance.InconsistentVersionException] {
@@ -291,6 +317,8 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers {
           call.resolve
         }
       }
+
+      
     }
   }
 }

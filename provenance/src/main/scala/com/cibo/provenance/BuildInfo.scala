@@ -22,7 +22,7 @@ trait BuildInfo extends Serializable {
 
   override def toString: String = f"BuildInfo($commitId@$buildId)"
 
-  lazy val abbreviate: BuildInfoBrief = BuildInfoBrief(commitId, buildId)
+  def abbreviate: BuildInfoBrief = BuildInfoBrief(commitId, buildId)
 }
 
 trait GitBuildInfo extends BuildInfo with Serializable {
@@ -51,7 +51,7 @@ object NoBuildInfo extends BuildInfo with Serializable {
 }
 
 case class BuildInfoBrief(commitId: String, override val buildId: String) extends BuildInfo {
-  lazy val impl: BuildInfo = NoBuildInfo
+  def impl: BuildInfo = NoBuildInfo
 
   def name: String = impl.name
   def version: String = impl.version
@@ -61,5 +61,5 @@ case class BuildInfoBrief(commitId: String, override val buildId: String) extend
   def builtAtString: String = impl.builtAtString
   def builtAtMillis: Long = impl.builtAtMillis
 
-  override lazy val abbreviate: BuildInfoBrief = this
+  override def abbreviate: BuildInfoBrief = this
 }

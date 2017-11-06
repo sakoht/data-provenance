@@ -32,7 +32,6 @@ trait FunctionWithProvenance[O] extends Serializable {
   }
 }
 
-
 trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializable {
   self =>
 
@@ -51,14 +50,15 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
   case class Call(vv: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O]) extends Function0CallWithProvenance[O](vv)(implVersion) {
     val functionName: String = self.getClass.getName.stripSuffix("$")
     override def toString: String = self.getClass.getSimpleName.stripSuffix("$") + "()" // no Tuple0
-    override def run(implicit rt: ResultTracker): Result = newResult(super.run(rt).getOutput)(rt.getCurrentBuildInfo)
-    def newResult(output: Deflatable[O])(implicit bi: BuildInfo): Result = Result(this, output)(bi)
+    override def run(implicit rt: ResultTracker): Result = newResult(super.run(rt).getOutputVirtual)(rt.getCurrentBuildInfo)
+    override def resolve(implicit rt: ResultTracker): Result = super.resolve(rt).asInstanceOf[Result]
+    def newResult(output: VirtualValue[O])(implicit bi: BuildInfo): Result = Result(this, output)(bi)
     def duplicate(vv: ValueWithProvenance[Version]): Call = copy(vv)
   }
 
-  case class Result(provenance: Call, data: Deflatable[O])(implicit bi: BuildInfo) extends Function0CallResultWithProvenance(provenance, data)(bi)
+  case class Result(call: Call, data: VirtualValue[O])(implicit bi: BuildInfo) extends Function0CallResultWithProvenance(call, data)(bi)
 
-  implicit private def convertResult(r: Function0CallResultWithProvenance[O]): Result = Result(r.getProvenanceValue, r.getOutput)(r.getOutputBuildInfoBrief)
+  implicit private def convertResult(r: Function0CallResultWithProvenance[O]): Result = Result(r.provenance, r.getOutputVirtual)(r.getOutputBuildInfoBrief)
 
   implicit private def convertProvenance(f: Function0CallWithProvenance[O]): Call = Call(f.getVersion)(f.getOutputClassTag)
 }
@@ -82,14 +82,15 @@ trait Function1WithProvenance[O, I1] extends FunctionWithProvenance[O] with Seri
   case class Call(v1: ValueWithProvenance[I1], vv: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O]) extends Function1CallWithProvenance[O, I1](v1, vv)(implVersion) with Serializable {
     val functionName: String = self.getClass.getName.stripSuffix("$")
     override def toString: String = self.getClass.getSimpleName.stripSuffix("$") + inputTuple.toString
-    override def run(implicit rt: ResultTracker): Result = newResult(super.run(rt).getOutput)(rt.getCurrentBuildInfo)
-    def newResult(output: Deflatable[O])(implicit bi: BuildInfo): Result = Result(this, output)(bi)
+    override def run(implicit rt: ResultTracker): Result = newResult(super.run(rt).getOutputVirtual)(rt.getCurrentBuildInfo)
+    override def resolve(implicit rt: ResultTracker): Result = super.resolve(rt).asInstanceOf[Result]
+    def newResult(output: VirtualValue[O])(implicit bi: BuildInfo): Result = Result(this, output)(bi)
     def duplicate(v1: ValueWithProvenance[I1], vv: ValueWithProvenance[Version]): Call = copy(v1, vv)
   }
 
-  case class Result(provenance: Call, data: Deflatable[O])(implicit bi: BuildInfo) extends Function1CallResultWithProvenance(provenance, data)(bi)
+  case class Result(call: Call, data: VirtualValue[O])(implicit bi: BuildInfo) extends Function1CallResultWithProvenance(call, data)(bi)
 
-  implicit private def convertResult(r: Function1CallResultWithProvenance[O, I1]): Result = Result(r.getProvenanceValue, r.getOutput)(r.getOutputBuildInfoBrief)
+  implicit private def convertResult(r: Function1CallResultWithProvenance[O, I1]): Result = Result(r.provenance, r.getOutputVirtual)(r.getOutputBuildInfoBrief)
 
   implicit private def convertProvenance(f: Function1CallWithProvenance[O, I1]): Call = {
     val i = f.inputTuple
@@ -117,15 +118,16 @@ trait Function2WithProvenance[O, I1, I2] extends FunctionWithProvenance[O] with 
   case class Call(v1: ValueWithProvenance[I1], v2: ValueWithProvenance[I2], vv: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O]) extends Function2CallWithProvenance[O, I1, I2](v1, v2, vv)(implVersion) with Serializable {
     val functionName: String = self.getClass.getName.stripSuffix("$")
     override def toString: String = self.getClass.getSimpleName.stripSuffix("$") + inputTuple.toString
-    override def run(implicit rt: ResultTracker): Result = newResult(super.run(rt).getOutput)(rt.getCurrentBuildInfo)
-    def newResult(output: Deflatable[O])(implicit bi: BuildInfo): Result = Result(this, output)(bi)
+    override def run(implicit rt: ResultTracker): Result = newResult(super.run(rt).getOutputVirtual)(rt.getCurrentBuildInfo)
+    override def resolve(implicit rt: ResultTracker): Result = super.resolve(rt).asInstanceOf[Result]
+    def newResult(output: VirtualValue[O])(implicit bi: BuildInfo): Result = Result(this, output)(bi)
     def duplicate(v1: ValueWithProvenance[I1], v2: ValueWithProvenance[I2], vv: ValueWithProvenance[Version]): Call = copy(v1, v2, vv)
   }
 
-  case class Result(provenance: Call, data: Deflatable[O])(implicit bi: BuildInfo) extends Function2CallResultWithProvenance(provenance, data)(bi)
+  case class Result(call: Call, data: VirtualValue[O])(implicit bi: BuildInfo) extends Function2CallResultWithProvenance(call, data)(bi)
   
   implicit private def convertResultWithVersion(r: Function2CallResultWithProvenance[O, I1, I2]): Result =
-    Result(r.getProvenanceValue, r.getOutput)(r.getOutputBuildInfoBrief)
+    Result(r.provenance, r.getOutputVirtual)(r.getOutputBuildInfoBrief)
 
   implicit private def convertProvenanceWithVersion(f: Function2CallWithProvenance[O, I1, I2]): Call = {
     val i = f.inputTuple
@@ -153,15 +155,16 @@ trait Function3WithProvenance[O, I1, I2, I3] extends FunctionWithProvenance[O] {
   case class Call(v1: ValueWithProvenance[I1], v2: ValueWithProvenance[I2], v3: ValueWithProvenance[I3], vv: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O]) extends Function3CallWithProvenance[O, I1, I2, I3](v1, v2, v3, vv)(implVersion) {
     val functionName: String = self.getClass.getName.stripSuffix("$")
     override def toString: String = self.getClass.getSimpleName.stripSuffix("$") + inputTuple.toString
-    override def run(implicit rt: ResultTracker): Result = newResult(super.run(rt).getOutput)(rt.getCurrentBuildInfo)
-    def newResult(output: Deflatable[O])(implicit bi: BuildInfo): Result = Result(this, output)(bi)
+    override def run(implicit rt: ResultTracker): Result = newResult(super.run(rt).getOutputVirtual)(rt.getCurrentBuildInfo)
+    override def resolve(implicit rt: ResultTracker): Result = super.resolve(rt).asInstanceOf[Result]
+    def newResult(output: VirtualValue[O])(implicit bi: BuildInfo): Result = Result(this, output)(bi)
     def duplicate(v1: ValueWithProvenance[I1], v2: ValueWithProvenance[I2], v3: ValueWithProvenance[I3], vv: ValueWithProvenance[Version]): Call = copy(v1, v2, v3, vv)
   }
 
-  case class Result(provenance: Call, data: Deflatable[O])(implicit bi: BuildInfo) extends Function3CallResultWithProvenance(provenance, data)(bi)
+  case class Result(call: Call, data: VirtualValue[O])(implicit bi: BuildInfo) extends Function3CallResultWithProvenance(call, data)(bi)
 
   implicit private def convertResult(r: Function3CallResultWithProvenance[O, I1, I2, I3]): Result =
-    Result(r.getProvenanceValue, r.getOutput)(r.getOutputBuildInfoBrief)
+    Result(r.provenance, r.getOutputVirtual)(r.getOutputBuildInfoBrief)
 
   implicit private def convertProvenance(f: Function3CallWithProvenance[O, I1, I2, I3]): Call = {
     val i = f.inputTuple
@@ -189,15 +192,16 @@ trait Function4WithProvenance[O, I1, I2, I3, I4] extends FunctionWithProvenance[
   case class Call(v1: ValueWithProvenance[I1], v2: ValueWithProvenance[I2], v3: ValueWithProvenance[I3], v4: ValueWithProvenance[I4], vv: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O]) extends Function4CallWithProvenance[O, I1, I2, I3, I4](v1, v2, v3, v4, vv)(implVersion) {
     val functionName: String = self.getClass.getName.stripSuffix("$")
     override def toString: String = self.getClass.getSimpleName.stripSuffix("$") + inputTuple.toString
-    override def run(implicit rt: ResultTracker): Result = newResult(super.run(rt).getOutput)(rt.getCurrentBuildInfo)
-    def newResult(output: Deflatable[O])(implicit bi: BuildInfo): Result = Result(this, output)(bi)
+    override def run(implicit rt: ResultTracker): Result = newResult(super.run(rt).getOutputVirtual)(rt.getCurrentBuildInfo)
+    override def resolve(implicit rt: ResultTracker): Result = super.resolve(rt).asInstanceOf[Result]
+    def newResult(output: VirtualValue[O])(implicit bi: BuildInfo): Result = Result(this, output)(bi)
     def duplicate(v1: ValueWithProvenance[I1], v2: ValueWithProvenance[I2], v3: ValueWithProvenance[I3], v4: ValueWithProvenance[I4], vv: ValueWithProvenance[Version]): Call = copy(v1, v2, v3, v4, vv)
   }
 
-  case class Result(provenance: Call, data: Deflatable[O])(implicit bi: BuildInfo) extends Function4CallResultWithProvenance(provenance, data)(bi)
+  case class Result(call: Call, data: VirtualValue[O])(implicit bi: BuildInfo) extends Function4CallResultWithProvenance(call, data)(bi)
 
   implicit private def convertResult(r: Function4CallResultWithProvenance[O, I1, I2, I3, I4]): Result =
-    Result(r.getProvenanceValue, r.getOutput)(r.getOutputBuildInfoBrief)
+    Result(r.provenance, r.getOutputVirtual)(r.getOutputBuildInfoBrief)
 
   implicit private def convertProvenance(f: Function4CallWithProvenance[O, I1, I2, I3, I4]): Call = {
     val i = f.inputTuple

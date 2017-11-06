@@ -3,7 +3,7 @@ package com.cibo.provenance
 /**
   * Created by ssmith on 10/6/17.
   *
-  * This encapsulates a value such that it can go from a real object to a serialized blob to a digest and back.
+  * This encapsulates a value such that it can go from a real object to a byte array to a digest and back.
   *
   */
 
@@ -13,7 +13,7 @@ import scala.language.implicitConversions
 import scala.reflect.ClassTag
 
 
-case class Deflatable[T](
+case class VirtualValue[T](
   valueOption: Option[T],
   digestOption: Option[Digest],
   serializedDataOption: Option[Array[Byte]]
@@ -26,7 +26,7 @@ case class Deflatable[T](
 
   def className: String = ct.runtimeClass.getName
 
-  def resolveValue(implicit rt: ResultTracker): Deflatable[T] =
+  def resolveValue(implicit rt: ResultTracker): VirtualValue[T] =
     valueOption match {
       case Some(_) =>
         this
@@ -47,7 +47,7 @@ case class Deflatable[T](
         copy(valueOption = Some(value))
     }
 
-  def resolveSerialization(implicit rt: ResultTracker): Deflatable[T] =
+  def resolveSerialization(implicit rt: ResultTracker): VirtualValue[T] =
     serializedDataOption match {
       case Some(_) =>
         this
@@ -69,7 +69,7 @@ case class Deflatable[T](
         copy(serializedDataOption = Some(serialization))
     }
 
-  def resolveDigest: Deflatable[T] = digestOption match {
+  def resolveDigest: VirtualValue[T] = digestOption match {
     case Some(_) =>
       this
     case None =>
@@ -89,17 +89,17 @@ case class Deflatable[T](
   }
 }
 
-object Deflatable {
-  def apply[T](obj: T)(implicit ct: ClassTag[T]): Deflatable[T] =
-    Deflatable(valueOption = Some(obj), digestOption = None, serializedDataOption = None)
+object VirtualValue {
+  def apply[T](obj: T)(implicit ct: ClassTag[T]): VirtualValue[T] =
+    VirtualValue(valueOption = Some(obj), digestOption = None, serializedDataOption = None)
 
-  def unapply[T : ClassTag](v: Deflatable[T])(implicit rt: ResultTracker): T =
+  def unapply[T : ClassTag](v: VirtualValue[T])(implicit rt: ResultTracker): T =
     v.resolveValue.valueOption.get
 
-  implicit def toDeflatable[T : ClassTag](obj: T): Deflatable[T] =
+  implicit def toDeflatable[T : ClassTag](obj: T): VirtualValue[T] =
     apply(obj)
 
-  implicit def fromDeflatable[T : ClassTag](v: Deflatable[T])(implicit rt: ResultTracker): T =
+  implicit def fromDeflatable[T : ClassTag](v: VirtualValue[T])(implicit rt: ResultTracker): T =
     unapply(v)
 
 }

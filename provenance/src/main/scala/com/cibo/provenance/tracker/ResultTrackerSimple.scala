@@ -49,8 +49,8 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
     implicit val rt: ResultTracker = this
 
     // The result links the provenance to an output produced at a given build.
-    val provenance: FunctionCallWithProvenance[O] = result.getProvenanceValue
-    val outputValue: O = result.getOutputValue
+    val provenance: FunctionCallWithProvenance[O] = result.provenance
+    val outputValue: O = result.output
     val buildInfo: BuildInfo = result.getOutputBuildInfoBrief
 
     provenance match {
@@ -86,7 +86,7 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
       case u: IdentityCall[_] =>
         saveCall(u)
       case u: IdentityResult[_] =>
-        saveCall(u.getProvenanceValue)
+        saveCall(u.provenance)
       case _ =>
     }
 
@@ -134,6 +134,7 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
 
   def saveCall[O](call: FunctionCallWithProvenance[O]): FunctionCallWithProvenanceDeflated[O] =
     call match {
+
       case unknown: UnknownProvenance[O] =>
         // Skip saving calls with unknown provenance.
         // Whatever uses them can re-constitute the value from the input values.
@@ -145,42 +146,55 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
         }
         // Return a deflated object.
         FunctionCallWithProvenanceDeflated(call)(rt=this)
+
       case known =>
         // Save and let the saver produce the deflated version it saves.
         implicit val rt: ResultTracker = this
         implicit val ct: ClassTag[O] = known.getOutputClassTag
 
         // Deflate the current call, saving upstream calls as needed.
-        // This will stop decomposing when it encounters an already deflated call.
-        val deflatedInputs: FunctionCallWithProvenance[O] =
+        // This will stop deflating when it encounters an already deflated call.
+        val inflatedCallWithDeflatedInputs: FunctionCallWithProvenance[O] =
           try {
             known.deflateInputs
           } catch {
-            case _ : AmbiguousVersionException[_] =>
-              // An upstream call used a version that was not a raw value.  Don't collapse further in this corner case.
+            case e : UnresolvedVersionException[_] =>
+              // An upstream call used a version that was not a raw value.
+              // Don't deflate further in this corner case.
+              // Just let the call contain the indirect form of the version.
+              logger.warn(f"Unresolved version when saving call to $call: $e.")
               known
           }
-        val deflatedInputsBlob: Array[Byte] = Util.serialize(deflatedInputs)
-        val deflatedInputsDigest = Util.digestBytes(deflatedInputsBlob)
 
-        // Extract
+        // Extract the version Value.
         val versionValue: Version = known.getVersionValueAlreadyResolved match {
-          case Some(value) => value
-          case None => throw new AmbiguousVersionException(known)
+          case Some(value) =>
+            value
+          case None =>
+            // While this call cannot be saved directly, any downstream call will be allowed to wrap it.
+            // (This exception is intercepted in the block above of the downstream call.)
+            throw new UnresolvedVersionException(known)
         }
 
         val functionName = known.functionName
         val versionId = versionValue.id
-        val prefix = f"functions/$functionName/$versionId"
 
-        saveSerializedDataToPath(f"$prefix/provenance-values/${deflatedInputsDigest.id}", deflatedInputsBlob)
+        // Save the provenance object w/ the inputs deflated.
+        // Re-constituting the tree can happen one layer at a time.
+        val inflatedProvenanceWithDeflatedInputsBytes: Array[Byte] = Util.serialize(inflatedCallWithDeflatedInputs)
+        val inflatedProvenanceWithDeflatedInputsDigest = Util.digestBytes(inflatedProvenanceWithDeflatedInputsBytes)
+        saveSerializedDataToPath(
+          f"functions/$functionName/$versionId/provenance-values/${inflatedProvenanceWithDeflatedInputsDigest.id}",
+          inflatedProvenanceWithDeflatedInputsBytes
+        )
 
-        // A fully deflated call, referencing the non-deflated one.
-        // This is suitable as input in the current app/lib and downstream apps that understand the return type.
+        // Now return a fully deflated call, referencing the non-deflated one we just saved.
+        // This is suitable as input in the current app/lib,
+        // and also downstream other apps that understand the return type.
         FunctionCallWithKnownProvenanceDeflated[O](
           functionName = known.functionName,
           functionVersion = versionValue,
-          inflatedCallDigest = deflatedInputsDigest,
+          inflatedCallDigest = inflatedProvenanceWithDeflatedInputsDigest,
           outputClassName = known.getOutputClassTag.runtimeClass.getName
         )
     }
@@ -228,7 +242,7 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
       case (outputId, commitId, buildId) =>
         val ct = f.getOutputClassTag
         val output: O = loadValue[O](outputId)(ct)
-        val outputWrapped = Deflatable(valueOption = Some(output), digestOption = Some(outputId), serializedDataOption = None)(ct)
+        val outputWrapped = VirtualValue(valueOption = Some(output), digestOption = Some(outputId), serializedDataOption = None)(ct)
         val bi = BuildInfoBrief(commitId, buildId)
         f.newResult(outputWrapped)(bi)
     }
@@ -368,7 +382,7 @@ object ResultTrackerSimple {
     ResultTrackerSimple(SyncablePath(basePath))(currentAppBuildInfo)
 }
 
-class AmbiguousVersionException[O](call: FunctionCallWithProvenance[O])
+class UnresolvedVersionException[O](call: FunctionCallWithProvenance[O])
   extends RuntimeException(f"Cannot deflate calls with an unresolved version: $call") {
 
   def getCall: FunctionCallWithProvenance[O] = call
