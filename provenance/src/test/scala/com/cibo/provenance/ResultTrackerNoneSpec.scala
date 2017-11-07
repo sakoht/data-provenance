@@ -20,7 +20,7 @@ class ResultTrackerNoneSpec extends FunSpec with Matchers {
   describe("The null ResultTracker") {
 
     implicit val buildInfo: BuildInfo = DummyBuildInfo
-    implicit val noTracking = ResultTrackerNone()
+    implicit val noTracking: ResultTrackerNone = ResultTrackerNone()
 
     it("causes functions re-run every time to produce results.") {
       AddTwoInts.runCount = 0
@@ -40,6 +40,7 @@ class ResultTrackerNoneSpec extends FunSpec with Matchers {
 
       val c3 = AddTwoInts(c1, c2)
       val r3 = c3.run
+      r3.call shouldBe c3
       val cnt3 = AddTwoInts.runCount
       cnt3 shouldBe 5 // re-runs s1 and s2, then runs s3
 

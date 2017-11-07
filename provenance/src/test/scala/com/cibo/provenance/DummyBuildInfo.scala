@@ -16,7 +16,7 @@ trait DummyBuildInfo extends BuildInfo {
   def scalaVersion: String = "DUMMY-SCALA-VERSION"
   def sbtVersion: String = "DUMMY-SBT-VERSION"
 
-  private lazy val startTime: Instant = Instant.now
+  lazy val startTime: Instant = Instant.parse("1955-11-12T22:04:00.000Z") // we don't need roads
 
   lazy val builtAtString: String = startTime.toString
   lazy val builtAtMillis: Long = startTime.toEpochMilli

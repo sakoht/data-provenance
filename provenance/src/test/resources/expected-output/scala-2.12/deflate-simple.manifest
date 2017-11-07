@@ -1,0 +1,13 @@
+       7 ./data-provenance/308fe67caf72b9c8af4eeef8bbd4e38c3e9ab0c9/from/-
+       7 ./data-provenance/83e06c74c77009e510e73d8c53d64be2e1600a71/from/-
+       7 ./data-provenance/a5e8692649761bfa5900a3de0e6a6b09bc0dc73f/from/com.cibo.provenance.multMe/1.0/with-inputs/60f11cce962f0744310cfb487cd0a1cd9ade6e92/with-provenance/25c820ef7ef76db44a55db881710822c92a6384c/at/DUMMY-COMMIT/2017.11.06T09.44.12.956Z
+      80 ./data/308fe67caf72b9c8af4eeef8bbd4e38c3e9ab0c9
+      81 ./data/83e06c74c77009e510e73d8c53d64be2e1600a71
+      81 ./data/a5e8692649761bfa5900a3de0e6a6b09bc0dc73f
+     294 ./functions/com.cibo.provenance.multMe/1.0/input-group-values/60f11cce962f0744310cfb487cd0a1cd9ade6e92
+       7 ./functions/com.cibo.provenance.multMe/1.0/inputs-to-output/60f11cce962f0744310cfb487cd0a1cd9ade6e92/a5e8692649761bfa5900a3de0e6a6b09bc0dc73f/DUMMY-COMMIT/2017.11.06T09.44.12.956Z
+       7 ./functions/com.cibo.provenance.multMe/1.0/output-to-provenance/a5e8692649761bfa5900a3de0e6a6b09bc0dc73f/60f11cce962f0744310cfb487cd0a1cd9ade6e92/25c820ef7ef76db44a55db881710822c92a6384c
+       7 ./functions/com.cibo.provenance.multMe/1.0/provenance-to-inputs/25c820ef7ef76db44a55db881710822c92a6384c/60f11cce962f0744310cfb487cd0a1cd9ade6e92
+    1878 ./functions/com.cibo.provenance.multMe/1.0/provenance-values/4fe234394b3b36ca1a7f63b6e1aa98b6dc78ea84
+    2573 ./functions/com.cibo.provenance.multMe/1.0/provenance-values/8d91f7a4f887355bce28d37bc044de1f879f84ef
+    5029 total
