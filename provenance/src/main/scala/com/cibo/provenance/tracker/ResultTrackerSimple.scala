@@ -86,9 +86,9 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
     val inputGroupKey = inputGroupDigest.id
 
     provenance.getInputs.map {
-      case u: IdentityCall[_] =>
+      case u: UnknownProvenance[_] =>
         saveCall(u)
-      case u: IdentityResult[_] =>
+      case u: UnknownProvenanceValue[_] =>
         saveCall(u.provenance)
       case _ =>
     }

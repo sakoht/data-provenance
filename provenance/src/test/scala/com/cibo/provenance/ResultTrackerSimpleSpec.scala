@@ -4,7 +4,6 @@ package com.cibo.provenance
   * Created by ssmith on 9/20/17.
   */
 
-import java.nio.file.{Files, Paths}
 
 import com.typesafe.scalalogging.LazyLogging
 import org.scalatest.{FunSpec, Matchers}
@@ -12,6 +11,7 @@ import org.scalatest.{FunSpec, Matchers}
 
 class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
   import java.io.File
+  import java.nio.file.{Files, Paths}
   import org.apache.commons.io.FileUtils
 
   import com.cibo.io.s3.SyncablePath
