@@ -1,0 +1,13 @@
+       7 ./data-provenance/284761844b5d85aa359a88205675e3fb9b26801f/from/-
+       7 ./data-provenance/308fe67caf72b9c8af4eeef8bbd4e38c3e9ab0c9/from/-
+       7 ./data-provenance/83e06c74c77009e510e73d8c53d64be2e1600a71/from/-
+       7 ./data-provenance/c71d99fce6568d995e19cfdc1d890892b398e470/from/-
+      81 ./data/284761844b5d85aa359a88205675e3fb9b26801f
+      80 ./data/308fe67caf72b9c8af4eeef8bbd4e38c3e9ab0c9
+      81 ./data/83e06c74c77009e510e73d8c53d64be2e1600a71
+      81 ./data/c71d99fce6568d995e19cfdc1d890892b398e470
+    1876 ./functions/com.cibo.provenance.addMe/1.0/provenance-values/433bd2e639f3766ff6285ac0ca9829f372eb3dbd
+    1876 ./functions/com.cibo.provenance.addMe/1.0/provenance-values/6ece64da949ffa53eef8878905bba45fa126ca10
+    2122 ./functions/com.cibo.provenance.multMe/1.0/provenance-values/fd3013f3d05a9062c3f8030ae807aaabcb2af33b
+    2084 ./functions/com.cibo.provenance.multMe/1.0/provenance-values/ff155a2624c2848ebe2f24d979a8b2c578ddec0e
+    8309 total

@@ -32,27 +32,45 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
   // We test only the manifests since the SHA1 in the name is the digest of the file,
   // or the file is a key path, with empty content.
   def checkDirectory(subdir: String) = {
+
+    val version =
+      if (libBuildInfo.scalaVersion.startsWith("2.11"))
+        "2.11"
+      else if (libBuildInfo.scalaVersion.startsWith("2.12"))
+        "2.12"
+      else
+        throw new RuntimeException(f"Unexpected scala version $libBuildInfo.scalaVersion")
+
     val actualOutputDir = f"$baseTestDir/$subdir"
-    if (!new File(actualOutputDir).exists)
-      throw new RuntimeException(s"Failed to find $actualOutputDir!")
-
-    val expectedManifestFile = new File(f"src/test/resources/expected-output/$subdir.manifest")
-    if (!expectedManifestFile.exists)
-      throw new RuntimeException(s"Failed to find $expectedManifestFile!")
-    val expectedManifestBytes = Files.readAllBytes(Paths.get(expectedManifestFile.getAbsolutePath))
-    val expectedManifestString = new String(expectedManifestBytes)
-
     val newManifestBytes = getOutputAsBytes(s"cd $actualOutputDir && wc -c `find . -type file | sort`")
     val newManifestString = new String(newManifestBytes)
 
-    if (newManifestString != expectedManifestString) {
-      // If the test will fail, write the new content in case it needs to replace the old test data.
-      val name = f"$subdir.manifest"
-      logger.error(f"Writing $name to put in src/test/resources/expected-outputs/")
-      Files.write(Paths.get(name), newManifestBytes)
-    }
+    try {
 
-    newManifestString shouldBe expectedManifestString
+      if (!new File(actualOutputDir).exists)
+        throw new RuntimeException(s"Failed to find $actualOutputDir!")
+
+      val expectedManifestFile = new File(f"src/test/resources/expected-output/scala-$version/$subdir.manifest")
+      if (!expectedManifestFile.exists)
+        throw new RuntimeException(s"Failed to find $expectedManifestFile!")
+
+      val expectedManifestBytes = Files.readAllBytes(Paths.get(expectedManifestFile.getAbsolutePath))
+      val expectedManifestString = new String(expectedManifestBytes)
+
+      newManifestString shouldBe expectedManifestString
+
+    } catch {
+      case e: Exception =>
+        // For any failure, write the new content in case it needs to replace the old test data.
+        val dirName = f"new-manifests-$version"
+        val dir = new File(dirName)
+        if (!dir.exists)
+          dir.mkdirs()
+        val name = f"$dirName/$subdir.manifest"
+        logger.error(f"Writing $name to put in src/test/resources/expected-outputs/")
+        Files.write(Paths.get(name), newManifestBytes)
+        throw e
+    }
   }
 
   describe("The simple ResultTracker") {
