@@ -30,7 +30,7 @@ package com.cibo.provenance
   *
   */
 
-import com.cibo.provenance.mappable.GatherWithProvenance
+import com.cibo.provenance.mappable._
 import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone}
 
 import scala.collection.immutable
@@ -43,7 +43,7 @@ sealed trait ValueWithProvenance[O] extends Serializable {
   def isResolved: Boolean
   def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O]
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
-  def deflate(implicit rt: ResultTracker): ValueWithProvenance[O]
+  def deflate(implicit rt: ResultTracker): ValueWithProvenanceDeflated[O]
   def inflate(implicit rt: ResultTracker): ValueWithProvenance[O]
 
   protected def nocopy[T](newObj: T, prevObj: T): T =
@@ -100,21 +100,27 @@ object ValueWithProvenance {
 
 // The primary 2 types of value are the Call and Result.
 
-abstract class FunctionCallWithProvenance[O : ClassTag](var version: ValueWithProvenance[Version]) extends ValueWithProvenance[O] with Serializable {
-  self =>
-
+trait Call[O] extends ValueWithProvenance[O] with Serializable {
   val isResolved: Boolean = false
+}
+
+trait Result[O] extends ValueWithProvenance[O] with Serializable {
+  val isResolved: Boolean = true
+}
+
+
+// The regular pair of Call/Result work for normal functions.
+
+abstract class FunctionCallWithProvenance[O : ClassTag](var version: ValueWithProvenance[Version]) extends Call[O] with Serializable {
+  self =>
 
   lazy val getOutputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
 
-  /*
-   * Abstract interface.  These are implemented by Function{n}CallSignatureWithProvenance.
-   */
+  // Abstract interface.  These are implemented in each Function{n}CallSignatureWithProvenance subclass.
 
   val functionName: String
 
-  // The subclasses are specific Function{N}.
-  val impl: AnyRef
+  val impl: AnyRef // The subclasses are specific Function{N}.
 
   def getInputs: Seq[ValueWithProvenance[_]]
 
@@ -130,10 +136,9 @@ abstract class FunctionCallWithProvenance[O : ClassTag](var version: ValueWithPr
 
   protected[provenance] def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
 
-  def getVersion: ValueWithProvenance[Version] = Option(version) match {
-    case Some(value) => value
-    case None => NoVersionProvenance // NoVersion breaks some serialization, so we, sadly, allow a null version for internal things.
-  }
+  // Common methods.
+
+  def getVersion: ValueWithProvenance[Version] = version
 
   def getVersionValue(implicit rt: ResultTracker): Version = getVersion.resolve.output
 
@@ -191,16 +196,14 @@ abstract class FunctionCallWithProvenance[O : ClassTag](var version: ValueWithPr
 
 
 abstract class FunctionCallResultWithProvenance[O](
-
   call: FunctionCallWithProvenance[O],
   outputVirtual: VirtualValue[O],
   outputBuildInfo: BuildInfo
-) extends ValueWithProvenance[O] with Serializable {
+) extends Result[O] with Serializable {
 
   def provenance: FunctionCallWithProvenance[O]
 
   def output(implicit rt: ResultTracker): O = outputVirtual.resolveValue(rt).valueOption.get
-
 
   def getOutputVirtual: VirtualValue[O] = outputVirtual
 
@@ -228,8 +231,6 @@ abstract class FunctionCallResultWithProvenance[O](
         }
     }
 
-  val isResolved: Boolean = true
-
   def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
     this
 
@@ -245,14 +246,15 @@ abstract class FunctionCallResultWithProvenance[O](
 }
 
 /*
- * IdentityCall and IdentityResult are used to bootstrap parts of the system (UnknownProvenance and NoVersion).
- * They must be in this source file because to be part of the VirtualValue sealed trait.
- * They use a null to avoid circulatrity/serialization problems with the NoVersion Version itself being an IdentityValue.
+ * UnknownProvenance represents data with no history.
  *
+ * Note that `null` version is required in the inheritance constructor to solve a ciruclarity problem.
+ * The version is NoVerison, but that value is itself a value with UnknownProvenance.
  */
 
 //scalastyle:off
-class IdentityCall[O : ClassTag](value: O) extends Function0CallWithProvenance[O](null)((_) => value) with Serializable {
+case class UnknownProvenance[O : ClassTag](value: O) extends Function0CallWithProvenance[O](null)((_) => value) with Serializable {
+
   val functionName: String = toString
 
   // Note: this takes a version of "null" and explicitly sets getVersion to NoVersion.
@@ -262,13 +264,14 @@ class IdentityCall[O : ClassTag](value: O) extends Function0CallWithProvenance[O
   private lazy implicit val rt: ResultTracker = ResultTrackerNone()(NoBuildInfo)
 
 
-  private lazy val cachedResult: IdentityResult[O] = new IdentityResult(this, VirtualValue(value).resolveDigest)
+  private lazy val cachedResult: UnknownProvenanceValue[O] =
+    UnknownProvenanceValue(this, VirtualValue(value).resolveDigest)
 
-  def newResult(o: VirtualValue[O])(implicit bi: BuildInfo): IdentityResult[O] =
+  def newResult(o: VirtualValue[O])(implicit bi: BuildInfo): UnknownProvenanceValue[O] =
     cachedResult
 
   def duplicate(vv: ValueWithProvenance[Version]): Function0CallWithProvenance[O] =
-    new IdentityCall(value)(implicitly[ClassTag[O]])
+    UnknownProvenance(value)(implicitly[ClassTag[O]])
 
   private lazy val cachedDigest = Util.digestObject(value)
 
@@ -299,71 +302,23 @@ class IdentityCall[O : ClassTag](value: O) extends Function0CallWithProvenance[O
 
   override def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] = this
 
+  override def toString: String = f"raw($value)"
 }
 
 
-class IdentityResult[O : ClassTag](
-  call: IdentityCall[O],
+case class UnknownProvenanceValue[O : ClassTag](
+  call: UnknownProvenance[O],
   output: VirtualValue[O]
 ) extends Function0CallResultWithProvenance[O](call, output)(NoBuildInfo) with Serializable {
+
+  // Note: This class is present to complete the API, but nothing in the system instantiates it.
+  // The newResult method is never called for an UnknownProvenance[T].
+
   override def deflate(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] =
     FunctionCallResultWithProvenanceDeflated(this)
-}
 
-
-class IdentityValueForBootstrap[O : ClassTag](v: O) extends ValueWithProvenance[O] with Serializable {
-  // This bootstraps the system by wrapping a value as a virtual value.
-  // There are two uses: UnknownProvenance[O] and NoVersion.
-
-  def value: O = v
-
-  val isResolved: Boolean = true
-
-  val getOutputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
-
-  private lazy val resultVar: IdentityResult[O] = new IdentityResult(callVar, VirtualValue(v))
-  def resolve(implicit s: ResultTracker): IdentityResult[O] = resultVar
-
-  private lazy val callVar: IdentityCall[O] = new IdentityCall(v)
-  def unresolve(implicit s: ResultTracker): IdentityCall[O] = callVar
-
-  override def deflate(implicit rt: ResultTracker): ValueWithProvenanceDeflated[O] =
-    resultVar.deflate(rt)
-
-  def inflate(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = this.resolve
-}
-
-
-/*
- * UnknownProvenance[T] represents raw values that lack provenance tracking.
- *
- */
-
-case class UnknownProvenance[O : ClassTag](value: O) extends IdentityCall[O](value) {
-
-  override def toString: String = f"raw($value)"
-
-  override def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): UnknownProvenanceValue[O] =
-    new UnknownProvenanceValue[O](this, value)
-
-}
-
-
-case class UnknownProvenanceValue[O : ClassTag](prov: UnknownProvenance[O], output: VirtualValue[O]) extends IdentityResult[O](prov, output) {
-  // Note: This class is present to complete the API, but nothing in the system instantiates it.
-  // THe newResult method is never called for an UnknownProvenance[T].
   override def toString: String = f"rawv($output)"
 }
-
-
-/*
- * The second type of IdentityValue is used to represent a null version number.
- *
- */
-
-object NoVersion extends Version("-") with Serializable
-
-object NoVersionProvenance extends IdentityValueForBootstrap[Version](NoVersion) with Serializable
 
 
 /*
@@ -379,9 +334,7 @@ object NoVersionProvenance extends IdentityValueForBootstrap[Version](NoVersion)
 sealed trait ValueWithProvenanceDeflated[O] extends ValueWithProvenance[O] with Serializable
 
 
-sealed trait FunctionCallWithProvenanceDeflated[O] extends ValueWithProvenanceDeflated[O] with Serializable {
-
-  def isResolved: Boolean = false
+sealed trait FunctionCallWithProvenanceDeflated[O] extends ValueWithProvenanceDeflated[O] with Call[O] with Serializable {
 
   def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
     inflate.resolve(rt)
@@ -502,12 +455,9 @@ case class FunctionCallResultWithProvenanceDeflated[O](
   inputGroupDigest: Digest,
   outputDigest: Digest,
   buildInfo: BuildInfo
-)(implicit ct: ClassTag[O]) extends ValueWithProvenanceDeflated[O] with Serializable {
+)(implicit ct: ClassTag[O]) extends ValueWithProvenanceDeflated[O] with Result[O] with Serializable {
 
   def getOutputClassTag: ClassTag[O] = ct
-
-  def isResolved: Boolean =
-    true
 
   def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
     inflate.resolve(rt)
@@ -528,4 +478,6 @@ case class FunctionCallResultWithProvenanceDeflated[O](
     }
   }
 }
+
+
 

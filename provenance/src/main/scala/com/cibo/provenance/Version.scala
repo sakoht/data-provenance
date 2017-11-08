@@ -10,8 +10,12 @@ package com.cibo.provenance
   *
   */
 
-case class Version(id: String) {
+case class Version(id: String) extends Serializable {
   override def toString: String = f"v$id"
 }
+
+object NoVersion extends Version("-") with Serializable
+
+object NoVersionProvenance extends UnknownProvenance[Version](NoVersion) with Serializable
 
 
