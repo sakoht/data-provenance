@@ -30,7 +30,7 @@ package com.cibo.provenance
   *
   */
 
-import com.cibo.provenance.mappable._
+import com.cibo.provenance.monaidcs._
 import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone}
 
 import scala.collection.immutable
@@ -62,38 +62,43 @@ object ValueWithProvenance {
     UnknownProvenance(v)
 
   // Convert Seq[ValueWithProvenance[T]] into a ValueWithProvenance[Seq[T]] implicitly.
-  implicit def convertSeqWithProvenance[E : ClassTag, S <: Seq[ValueWithProvenance[E]]](seq: S)(implicit rt: ResultTracker): GatherWithProvenance[E, Seq[E], Seq[ValueWithProvenance[E]]]#Call = {
-    val gather: GatherWithProvenance[E, Seq[E], Seq[ValueWithProvenance[E]]]#Call = GatherWithProvenance[E].apply(seq)
+  implicit def convertSeqWithProvenance[A : ClassTag, S <: Seq[ValueWithProvenance[A]]](seq: S)(implicit rt: ResultTracker): GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call = {
+    val gather: GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call = GatherWithProvenance[A].apply(seq)
     gather
   }
 
   // Add methods to a Call where the output is a Seq.
-  implicit class MappableCall[E: ClassTag](seq: FunctionCallWithProvenance[Seq[E]]) {
-    import com.cibo.provenance.mappable._
+  implicit class MappableCall[A: ClassTag, +S <: Seq[A]](seq: FunctionCallWithProvenance[Seq[A]]) {
+    import com.cibo.provenance.monaidcs._
 
-    def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[E]#Call = {
-      ApplyWithProvenance[E](seq, n)
-    }
+    def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[A]#Call =
+      ApplyWithProvenance[A](seq, n)
 
-    // TODO: make map work w/o scatter, and be sure that chained .map calls do not gather in-between.
+    def indices: IndicesWithProvenance[A]#Call =
+      IndicesWithProvenance[A].apply(seq)
+
+    def map[B: ClassTag](f: Function1WithProvenance[B, A]): MapWithProvenance[B, A]#Call =
+      MapWithProvenance[B, A].apply(seq, f)
+
   }
 
   // Add methods to a Result where the output is a Seq.
-  implicit class MappableResult[E: ClassTag](seq: FunctionCallResultWithProvenance[Seq[E]]) {
-    import com.cibo.provenance.mappable._
+  implicit class MappableResult[A: ClassTag](seq: FunctionCallResultWithProvenance[Seq[A]]) {
+    import com.cibo.provenance.monaidcs._
 
-    def scatter(implicit rt: ResultTracker): Seq[ApplyWithProvenance[E]#Result] = {
+    def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[A]#Call =
+      ApplyWithProvenance[A](seq, n)
+
+    def indices: IndicesWithProvenance[A]#Call =
+      IndicesWithProvenance[A].apply(seq)
+
+    def map[B: ClassTag](f: Function1WithProvenance[B, A]): MapWithProvenance[B, A]#Call =
+      MapWithProvenance[B, A].apply(seq, f)
+
+    def scatter(implicit rt: ResultTracker): Seq[ApplyWithProvenance[A]#Result] =
       seq.output.indices.map {
-        n => ApplyWithProvenance[E](seq, n).resolve
+        n => ApplyWithProvenance[A](seq, n).resolve
       }
-    }
-
-    def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[E]#Call = {
-      ApplyWithProvenance[E](seq, n)
-    }
-
-    def map[E2: ClassTag](f: Function1WithProvenance[E2, E])(implicit rt: ResultTracker): Seq[f.Call] =
-      seq.scatter.map(e => f(e))
   }
 }
 
