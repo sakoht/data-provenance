@@ -1,4 +1,4 @@
-package com.cibo.provenance.mappable
+package com.cibo.provenance.monaidcs
 
 /**
   * Created by ssmith on 11/06/17.

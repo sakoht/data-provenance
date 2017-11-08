@@ -1,4 +1,4 @@
-package com.cibo.provenance.mappable
+package com.cibo.provenance.monaidcs
 
 /**
   * Created by ssmith on 11/06/17.
@@ -7,10 +7,10 @@ package com.cibo.provenance.mappable
   *
   */
 
-import com.cibo.provenance.{Function2WithProvenance, NoVersion}
+import com.cibo.provenance._
 
 class ApplyWithProvenance[O] extends Function2WithProvenance[O, Seq[O], Int]  {
-  val currentVersion = NoVersion
+  val currentVersion: Version = NoVersion
   def impl(seq: Seq[O], n: Int): O = seq(n)
 }
 
