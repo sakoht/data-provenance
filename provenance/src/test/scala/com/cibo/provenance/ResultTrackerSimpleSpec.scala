@@ -57,7 +57,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       val expectedManifestBytes = Files.readAllBytes(Paths.get(expectedManifestFile.getAbsolutePath))
       val expectedManifestString = new String(expectedManifestBytes)
 
-      //newManifestString shouldBe expectedManifestString
+      newManifestString shouldBe expectedManifestString
 
     } catch {
       case e: Exception =>
