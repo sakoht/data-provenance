@@ -33,15 +33,17 @@ import com.typesafe.scalalogging.LazyLogging
   *
   */
 
-case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuildInfo: BuildInfo) extends ResultTracker with LazyLogging {
+class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBuildInfo: BuildInfo) extends ResultTracker with LazyLogging {
 
   import scala.reflect.ClassTag
   import org.apache.commons.codec.digest.DigestUtils
 
-  private val s3db = S3DB.fromSyncablePath(basePath)
+  private val s3db = S3DB.fromSyncablePath(baseSyncablePath)
   protected val overwrite: Boolean = false
 
   // public interface
+
+  val basePath = baseSyncablePath
 
   def getCurrentBuildInfo: BuildInfo = currentBuildInfo
 
@@ -219,7 +221,7 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
   }
 
   def hasValue(digest: Digest): Boolean = {
-    val path: SyncablePath = basePath.extendPath(f"data/${digest.id}")
+    val path: SyncablePath = baseSyncablePath.extendPath(f"data/${digest.id}")
     path.exists
   }
 
@@ -322,7 +324,7 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
   }
 
   private def saveSerializedDataToPath(path: String, serializedData: Array[Byte]): Unit = {
-    val fullPath: SyncablePath = basePath.extendPath(path)
+    val fullPath: SyncablePath = baseSyncablePath.extendPath(path)
     if (overwrite || !fullPath.exists)
       Util.saveBytes(serializedData, fullPath.getFile)
   }
@@ -335,7 +337,7 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
   }
 
   private def loadObjectFromPath[T : ClassTag](path: String): T =
-    loadObjectFromFile[T](basePath.extendPath(path).getFile)
+    loadObjectFromFile[T](baseSyncablePath.extendPath(path).getFile)
 
   private def loadOutputCommitAndBuildIdForInputGroupIdOption[O : ClassTag](fname: String, fversion: Version, inputGroupId: Digest): Option[(Digest,String, String)] = {
       s3db.getSuffixesForPrefix(f"functions/$fname/${fversion.id}/inputs-to-output/${inputGroupId.id}/").toList match {
@@ -405,8 +407,11 @@ case class ResultTrackerSimple(basePath: SyncablePath)(implicit val currentBuild
 }
 
 object ResultTrackerSimple {
+  def apply(basePath: SyncablePath)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
+    new ResultTrackerSimple(basePath)(currentAppBuildInfo)
+
   def apply(basePath: String)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
-    ResultTrackerSimple(SyncablePath(basePath))(currentAppBuildInfo)
+    apply(SyncablePath(basePath))(currentAppBuildInfo)
 }
 
 class UnresolvedVersionException[O](call: FunctionCallWithProvenance[O])
