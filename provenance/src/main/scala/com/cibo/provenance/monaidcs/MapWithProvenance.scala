@@ -17,7 +17,7 @@ class MapWithProvenance[B : ClassTag, A : ClassTag] extends Function2WithProvena
     seq.map(f.impl)
 
   override protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
-    // Skip impl and construct the result indirectly.
+    // Skip the bulk impl() call and construct the output result from the individual calls.
     val individualResults: Seq[FunctionCallResultWithProvenance[B]] = runOnEach(call)(rt)
     val unified: Seq[B] = individualResults.map(_.output)
     call.newResult(unified)(rt.getCurrentBuildInfo)
@@ -27,7 +27,7 @@ class MapWithProvenance[B : ClassTag, A : ClassTag] extends Function2WithProvena
     val inResult: FunctionCallResultWithProvenance[Seq[A]] = call.v1.resolve
     val funcResult: FunctionCallResultWithProvenance[Function1WithProvenance[B, A]] = call.v2.resolve
 
-    // The "funcResult" actually accounts for the possibility that the function selection itself has provenance.
+    // The "funcResult" actually accounts for the possibility that the function selection _itself_ has provenance.
     // In most cases, we won't really have a FunctionWithProvenance returned by another FunctionWithProvenance.
     // To support this a ValueWithProvenance will need an implicit class to add
     // an .apply method much like we give .apply and .map to Seqs.
@@ -35,9 +35,9 @@ class MapWithProvenance[B : ClassTag, A : ClassTag] extends Function2WithProvena
     // For now, just grab the output and run with it.  It is, likely, only wrapped in UnknownProvenance.
     val func: Function1WithProvenance[B, A] = funcResult.output
 
-
+    // TODO: Find a way to be sure we don't really save this.
+    // It's great to know that we got 5 from looking up the 6th index in a list, but.
     val indicesWithProvenance: IndicesWithProvenance[A]#Result = inResult.indices.resolve(rt)
-    //val indices: List[Int] = indicesWithProvenance.output.toList
 
     inResult.output.indices.toList.map {
       n =>

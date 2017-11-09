@@ -13,10 +13,6 @@ import org.scalatest.{FunSpec, Matchers}
 
 class ResultTrackerNoneSpec extends FunSpec with Matchers {
 
-  val baseTestDir: String = f"/tmp/" + sys.env.getOrElse("USER", "anonymous") + "/rt"
-
-  ////
-
   describe("The null ResultTracker") {
 
     implicit val buildInfo: BuildInfo = DummyBuildInfo

@@ -11,28 +11,28 @@ import org.scalatest.{FunSpec, Matchers}
   * Created by ssmith on 10/26/17.
   */
 class InflateDeflateSpec extends FunSpec with Matchers {
-  val baseTestDir: String = f"/tmp/" + sys.env.getOrElse("USER", "anonymous") + "/rt"
+  val outputBaseDir: String = TestUtils.testOutputBaseDir
 
   describe("Deflation and inflation") {
 
     it("work on simple provenance.") {
 
-      val testDataDir = f"$baseTestDir/deflate-simple"
+      val testDataDir = f"$outputBaseDir/deflate-simple"
       FileUtils.deleteDirectory(new File(testDataDir))
-      
+
       implicit val bi: BuildInfo = DummyBuildInfo
       implicit val rt: ResultTrackerSimple = ResultTrackerSimple(SyncablePath(testDataDir))
 
       val s1a = multMe(2, 2)
       val _ = s1a.resolve
-      
+
       val s1b = s1a.deflate
       val s1c = s1b.inflate
       s1c shouldEqual s1a
     }
 
     it("works on nested provenance") {
-      val testDataDir = f"$baseTestDir/deflate-nested"
+      val testDataDir = f"$outputBaseDir/deflate-nested"
       FileUtils.deleteDirectory(new File(testDataDir))
       
       implicit val bi: BuildInfo = DummyBuildInfo
