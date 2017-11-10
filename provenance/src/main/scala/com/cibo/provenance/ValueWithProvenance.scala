@@ -59,12 +59,10 @@ object ValueWithProvenance {
     UnknownProvenance(v)
 
   // Convert Seq[ValueWithProvenance[T]] into a ValueWithProvenance[Seq[T]] implicitly.
-  implicit def convertSeqWithProvenance[A : ClassTag, S <: Seq[ValueWithProvenance[A]]](seq: S)(implicit rt: ResultTracker): GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call = {
-    val gather: GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call = GatherWithProvenance[A].apply(seq)
-    gather
-  }
+  implicit def convertSeqWithProvenance[A : ClassTag, S <: Seq[ValueWithProvenance[A]]](seq: S)(implicit rt: ResultTracker): GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call =
+    GatherWithProvenance[A].apply(seq)
 
-  // Add methods to a Call where the output is a Seq.
+  // Add methods to a call where the output is a Seq.
   implicit class MappableCall[A: ClassTag](seq: FunctionCallWithProvenance[Seq[A]]) {
     import com.cibo.provenance.monaidcs._
 
@@ -74,9 +72,9 @@ object ValueWithProvenance {
     def indices: IndicesWithProvenance[A]#Call =
       IndicesWithProvenance[A].apply(seq)
 
+    // Mapping over a function with provenance tracking keeps the provenance.
     def map[B: ClassTag](f: Function1WithProvenance[B, A]): MapWithProvenance[B, A]#Call =
       MapWithProvenance[B, A].apply(seq, f)
-
   }
 
   // Add methods to a Result where the output is a Seq.
@@ -92,6 +90,8 @@ object ValueWithProvenance {
     def map[B: ClassTag](f: Function1WithProvenance[B, A]): MapWithProvenance[B, A]#Call =
       MapWithProvenance[B, A].apply(seq, f)
 
+    // Return a regular Seq where each element retains provenance.
+    // Note that this is reversed by the implicit convertSeqWithProvenance above.
     def scatter(implicit rt: ResultTracker): Seq[ApplyWithProvenance[A]#Result] =
       seq.output.indices.map {
         n => ApplyWithProvenance[A](seq, n).resolve
