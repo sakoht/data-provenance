@@ -68,7 +68,7 @@ object ValueWithProvenance {
   }
 
   // Add methods to a Call where the output is a Seq.
-  implicit class MappableCall[A: ClassTag, +S <: Seq[A]](seq: FunctionCallWithProvenance[Seq[A]]) {
+  implicit class MappableCall[A: ClassTag](seq: FunctionCallWithProvenance[Seq[A]]) {
     import com.cibo.provenance.monaidcs._
 
     def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[A]#Call =
