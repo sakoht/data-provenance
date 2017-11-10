@@ -30,12 +30,22 @@ object TestUtils extends LazyLogging with Matchers {
     val newManifestBytes = getOutputAsBytes(s"cd $actualOutputDir && wc -c `find . -type file | sort`")
     val newManifestString = new String(newManifestBytes)
 
+    val rootSubdir = "src/test/resources/expected-output"
+
+    val expectedDataRoot =
+      if (new File(rootSubdir).exists)
+        rootSubdir
+      else if (new File(f"provenance/$rootSubdir").exists)
+        f"provenance/$rootSubdir"
+      else
+        throw new RuntimeException(f"Failed to find $rootSubdir under the current directory or provenance subdir!")
+
+    val expectedManifestFile = new File(f"$expectedDataRoot/scala-$version/$subdir.manifest")
+
     try {
 
       if (!new File(actualOutputDir).exists)
         throw new RuntimeException(s"Failed to find $actualOutputDir!")
-
-      val expectedManifestFile = new File(f"src/test/resources/expected-output/scala-$version/$subdir.manifest")
 
       val expectedManifestString =
         if (!expectedManifestFile.exists) {
@@ -50,14 +60,10 @@ object TestUtils extends LazyLogging with Matchers {
 
     } catch {
       case e: Exception =>
-        // For any failure, write the new content in case it needs to replace the old test data.
-        val dirName = f"new-manifests-$version"
-        val dir = new File(dirName)
-        if (!dir.exists)
-          dir.mkdirs()
-        val name = f"$dirName/$subdir.manifest"
-        logger.error(f"Writing $name to put in src/test/resources/expected-outputs/")
-        Files.write(Paths.get(name), newManifestBytes)
+        // For any failure, replae the test content.  This will show up in git status, and it can be committed or not.
+        expectedManifestFile.getParentFile.mkdirs()
+        logger.error(f"Writing $expectedManifestFile to put in source control.  Rever this if the change is not intentional.")
+        Files.write(Paths.get(expectedManifestFile.getAbsolutePath), newManifestBytes)
         throw e
     }
   }
