@@ -25,9 +25,6 @@ package com.cibo.provenance
   * and can represent parts of the provenance tree in external applications.  The ResultTracker
   * API returns these as it saves.
   *
-  * The IdentityCall and IdentityResult classes are behind UnknownProvenance and NoVersion,
-  * and are required to prevent circular deps and boostrap the system.
-  *
   */
 
 import com.cibo.provenance.monaidcs._
