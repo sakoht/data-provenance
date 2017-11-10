@@ -5,7 +5,7 @@ package com.cibo.provenance
   *
   * ValueWithProvenance[O] is a sealed trait with the following primary implementations:
   * - FunctionCallWithProvenance[O]: a function, its version, and its inputs (each a ValueWithProvenance[I*], etc)
-  * - FunctionCallResultWithProvenance[O]: adds a return value to the above signature
+  * - FunctionCallResultWithProvenance[O]: adds output (the return value) plus the BuildInfo (commit and build metadata)
   * - UnknownProvenance[O]: a special case of FunctionCallWithProvenance[O] for data w/o history.
   *
   * The type parameter O refers to the return/output type of the function in question.
@@ -24,9 +24,6 @@ package com.cibo.provenance
   * The *Deflated versions of FunctionCall{,Result}WithProvenance hold only text strings,
   * and can represent parts of the provenance tree in external applications.  The ResultTracker
   * API returns these as it saves.
-  *
-  * The IdentityCall and IdentityResult classes are behind UnknownProvenance and NoVersion,
-  * and are required to prevent circular deps and boostrap the system.
   *
   */
 
