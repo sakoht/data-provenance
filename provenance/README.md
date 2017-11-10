@@ -27,17 +27,20 @@ object MyApp extends App {
     // Replace with an s3:// path for real things.  Use a resources/ path for test cases.
     implicit val rt: ResultTracker = ResultTrackerSimple("/tmp/mydata")
     
-    val call1 = addMe(2, 3)             // no work is done 
-    val result1 = c1.resolve()          // determine and save the result
-    println(r1.output)                  // 5
-    println(r1.provenance)              // call1
+    val call1 = addMe(2, 3)             // no work is done
+    val result1 = call1.run()           // generate a result
+    println(r1.output)                  // get the output: 5
+    println(r1.provenance)              // geth the provenance: call1
     rt.hasResult(call1)                 // true
     
-    // This pulls the answer from storage instead of running:
-    val result1copy2 = addMe(2, 3).resolve()
+    // Check a db for a result, and run only if necessary:
+    result1b = call1.resolve            // grabs the implicit rt
+    result1b == result1
 
     // This calculates 1+2, but then looks-up 2+3 in storage:
     val sameOutputDifferentProvenance = addMe(2, addMe(1, 2).resolve()
+    sameOutputDifferentProvenance.output == result1.output
+    sameOutputDifferentProvenance.provenance != result1.provenance
 
     // Compose arbitarily:
     val bigPlan = addMe(addMe(addMe(2, 2), addMe(10, addMe(r1, c1)), addMe(5, 5))
