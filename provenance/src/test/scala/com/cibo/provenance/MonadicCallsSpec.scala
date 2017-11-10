@@ -17,6 +17,52 @@ class MonadicCallsSpec extends FunSpec with Matchers {
   val outputBaseDir: String = TestUtils.testOutputBaseDir
   implicit val buildInfo: BuildInfo = DummyBuildInfo
 
+  describe("Calls that return a SUBCLASS of Seq[A]") {
+    it("work ...*partly*") {
+      implicit val rt: ResultTracker = ResultTrackerNone()
+
+      val s: FunctionCallWithProvenance[Seq[Int]] = UnknownProvenance(Seq(11, 22, 33))
+      val l: FunctionCallWithProvenance[List[Int]] = UnknownProvenance(List(11, 22, 33))
+      val v: FunctionCallWithProvenance[Vector[Int]] = UnknownProvenance(Vector(11, 22, 33))
+      val a: FunctionCallWithProvenance[Array[Int]] = UnknownProvenance(Array(11, 22, 33))
+
+      s.resolve.output shouldBe Seq(11, 22, 33)
+      l.resolve.output shouldBe Vector(11, 22, 33)
+      v.resolve.output shouldBe Vector(11, 22, 33)
+      a.resolve.output shouldBe Array(11, 22, 33)
+
+      // This normal scala automatically works on Seq, and also List, Vector and Array.
+      def foo(s: Seq[Int]) = {
+        s.length
+      }
+      foo(s.resolve.output)
+      foo(l.resolve.output)
+      foo(v.resolve.output)
+      foo(a.resolve.output)
+
+      // For s, a FunctionCallWithProvenance[Seq[Int]], the implicit methods .map, .apply, etc.
+      // are available, because FunctionCallWithProvenance[O] has O <: Seq[_].
+      s.apply(2)              // .apply is defined in the implicit class MappableCall.
+      s.map(MyIncrement)      // .map is also.
+      s(2)                    // This is just apply w/ sugar.
+
+      // But none of these hit the MappableCall implicit class.  They all fail to compile.
+      /*
+      l.apply(2)
+      l.map(MyIncrement)
+      l(2)
+
+      v.apply(2)
+      v.map(MyIncrement)
+      v(2)
+
+      a.apply(2)
+      a.map(MyIncrement)
+      a(2)
+      */
+    }
+  }
+
   describe("Calls that return sequence") {
 
     it("never run when selecting an element, and only run once after resolving some element") {

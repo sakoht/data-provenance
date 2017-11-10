@@ -63,6 +63,10 @@ object ValueWithProvenance {
     GatherWithProvenance[A].apply(seq)
 
   // Add methods to a call where the output is a Seq.
+  /*
+  I attempted to make this support subclasses of Seq.  Attempted various permutations of:
+  implicit class MappableCall[A: ClassTag, S <: Seq[A]](seq: FunctionCallWithProvenance[S])(implicit ev: S <:< Seq[A]) {
+  */
   implicit class MappableCall[A: ClassTag](seq: FunctionCallWithProvenance[Seq[A]]) {
     import com.cibo.provenance.monaidcs._
 
