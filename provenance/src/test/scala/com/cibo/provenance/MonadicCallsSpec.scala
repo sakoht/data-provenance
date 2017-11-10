@@ -43,23 +43,27 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       // For s, a FunctionCallWithProvenance[Seq[Int]], the implicit methods .map, .apply, etc.
       // are available, because FunctionCallWithProvenance[O] has O <: Seq[_].
       s.apply(2)              // .apply is defined in the implicit class MappableCall.
+      s.apply2(2)
+      s.indices
+      s.indices2
       s.map(MyIncrement)      // .map is also.
       s(2)                    // This is just apply w/ sugar.
 
+
       // But none of these hit the MappableCall implicit class.  They all fail to compile.
-      /*
-      l.apply(2)
-      l.map(MyIncrement)
-      l(2)
+      l.apply2(2)
+      //l.apply(2)
+      //l.map(MyIncrement)
+      //l(2)
 
-      v.apply(2)
-      v.map(MyIncrement)
-      v(2)
+      v.apply2(2)
+      //v.apply(2)
+      //v.map(MyIncrement)
+      //v(2)
 
-      a.apply(2)
-      a.map(MyIncrement)
-      a(2)
-      */
+      //a.apply(2)
+      //a.map(MyIncrement)
+      //a(2)
     }
   }
 

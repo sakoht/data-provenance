@@ -31,8 +31,10 @@ import com.cibo.provenance.monaidcs._
 import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone}
 
 import scala.collection.immutable
-import scala.language.implicitConversions
 import scala.reflect.ClassTag
+
+import scala.language.implicitConversions
+import scala.language.higherKinds
 
 
 sealed trait ValueWithProvenance[O] extends Serializable {
@@ -62,11 +64,24 @@ object ValueWithProvenance {
   implicit def convertSeqWithProvenance[A : ClassTag, S <: Seq[ValueWithProvenance[A]]](seq: S)(implicit rt: ResultTracker): GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call =
     GatherWithProvenance[A].apply(seq)
 
+  implicit class TraversableCall2[S[_], A](call: FunctionCallWithProvenance[S[A]])(implicit trav: Traversable[S], ct1: ClassTag[S[A]], ct2: ClassTag[A], ct3: ClassTag[S[Int]]) {
+    def apply2(n: ValueWithProvenance[Int]): ApplyWithProvenance2[S, A]#Call =
+      ApplyWithProvenance2[S, A].apply(trav, call, n)
+
+    def indices2: IndicesWithProvenance2[S, A]#Call =
+      IndicesWithProvenance2[S, A].apply(trav, call)
+
+    /*
+    def indices: IndicesWithProvenance[A]#Call =
+      IndicesWithProvenance[A].apply(seq)
+
+    // Mapping over a function with provenance tracking keeps the provenance.
+    def map[B: ClassTag](f: Function1WithProvenance[B, A]): MapWithProvenance[B, A]#Call =
+      MapWithProvenance[B, A].apply(seq, f)
+    */
+  }
+
   // Add methods to a call where the output is a Seq.
-  /*
-  I attempted to make this support subclasses of Seq.  Attempted various permutations of:
-  implicit class MappableCall[A: ClassTag, S <: Seq[A]](seq: FunctionCallWithProvenance[S])(implicit ev: S <:< Seq[A]) {
-  */
   implicit class MappableCall[A: ClassTag](seq: FunctionCallWithProvenance[Seq[A]]) {
     import com.cibo.provenance.monaidcs._
 
