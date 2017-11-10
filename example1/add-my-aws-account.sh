@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# Run this to set your AWS account in the docker.sbt.
+# Do not commit that.  Just set it before launching a build, so it names it and publishes.
+
 DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 cd $DIR
 

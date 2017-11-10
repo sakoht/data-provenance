@@ -18,12 +18,8 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
   import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone, ResultTrackerSimple}
   import com.cibo.io.Shell.getOutputAsBytes
 
-  // The this is the BuildInfo _object_ for this library.
-  val libBuildInfo = com.cibo.provenance.internal.BuildInfo
-
-  // Use the scala version for the library in this test,
-  // cross-compiled tests can run in parallel.
-  val baseTestDir: String = f"/tmp/" + sys.env.getOrElse("USER", "anonymous") + f"/rt-${libBuildInfo.scalaVersion}"
+  // This is the root for test ouptut.
+  val testOutputBaseDir: String = TestUtils.testOutputBaseDir
 
   // This dummy BuildInfo is used by all ResultTrackers below.
   implicit val buildInfo: BuildInfo = DummyBuildInfo
@@ -31,53 +27,12 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
   // This is called at the end of each test to regression-test the low-level storage.
   // We test only the manifests since the SHA1 in the name is the digest of the file,
   // or the file is a key path, with empty content.
-  def checkDirectory(subdir: String) = {
-
-    val version =
-      if (libBuildInfo.scalaVersion.startsWith("2.11"))
-        "2.11"
-      else if (libBuildInfo.scalaVersion.startsWith("2.12"))
-        "2.12"
-      else
-        throw new RuntimeException(f"Unexpected scala version $libBuildInfo.scalaVersion")
-
-    val actualOutputDir = f"$baseTestDir/$subdir"
-    val newManifestBytes = getOutputAsBytes(s"cd $actualOutputDir && wc -c `find . -type file | sort`")
-    val newManifestString = new String(newManifestBytes)
-
-    try {
-
-      if (!new File(actualOutputDir).exists)
-        throw new RuntimeException(s"Failed to find $actualOutputDir!")
-
-      val expectedManifestFile = new File(f"src/test/resources/expected-output/scala-$version/$subdir.manifest")
-      if (!expectedManifestFile.exists)
-        throw new RuntimeException(s"Failed to find $expectedManifestFile!")
-
-      val expectedManifestBytes = Files.readAllBytes(Paths.get(expectedManifestFile.getAbsolutePath))
-      val expectedManifestString = new String(expectedManifestBytes)
-
-      newManifestString shouldBe expectedManifestString
-
-    } catch {
-      case e: Exception =>
-        // For any failure, write the new content in case it needs to replace the old test data.
-        val dirName = f"new-manifests-$version"
-        val dir = new File(dirName)
-        if (!dir.exists)
-          dir.mkdirs()
-        val name = f"$dirName/$subdir.manifest"
-        logger.error(f"Writing $name to put in src/test/resources/expected-outputs/")
-        Files.write(Paths.get(name), newManifestBytes)
-        throw e
-    }
-  }
 
   describe("The simple ResultTracker") {
 
     it("has primitives save and reload correctly.") {
       val testSubdir = "reload1"
-      val testDataDir = f"$baseTestDir/$testSubdir"
+      val testDataDir = f"$testOutputBaseDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
 
@@ -86,12 +41,12 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       val obj2 = rt.loadValue[Int](id)
       obj2 shouldEqual obj1
 
-      checkDirectory(testSubdir)
+      TestUtils.diffOutputSubdir(testSubdir)
     }
 
     it("has signatures save and reload correctly.") {
       val testSubdir = "reload2"
-      val testDataDir = f"$baseTestDir/$testSubdir"
+      val testDataDir = f"$testOutputBaseDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
 
@@ -100,12 +55,12 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       val obj2 = rt.loadValue[Add.Call](id)
       obj2 shouldEqual obj1
 
-      checkDirectory(testSubdir)
+      TestUtils.diffOutputSubdir(testSubdir)
     }
 
     it("lets a result save and be re-loaded by its call signature.") {
       val testSubdir = "reload3"
-      val testDataDir = f"$baseTestDir/$testSubdir"
+      val testDataDir = f"$testOutputBaseDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
       
@@ -121,12 +76,12 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       r2b.provenance shouldEqual r2.provenance
       r2b.output shouldEqual r2.output
 
-      checkDirectory(testSubdir)
+      TestUtils.diffOutputSubdir(testSubdir)
     }
 
     it("ensures functions do not re-run") {
       val testSubdir = "rerun1"
-      val testDataDir = f"$baseTestDir/$testSubdir"
+      val testDataDir = f"$testOutputBaseDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
       
@@ -144,12 +99,12 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       val rc1b = Add.runCount
       rc1b shouldBe 1
 
-      checkDirectory(testSubdir)
+      TestUtils.diffOutputSubdir(testSubdir)
     }
 
     it("ensures functions do not re-run when called with the same inputs") {
       val testSubdir = "rerun2"
-      val testDataDir = f"$baseTestDir/$testSubdir"
+      val testDataDir = f"$testOutputBaseDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
 
@@ -173,12 +128,12 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       val rc2 = Add.runCount
       rc2 shouldBe 0 // unchanged
 
-      checkDirectory(testSubdir)
+      TestUtils.diffOutputSubdir(testSubdir)
     }
 
     it("should skip calls where the call has been made before with the same input values") {
       val testSubdir = "rerun3"
-      val testDataDir = f"$baseTestDir/$testSubdir"
+      val testDataDir = f"$testOutputBaseDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
 
@@ -215,12 +170,12 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       r3.provenance.unresolve shouldBe s3
       rc3 shouldBe 2                                    // only TWO of the four operations actually run: Add(3+5) and the final +7
 
-      checkDirectory(testSubdir)
+      TestUtils.diffOutputSubdir(testSubdir)
     }
 
     it("ensures functions method calls return expected values (breakdown)") {
       val testSubdir = "breakdown"
-      val testDataDir = f"$baseTestDir/$testSubdir"
+      val testDataDir = f"$testOutputBaseDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
 
@@ -262,7 +217,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       r3b.output shouldEqual r3.output
       r3b.provenance.unresolve shouldEqual s3b
 
-      checkDirectory(testSubdir)
+      TestUtils.diffOutputSubdir(testSubdir)
     }
   }
 
@@ -273,7 +228,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
 
     it("results should be found from a previous run") {
       val testSubdir = "collision"
-      val testDataDir = f"$baseTestDir/$testSubdir"
+      val testDataDir = f"$testOutputBaseDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
 
       {
@@ -310,12 +265,12 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
         r3.getOutputBuildInfoBrief == build3 // now build 3!
       }
 
-      checkDirectory(testSubdir)
+      TestUtils.diffOutputSubdir(testSubdir)
     }
 
     it("should detect inconsistent output for the same commit/build") {
       val testSubdir = "same-build-inconsistency"
-      val testDataDir = f"$baseTestDir/$testSubdir"
+      val testDataDir = f"$testOutputBaseDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
 
       val call = Add(1, 1)
@@ -346,12 +301,12 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
         }
       }
 
-      checkDirectory(testSubdir)
+      TestUtils.diffOutputSubdir(testSubdir)
     }
 
     it("should detect inconsistent output for the same declared version across commit/builds") {
       val testSubdir = f"cross-build-inconsistency"
-      val testDataDir = f"$baseTestDir/$testSubdir"
+      val testDataDir = f"$testOutputBaseDir/$testSubdir"
       FileUtils.deleteDirectory(new File(testDataDir))
 
       val call = Add(1, 1)
@@ -379,7 +334,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
         }
       }
 
-      checkDirectory(testSubdir)
+      TestUtils.diffOutputSubdir(testSubdir)
     }
   }
 }

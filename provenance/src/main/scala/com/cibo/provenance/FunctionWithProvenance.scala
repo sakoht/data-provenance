@@ -4,7 +4,6 @@ package com.cibo.provenance
   * Created by ssmith on 9/12/17.
   */
 
-
 import com.cibo.provenance.tracker.ResultTracker
 
 import scala.language.implicitConversions
@@ -20,6 +19,9 @@ trait FunctionWithProvenance[O] extends Serializable {
 
   lazy val loadableVersionSet: Set[Version] = loadableVersions.toSet
   lazy val runnableVersionSet: Set[Version] = runnableVersions.toSet
+
+  def name = getClass.getName.stripSuffix("$")
+  override def toString = f"$name@$currentVersion"
 
   protected def throwInvalidVersionException(v: Version): Unit = {
     if (runnableVersions.contains(v)) {
@@ -48,6 +50,7 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
   }
 
   case class Call(vv: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O]) extends Function0CallWithProvenance[O](vv)(implVersion) {
+    val function = self
     val functionName: String = self.getClass.getName.stripSuffix("$")
     override def toString: String = self.getClass.getSimpleName.stripSuffix("$") + "()" // no Tuple0
     override def run(implicit rt: ResultTracker): Result = newResult(super.run(rt).getOutputVirtual)(rt.getCurrentBuildInfo)
@@ -80,6 +83,7 @@ trait Function1WithProvenance[O, I1] extends FunctionWithProvenance[O] with Seri
   }
 
   case class Call(v1: ValueWithProvenance[I1], vv: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O]) extends Function1CallWithProvenance[O, I1](v1, vv)(implVersion) with Serializable {
+    val function = self
     val functionName: String = self.getClass.getName.stripSuffix("$")
     override def toString: String = self.getClass.getSimpleName.stripSuffix("$") + inputTuple.toString
     override def run(implicit rt: ResultTracker): Result = newResult(super.run(rt).getOutputVirtual)(rt.getCurrentBuildInfo)
@@ -115,11 +119,22 @@ trait Function2WithProvenance[O, I1, I2] extends FunctionWithProvenance[O] with 
     impl(i1, i2)
   }
 
+  // This method is "pulled-up" from Call into the function so they can be overridden
+  // by provenance infrastructural functions.  In general, the impl() has access to only the raw values,
+  // not the ValueWithProvenance[T] wrappers.
+
+  protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
+    implicit val ct: ClassTag[O] = call.getOutputClassTag
+    val output: O = implVersion(call.v1.resolve.output, call.v2.resolve.output, call.getVersionValue)
+    call.newResult(VirtualValue(output))(rt.getCurrentBuildInfo)
+  }
+
   case class Call(v1: ValueWithProvenance[I1], v2: ValueWithProvenance[I2], vv: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O]) extends Function2CallWithProvenance[O, I1, I2](v1, v2, vv)(implVersion) with Serializable {
+    val function = self
     val functionName: String = self.getClass.getName.stripSuffix("$")
     override def toString: String = self.getClass.getSimpleName.stripSuffix("$") + inputTuple.toString
-    override def run(implicit rt: ResultTracker): Result = newResult(super.run(rt).getOutputVirtual)(rt.getCurrentBuildInfo)
-    override def resolve(implicit rt: ResultTracker): Result = super.resolve(rt).asInstanceOf[Result]
+    override def run(implicit rt: ResultTracker): Result = runCall(this)(rt)
+    override def resolve(implicit rt: ResultTracker): Result = rt.resolve(this).asInstanceOf[Result]
     def newResult(output: VirtualValue[O])(implicit bi: BuildInfo): Result = Result(this, output)(bi)
     def duplicate(v1: ValueWithProvenance[I1], v2: ValueWithProvenance[I2], vv: ValueWithProvenance[Version]): Call = copy(v1, v2, vv)
   }
@@ -153,6 +168,7 @@ trait Function3WithProvenance[O, I1, I2, I3] extends FunctionWithProvenance[O] {
   }
 
   case class Call(v1: ValueWithProvenance[I1], v2: ValueWithProvenance[I2], v3: ValueWithProvenance[I3], vv: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O]) extends Function3CallWithProvenance[O, I1, I2, I3](v1, v2, v3, vv)(implVersion) {
+    val function = self
     val functionName: String = self.getClass.getName.stripSuffix("$")
     override def toString: String = self.getClass.getSimpleName.stripSuffix("$") + inputTuple.toString
     override def run(implicit rt: ResultTracker): Result = newResult(super.run(rt).getOutputVirtual)(rt.getCurrentBuildInfo)
@@ -190,6 +206,7 @@ trait Function4WithProvenance[O, I1, I2, I3, I4] extends FunctionWithProvenance[
   }
 
   case class Call(v1: ValueWithProvenance[I1], v2: ValueWithProvenance[I2], v3: ValueWithProvenance[I3], v4: ValueWithProvenance[I4], vv: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O]) extends Function4CallWithProvenance[O, I1, I2, I3, I4](v1, v2, v3, v4, vv)(implVersion) {
+    val function = self
     val functionName: String = self.getClass.getName.stripSuffix("$")
     override def toString: String = self.getClass.getSimpleName.stripSuffix("$") + inputTuple.toString
     override def run(implicit rt: ResultTracker): Result = newResult(super.run(rt).getOutputVirtual)(rt.getCurrentBuildInfo)

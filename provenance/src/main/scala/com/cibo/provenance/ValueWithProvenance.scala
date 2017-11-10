@@ -30,6 +30,7 @@ package com.cibo.provenance
   *
   */
 
+import com.cibo.provenance.monaidcs._
 import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone}
 
 import scala.collection.immutable
@@ -59,6 +60,46 @@ object ValueWithProvenance {
   // This is how "normal" data is passed into FunctionWithProvenance transparently.
   implicit def convertValueWithNoProvenance[T : ClassTag](v: T): ValueWithProvenance[T] =
     UnknownProvenance(v)
+
+  // Convert Seq[ValueWithProvenance[T]] into a ValueWithProvenance[Seq[T]] implicitly.
+  implicit def convertSeqWithProvenance[A : ClassTag, S <: Seq[ValueWithProvenance[A]]](seq: S)(implicit rt: ResultTracker): GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call = {
+    val gather: GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call = GatherWithProvenance[A].apply(seq)
+    gather
+  }
+
+  // Add methods to a Call where the output is a Seq.
+  implicit class MappableCall[A: ClassTag, +S <: Seq[A]](seq: FunctionCallWithProvenance[Seq[A]]) {
+    import com.cibo.provenance.monaidcs._
+
+    def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[A]#Call =
+      ApplyWithProvenance[A](seq, n)
+
+    def indices: IndicesWithProvenance[A]#Call =
+      IndicesWithProvenance[A].apply(seq)
+
+    def map[B: ClassTag](f: Function1WithProvenance[B, A]): MapWithProvenance[B, A]#Call =
+      MapWithProvenance[B, A].apply(seq, f)
+
+  }
+
+  // Add methods to a Result where the output is a Seq.
+  implicit class MappableResult[A: ClassTag](seq: FunctionCallResultWithProvenance[Seq[A]]) {
+    import com.cibo.provenance.monaidcs._
+
+    def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[A]#Call =
+      ApplyWithProvenance[A](seq, n)
+
+    def indices: IndicesWithProvenance[A]#Call =
+      IndicesWithProvenance[A].apply(seq)
+
+    def map[B: ClassTag](f: Function1WithProvenance[B, A]): MapWithProvenance[B, A]#Call =
+      MapWithProvenance[B, A].apply(seq, f)
+
+    def scatter(implicit rt: ResultTracker): Seq[ApplyWithProvenance[A]#Result] =
+      seq.output.indices.map {
+        n => ApplyWithProvenance[A](seq, n).resolve
+      }
+  }
 }
 
 
@@ -71,6 +112,7 @@ trait Call[O] extends ValueWithProvenance[O] with Serializable {
 trait Result[O] extends ValueWithProvenance[O] with Serializable {
   val isResolved: Boolean = true
 }
+
 
 // The regular pair of Call/Result work for normal functions.
 
