@@ -3,6 +3,8 @@ package com.cibo.provenance
 import com.cibo.provenance.FunctionCallWithProvenance.TraversableCall
 import org.scalatest.{FunSpec, Matchers}
 
+import scala.collection.immutable
+
 /**
   * Created by ssmith on 11/07/17.
   */
@@ -18,6 +20,23 @@ class MonadicCallsSpec extends FunSpec with Matchers {
 
   val outputBaseDir: String = TestUtils.testOutputBaseDir
   implicit val buildInfo: BuildInfo = DummyBuildInfo
+
+  describe("Calls and results that return a Traversable") {
+    it("should \"scatter\" and retain the higher kind of the Traversable") {
+      implicit val rt: ResultTracker = ResultTrackerNone()
+
+      val i1 = UnknownProvenance(Vector(1, 2, 3))
+      val m1 = i1.map(MyIncrement)
+      val m2 = m1.map(MyIncrement)
+
+      val s1: Vector[FunctionCallWithProvenance[Int]] = m2.scatter
+
+      val s2: Vector[FunctionCallResultWithProvenance[Int]] = m2.resolve.scatter
+
+      s1.map(_.resolve.output) shouldBe Vector(3, 4, 5)
+      s2.map(_.output) shouldBe Vector(3, 4, 5)
+    }
+  }
 
   describe("Calls that return a Traversable[A] (Seq, Vector, List, etc.)") {
     it("have the expected additional methods that Seq does") {
@@ -57,6 +76,8 @@ class MonadicCallsSpec extends FunSpec with Matchers {
 
     it("resolves, and results also have the additional methos") {
       implicit val rt: ResultTracker = ResultTrackerNone()
+
+      MyIncrement.runCount = 0
 
       val call1: FunctionCallWithProvenance[Vector[Int]] = UnknownProvenance(Vector(11, 22, 33))
       val result1: FunctionCallResultWithProvenance[Vector[Int]] = call1.resolve

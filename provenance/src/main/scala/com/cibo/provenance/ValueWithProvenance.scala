@@ -84,6 +84,8 @@ object ValueWithProvenance {
 }
 
 object FunctionCallWithProvenance {
+
+  // Add methods like .map to a FunctionCallWithProvenance[O] where O is S[A], and an implicit Traversable[S] exists.
   implicit class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
     implicit hok: Traversable[S],
     ctsa: ClassTag[S[A]],
@@ -98,6 +100,13 @@ object FunctionCallWithProvenance {
 
     def map[B](f: Function1WithProvenance[B, A])(implicit ctsb: ClassTag[S[B]], ctb: ClassTag[B]): MapWithProvenance[B, A, S]#Call =
       MapWithProvenance[B, A, S].apply(call, f)
+
+    def scatter(implicit rt: ResultTracker): S[FunctionCallWithProvenance[A]] = {
+      val indices: Range = this.indices.resolve.output
+      indices.map {
+        n => ApplyWithProvenance[S, A].apply(call, n)
+      }.asInstanceOf[S[FunctionCallWithProvenance[A]]]
+    }
   }
 }
 
@@ -106,8 +115,10 @@ object FunctionCallResultWithProvenance {
     implicit hok: Traversable[S],
     ctsa: ClassTag[S[A]],
     cta: ClassTag[A],
-    ctsb: ClassTag[S[Int]]
+    ctsi: ClassTag[S[Int]]
   ) {
+    import com.cibo.provenance.FunctionCallWithProvenance.TraversableCall
+
     def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[S, A]#Call =
       ApplyWithProvenance[S, A].apply(result, n)
 
@@ -117,12 +128,13 @@ object FunctionCallResultWithProvenance {
     def map[B](f: Function1WithProvenance[B, A])(implicit ctsb: ClassTag[S[B]], ctb: ClassTag[B]): MapWithProvenance[B, A, S]#Call =
       new MapWithProvenance[B, A, S].apply(result, f)
 
-    // Return a regular Seq where each element retains provenance.
-    // Note that this is reversed by the implicit convertSeqWithProvenance above.
-    def scatter(implicit rt: ResultTracker): IndexedSeq[ApplyWithProvenance[S, A]#Result] =
-      hok.indices(result.output).map {
-        n => ApplyWithProvenance[S, A].apply(result, n).resolve
-      }
+    def scatter(implicit rt: ResultTracker): S[FunctionCallResultWithProvenance[A]] = {
+      val prov: FunctionCallWithProvenance[S[A]] = result.provenance
+      val prov2: TraversableCall[S, A] = TraversableCall[S, A](prov)
+      val calls: S[FunctionCallWithProvenance[A]] = prov2.scatter
+      def getResult(call: FunctionCallWithProvenance[A]): FunctionCallResultWithProvenance[A] = call.resolve
+      hok.map(getResult)(calls)
+    }
   }
 }
 
