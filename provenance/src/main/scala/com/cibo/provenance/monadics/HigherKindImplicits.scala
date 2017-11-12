@@ -16,10 +16,6 @@ package com.cibo.provenance.monadics
 
 import scala.language.higherKinds
 
-object Wrappers {
-  import com.cibo.provenance.monadics.Mappable._
-  import com.cibo.provenance.monadics.Traversable._
-}
 
 trait Applicable[T[_]] extends Serializable {
   def apply[A](idx: Int)(lok: T[A]): A
@@ -37,7 +33,7 @@ trait Traversable[T[_]] extends Applicable[T] with Mappable[T] with Serializable
 }
 
 object Mappable {
-  implicit object OptionWrapper extends Mappable[Option] with Serializable {
+  implicit object OptionMethods extends Mappable[Option] with Serializable {
     def map[A, B](f: A => B)(lok: Option[A]): Option[B] = lok.map(f)
     def toSeq[A](lok: Option[A]): Seq[A] = lok.toSeq
     def toList[A](lok: Option[A]): List[A] = lok.toList
@@ -47,7 +43,7 @@ object Mappable {
 }
 
 object Traversable {
-  implicit object SeqWrapper extends Traversable[Seq] with Serializable {
+  implicit object SeqMethods extends Traversable[Seq] with Serializable {
     def map[A, B](f: A => B)(lok: Seq[A]): Seq[B] = lok.map(f)
     def apply[A](idx: Int)(lok: Seq[A]): A = lok.apply(idx)
     def indices[A](lok: Seq[A]): Range = lok.indices
@@ -56,7 +52,7 @@ object Traversable {
     def toVector[A](lok: Seq[A]): Vector[A] = lok.toVector
     //def toArray[A](lok: Seq[A]): Array[A] = lok.toArray
   }
-  implicit object ListWrapper extends Traversable[List] with Serializable {
+  implicit object ListMethods extends Traversable[List] with Serializable {
     def map[A, B](f: A => B)(lok: List[A]): List[B] = lok.map(f)
     def apply[A](idx: Int)(lok: List[A]): A = lok.apply(idx)
     def indices[A](lok: List[A]): Range = lok.indices
@@ -65,7 +61,7 @@ object Traversable {
     def toVector[A](lok: List[A]): Vector[A] = lok.toVector
     //def toArray[A](lok: List[A]): Array[A] = lok.toArray
   }
-  implicit object VectorWrapper extends Traversable[Vector] with Serializable {
+  implicit object VectorMethods extends Traversable[Vector] with Serializable {
     def map[A, B](f: A => B)(lok: Vector[A]): Vector[B] = lok.map(f)
     def apply[A](idx: Int)(lok: Vector[A]): A = lok.apply(idx)
     def indices[A](lok: Vector[A]): Range = lok.indices

@@ -19,8 +19,8 @@ class MonadicCallsSpec extends FunSpec with Matchers {
   val outputBaseDir: String = TestUtils.testOutputBaseDir
   implicit val buildInfo: BuildInfo = DummyBuildInfo
 
-  describe("Calls that return a SUBCLASS of Seq[A]") {
-    it("work ...*partly*") {
+  describe("Calls that return a Traversable[A] (Seq, Vector, List, etc.)") {
+    it("have the expected additional methods that Seq does") {
       implicit val rt: ResultTracker = ResultTrackerNone()
 
       val s: FunctionCallWithProvenance[Seq[Int]] = UnknownProvenance(Seq(11, 22, 33))
@@ -33,34 +33,53 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       v.resolve.output shouldBe Vector(11, 22, 33)
       a.resolve.output shouldBe Array(11, 22, 33)
 
-      // This normal scala automatically works on Seq, and also List, Vector and Array.
-      def foo(s: Seq[Int]) = {
-        s.length
-      }
-      foo(s.resolve.output)
-      foo(l.resolve.output)
-      foo(v.resolve.output)
-      foo(a.resolve.output)
-
       s.apply(2)
       s.indices
       s.map(MyIncrement)
-      s(2)                    // This is just apply w/ sugar.
-
+      s(2)
 
       l.apply(2)
+      l.indices
       l.map(MyIncrement)
       l(2)
 
       v.apply(2)
-      //v.apply(2)
-      //v.map(MyIncrement)
-      //v(2)
+      v.indices
+      v.map(MyIncrement)
+      v(2)
 
+      // Unusual behavior w/ Array.  Fix.
       //a.apply(2)
+      //a.indices
       //a.map(MyIncrement)
       //a(2)
+    }
 
+    it("resolves, and results also have the additional methos") {
+      implicit val rt: ResultTracker = ResultTrackerNone()
+
+      val call1: FunctionCallWithProvenance[Vector[Int]] = UnknownProvenance(Vector(11, 22, 33))
+      val result1: FunctionCallResultWithProvenance[Vector[Int]] = call1.resolve
+
+      MyIncrement.runCount shouldBe 0
+      MyIncrement.runCount = 0
+
+      val call2a: MapWithProvenance[Int, Int, Vector]#Call = call1.map(MyIncrement)
+      val call2b: MapWithProvenance[Int, Int, Vector]#Call = result1.map(MyIncrement)
+      call2a.unresolve.toString shouldBe "MapWithProvenance(raw(Vector(11, 22, 33)),raw(com.cibo.provenance.MyIncrement@v0.0))"
+      call2b.unresolve.toString shouldBe "MapWithProvenance(raw(Vector(11, 22, 33)),raw(com.cibo.provenance.MyIncrement@v0.0))"
+
+      MyIncrement.runCount shouldBe 0
+
+      val result2 = call2a.resolve
+
+      MyIncrement.runCount shouldBe 3
+      MyIncrement.runCount = 0
+
+      result2.indices.resolve.output shouldBe (0 to 2)
+      result2(2).resolve.output shouldBe 34
+
+      MyIncrement.runCount shouldBe 0
     }
   }
 
