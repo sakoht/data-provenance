@@ -1,17 +1,30 @@
 package com.cibo.provenance.monadics
 
 /**
-  * Created by ssmith on 11/10/17.
+  * Created by ssmith on 11/10/17 with significant help from @tel.
   *
-  * Traits representing the ability to do .apply, .map, .indices, etc. on higher-order kinds.
+  * This is a tiny slice of concepts in "cats".  Switch to that if this begins to balloon.
   *
-  * Each monadic works with an S[A] where S is th kind (Seq, Vector, Option),
-  * and takes an implicit value like `hok: Traversable[S]` to access the higher-order "kinds".
-  * 
-  * The hok allows access to an appropriate .map, .apply, .indices, etc.
-  * 
-  * This is a tiny slice of concepts in "cats".
-  * Switch to that if this begins to balloon.
+  * These are traits and implicit objects for "higher-kinds", for instance, with
+  * higher kind S[_], S might be `Seq` or `Option` or `Future`.
+  *
+  * For example are several `Traversable[S]` implicit objects:
+  * - SeqMethods is a `Traversable[Seq]` object, subclassing Traversable[ S[_] ]
+  * - VectorMethods is a `Traversable[Vector]` object, subclassing Traversable [ [S_] ]
+  * - ...
+  *
+  * An implicit Traversable[Seq] is part of the signature for implicit classes that use S[_],
+  * but need to be specific about what _ is.  This isn't part of the type parameters, as a naive person might expect.
+  * Its presence in signature of an implicit class controls where the implicit class is applied.
+  *
+  * For instance, in the object FunctionCallWithProvenance[O], we add methods like map
+  * through an implicit class that recognizes O is S[_], there is a Traversable[S] implicitly available.
+  *
+  *   implicit class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(implicit hok: Traversable[S],..)
+  *
+  * The hok allows access to an appropriate .map, .apply, .indices, etc., even though S[A] is otherwise an an
+  * anonymous structure in the code.
+  *
   */
 
 import scala.language.higherKinds

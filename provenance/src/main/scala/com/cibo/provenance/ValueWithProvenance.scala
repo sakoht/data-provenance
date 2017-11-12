@@ -85,7 +85,7 @@ object ValueWithProvenance {
 
 object FunctionCallWithProvenance {
   implicit class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
-    implicit un: Traversable[S],
+    implicit hok: Traversable[S],
     ctsa: ClassTag[S[A]],
     cta: ClassTag[A],
     ctsi: ClassTag[S[Int]]
