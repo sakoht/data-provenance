@@ -1,10 +1,12 @@
 package com.cibo.provenance
 
+import com.cibo.provenance.FunctionCallWithProvenance.TraversableCall
 import org.scalatest.{FunSpec, Matchers}
 
 /**
   * Created by ssmith on 11/07/17.
   */
+
 
 class MonadicCallsSpec extends FunSpec with Matchers {
   import java.io.File
@@ -12,7 +14,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
 
   import com.cibo.io.s3.SyncablePath
   import com.cibo.provenance.tracker._
-  import com.cibo.provenance.monaidcs._
+  import com.cibo.provenance.monadics._
 
   val outputBaseDir: String = TestUtils.testOutputBaseDir
   implicit val buildInfo: BuildInfo = DummyBuildInfo
@@ -40,23 +42,17 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       foo(v.resolve.output)
       foo(a.resolve.output)
 
-      // For s, a FunctionCallWithProvenance[Seq[Int]], the implicit methods .map, .apply, etc.
-      // are available, because FunctionCallWithProvenance[O] has O <: Seq[_].
-      s.apply(2)              // .apply is defined in the implicit class MappableCall.
-      s.apply2(2)
+      s.apply(2)
       s.indices
-      s.indices2
-      s.map(MyIncrement)      // .map is also.
+      s.map(MyIncrement)
       s(2)                    // This is just apply w/ sugar.
 
 
-      // But none of these hit the MappableCall implicit class.  They all fail to compile.
-      l.apply2(2)
-      //l.apply(2)
-      //l.map(MyIncrement)
-      //l(2)
+      l.apply(2)
+      l.map(MyIncrement)
+      l(2)
 
-      v.apply2(2)
+      v.apply(2)
       //v.apply(2)
       //v.map(MyIncrement)
       //v(2)
@@ -64,6 +60,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       //a.apply(2)
       //a.map(MyIncrement)
       //a(2)
+
     }
   }
 
@@ -76,13 +73,13 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       implicit val rt: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))
       MakeDummyOutputList.runCount = 0
 
-      val myCall = MakeDummyOutputList()
+      val myCall: FunctionCallWithProvenance[Seq[Int]] = MakeDummyOutputList()
       MakeDummyOutputList.runCount shouldBe 0
 
-      val i0: ApplyWithProvenance[Int]#Call = myCall(0)
-      val i1: ApplyWithProvenance[Int]#Call = myCall(1)
-      val i2: ApplyWithProvenance[Int]#Call = myCall(2)
-      val i3: ApplyWithProvenance[Int]#Call = myCall(3)
+      val i0: ApplyWithProvenance[Seq, Int]#Call = myCall(0)
+      val i1: ApplyWithProvenance[Seq, Int]#Call = myCall(1)
+      val i2: ApplyWithProvenance[Seq, Int]#Call = myCall(2)
+      val i3: ApplyWithProvenance[Seq, Int]#Call = myCall(3)
 
       // Still hasn't run...
       MakeDummyOutputList.runCount shouldBe 0
@@ -141,13 +138,13 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       val myResult = MakeDummyOutputList().resolve
       MakeDummyOutputList.runCount shouldBe 1
 
-      val seqOfResults: Seq[ApplyWithProvenance[Int]#Result] = myResult.scatter
+      val seqOfResults = myResult.scatter
       MakeDummyOutputList.runCount shouldBe 1
 
-      val r0: ApplyWithProvenance[Int]#Result = seqOfResults(0)
-      val r1: ApplyWithProvenance[Int]#Result = seqOfResults(1)
-      val r2: ApplyWithProvenance[Int]#Result = seqOfResults(2)
-      val r3: ApplyWithProvenance[Int]#Result = seqOfResults(3)
+      val r0 = seqOfResults(0)
+      val r1 = seqOfResults(1)
+      val r2 = seqOfResults(2)
+      val r3 = seqOfResults(3)
 
       MakeDummyOutputList.runCount shouldBe 1
 
@@ -173,7 +170,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
 
       MyIncrement.runCount = 0
 
-      val myResult2: MapWithProvenance[Int, Int]#Call = myResult1.map(MyIncrement)
+      val myResult2: MapWithProvenance[Int, Int, Seq]#Call = myResult1.map(MyIncrement)
       MakeDummyOutputList.runCount shouldBe 1
       MyIncrement.runCount shouldBe 0
 

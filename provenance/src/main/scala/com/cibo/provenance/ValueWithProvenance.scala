@@ -27,12 +27,11 @@ package com.cibo.provenance
   *
   */
 
-import com.cibo.provenance.monaidcs._
+import com.cibo.provenance.monadics._
 import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone}
 
 import scala.collection.immutable
 import scala.reflect.ClassTag
-
 import scala.language.implicitConversions
 import scala.language.higherKinds
 
@@ -52,68 +51,56 @@ sealed trait ValueWithProvenance[O] extends Serializable {
       newObj
 }
 
-
 object ValueWithProvenance {
-
   // Convert any value T to an UnknownProvenance[T] wherever a ValueWithProvenance is expected.
   // This is how "normal" data is passed into FunctionWithProvenance transparently.
-  implicit def convertValueWithNoProvenance[T : ClassTag](v: T): ValueWithProvenance[T] =
+  implicit def convertValueWithNoProvenance[T: ClassTag](v: T): ValueWithProvenance[T] =
     UnknownProvenance(v)
 
   // Convert Seq[ValueWithProvenance[T]] into a ValueWithProvenance[Seq[T]] implicitly.
-  implicit def convertSeqWithProvenance[A : ClassTag, S <: Seq[ValueWithProvenance[A]]](seq: S)(implicit rt: ResultTracker): GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call =
+  implicit def convertSeqWithProvenance[A: ClassTag, S <: Seq[ValueWithProvenance[A]]](seq: S)(implicit rt: ResultTracker): GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call =
     GatherWithProvenance[A].apply(seq)
+}
 
-  implicit class TraversableCall2[S[_], A](call: FunctionCallWithProvenance[S[A]])(implicit trav: Traversable[S], ct1: ClassTag[S[A]], ct2: ClassTag[A], ct3: ClassTag[S[Int]]) {
-    def apply2(n: ValueWithProvenance[Int]): ApplyWithProvenance2[S, A]#Call =
-      ApplyWithProvenance2[S, A].apply(trav, call, n)
+object FunctionCallWithProvenance {
+  implicit class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
+    implicit un: Traversable[S],
+    ctsa: ClassTag[S[A]],
+    cta: ClassTag[A],
+    ctsi: ClassTag[S[Int]]
+  ) {
+    def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[S, A]#Call =
+      ApplyWithProvenance[S, A].apply(call, n)
 
-    def indices2: IndicesWithProvenance2[S, A]#Call =
-      IndicesWithProvenance2[S, A].apply(trav, call)
+    def indices: IndicesWithProvenance[S, A]#Call =
+      IndicesWithProvenance[S, A].apply(call)
 
-    /*
-    def indices: IndicesWithProvenance[A]#Call =
-      IndicesWithProvenance[A].apply(seq)
-
-    // Mapping over a function with provenance tracking keeps the provenance.
-    def map[B: ClassTag](f: Function1WithProvenance[B, A]): MapWithProvenance[B, A]#Call =
-      MapWithProvenance[B, A].apply(seq, f)
-    */
+    def map[B](f: Function1WithProvenance[B, A])(implicit ctsb: ClassTag[S[B]], ctb: ClassTag[B]): MapWithProvenance[B, A, S]#Call =
+      MapWithProvenance[B, A, S].apply(call, f)
   }
+}
 
-  // Add methods to a call where the output is a Seq.
-  implicit class MappableCall[A: ClassTag](seq: FunctionCallWithProvenance[Seq[A]]) {
-    import com.cibo.provenance.monaidcs._
+object FunctionCallResultWithProvenance {
+  implicit class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])(
+    implicit hok: Traversable[S],
+    ctsa: ClassTag[S[A]],
+    cta: ClassTag[A],
+    ctsb: ClassTag[S[Int]]
+  ) {
+    def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[S, A]#Call =
+      ApplyWithProvenance[S, A].apply(result, n)
 
-    def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[A]#Call =
-      ApplyWithProvenance[A](seq, n)
+    def indices: IndicesWithProvenance[S, A]#Call =
+      IndicesWithProvenance[S, A].apply(result)
 
-    def indices: IndicesWithProvenance[A]#Call =
-      IndicesWithProvenance[A].apply(seq)
-
-    // Mapping over a function with provenance tracking keeps the provenance.
-    def map[B: ClassTag](f: Function1WithProvenance[B, A]): MapWithProvenance[B, A]#Call =
-      MapWithProvenance[B, A].apply(seq, f)
-  }
-
-  // Add methods to a Result where the output is a Seq.
-  implicit class MappableResult[A: ClassTag](seq: FunctionCallResultWithProvenance[Seq[A]]) {
-    import com.cibo.provenance.monaidcs._
-
-    def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[A]#Call =
-      ApplyWithProvenance[A](seq, n)
-
-    def indices: IndicesWithProvenance[A]#Call =
-      IndicesWithProvenance[A].apply(seq)
-
-    def map[B: ClassTag](f: Function1WithProvenance[B, A]): MapWithProvenance[B, A]#Call =
-      MapWithProvenance[B, A].apply(seq, f)
+    def map[B](f: Function1WithProvenance[B, A])(implicit ctsb: ClassTag[S[B]], ctb: ClassTag[B]): MapWithProvenance[B, A, S]#Call =
+      new MapWithProvenance[B, A, S].apply(result, f)
 
     // Return a regular Seq where each element retains provenance.
     // Note that this is reversed by the implicit convertSeqWithProvenance above.
-    def scatter(implicit rt: ResultTracker): Seq[ApplyWithProvenance[A]#Result] =
-      seq.output.indices.map {
-        n => ApplyWithProvenance[A](seq, n).resolve
+    def scatter(implicit rt: ResultTracker): IndexedSeq[ApplyWithProvenance[S, A]#Result] =
+      hok.indices(result.output).map {
+        n => ApplyWithProvenance[S, A].apply(result, n).resolve
       }
   }
 }
@@ -340,7 +327,6 @@ case class UnknownProvenanceValue[O : ClassTag](
 
   override def toString: String = f"rawv($output)"
 }
-
 
 /*
  * "Deflated" equivalents of the call and result are still functional as ValueWithProvenance[O],

@@ -1,4 +1,4 @@
-package com.cibo.provenance.monaidcs
+package com.cibo.provenance.monadics
 
 /**
   * Created by ssmith on 11/06/17.
