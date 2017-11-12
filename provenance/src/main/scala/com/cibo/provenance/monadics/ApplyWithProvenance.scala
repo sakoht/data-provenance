@@ -18,7 +18,7 @@ class ApplyWithProvenance[S[_], O](implicit hok: Applicable[S]) extends Function
 }
 
 object ApplyWithProvenance {
-  def apply[S[_], A](implicit converter: Applicable[S]) = new ApplyWithProvenance[S, A]
+  def apply[S[_], A](implicit hok: Applicable[S]) = new ApplyWithProvenance[S, A]
 }
 
 object ApplyToRangeWithProvenance extends Function2WithProvenance[Int, Range, Int] {

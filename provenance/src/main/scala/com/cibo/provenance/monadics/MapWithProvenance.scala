@@ -42,9 +42,6 @@ class MapWithProvenance[B, A, S[_]](implicit hok: Traversable[S], ctsb: ClassTag
 }
 
 object MapWithProvenance {
-  //def apply[S[_], A](implicit converter: Applicable[S]) = new ApplyWithProvenance[S, A]
-  //def apply[E2 : ClassTag, E : ClassTag] = new MapWithProvenance[E2, E]
-  def apply[B, A, S[_]](
-    implicit converter: Traversable[S], ct: ClassTag[S[B]], ct2: ClassTag[A], ct3: ClassTag[B]
-  ) = new MapWithProvenance[B, A, S]()(converter, ct, ct2, ct3)
+  def apply[B, A, S[_]](implicit converter: Traversable[S], ct: ClassTag[S[B]], ct2: ClassTag[A], ct3: ClassTag[B]) =
+    new MapWithProvenance[B, A, S]()(converter, ct, ct2, ct3)
 }
