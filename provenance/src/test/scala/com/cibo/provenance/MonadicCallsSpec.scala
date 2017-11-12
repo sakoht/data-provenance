@@ -3,8 +3,6 @@ package com.cibo.provenance
 import com.cibo.provenance.FunctionCallWithProvenance.TraversableCall
 import org.scalatest.{FunSpec, Matchers}
 
-import scala.collection.immutable
-
 /**
   * Created by ssmith on 11/07/17.
   */
