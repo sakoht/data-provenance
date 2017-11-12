@@ -23,22 +23,20 @@ class MapWithProvenance[B, A, S[_]](implicit hok: Traversable[S], ctsb: ClassTag
     // This is provided for completeness since `.impl` is externally exposed.
     hok.map(f.impl)(s)
 
-
   protected def runOnEach(call: Call)(implicit rt: ResultTracker): S[FunctionCallResultWithProvenance[B]] = {
-    val inResult: FunctionCallResultWithProvenance[S[A]] = call.v1.resolve
+    val inputValuesWithProvenance: FunctionCallResultWithProvenance[S[A]] = call.v1.resolve
     val funcResult: FunctionCallResultWithProvenance[Function1WithProvenance[B, A]] = call.v2.resolve
+
+    val inputValues: S[A] = inputValuesWithProvenance.output
     val func: Function1WithProvenance[B, A] = funcResult.output
 
-    val inputResultOutput: S[A] = inResult.output
-    val indices: Range = hok.indices(inputResultOutput)
-
+    val indices: Range = hok.indices(inputValues)
     indices.map {
       n =>
-        val e1call: ApplyWithProvenance[S, A]#Call = ApplyWithProvenance[S, A].apply(inResult, n)
-        val e1result: ApplyWithProvenance[S, A]#Result = e1call.resolve(rt)
-        val e2call: func.Call = func(e1result)
-        val e2result: FunctionCallResultWithProvenance[B] = e2call.resolve(rt)
-        e2result
+        val callToGetA = ApplyWithProvenance[S, A].apply(inputValuesWithProvenance, n)
+        val resultA = callToGetA.resolve(rt)
+        val resultB = func(resultA).resolve(rt)
+        resultB
     }.asInstanceOf[S[FunctionCallResultWithProvenance[B]]]
   }
 }

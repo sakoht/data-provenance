@@ -3,6 +3,24 @@ package com.cibo.provenance
 /**
   * Created by ssmith on 9/12/17.
   *
+  * The following classes and traits are in this file:
+  *
+  *  ValueWithProvenance                             sealed trait
+  *    Call                                          sealed trait
+  *      FunctionCallWithProvenance                  abstract class with N implementations
+  *      FunctionCallWithProvenanceDeflated          sealed trait
+  *        FunctionCallWithKnownProvenanceDeflated   case class
+  *        FunctionCallWithUnknownProvenanceDeflated case class
+  *      UnknownProvenance                           case class
+  *
+  *    Result                                        sealed trait
+  *      FunctionResultCallWithProvenance            abstract class with N implementations
+  *      FunctionResultCallWithProvenanceDeflated    case class
+  *      UnknownProvenanceValue                      case classs
+  *
+  *    ValueWithProvenanceDeflated                   sealed trait applying to both deflated types above
+  *
+  *
   * ValueWithProvenance[O] is a sealed trait with the following primary implementations:
   * - FunctionCallWithProvenance[O]: a function, its version, and its inputs (each a ValueWithProvenance[I*], etc)
   * - FunctionCallResultWithProvenance[O]: adds output (the return value) plus the BuildInfo (commit and build metadata)
@@ -24,6 +42,9 @@ package com.cibo.provenance
   * The *Deflated versions of FunctionCall{,Result}WithProvenance hold only text strings,
   * and can represent parts of the provenance tree in external applications.  The ResultTracker
   * API returns these as it saves.
+  *
+  * NOTE: Function calls/results that are not deflated and that have an output type that typically
+  * supports monadic functions (.map, etc.) have those added by implicits in the companion objects.
   *
   */
 
@@ -104,7 +125,6 @@ object FunctionCallResultWithProvenance {
       }
   }
 }
-
 
 // The primary 2 types of value are the Call and Result.
 
