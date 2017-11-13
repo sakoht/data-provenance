@@ -23,7 +23,7 @@ object MyApp extends App {
     
     implicit val rt: ResultTracker = ResultTrackerSimple("/tmp/mydata") // or s3://...
     
-    // Basic use: separat objects to represent the logical call and the result and the actual output.
+    // Basic use: separate objects to represent the logical call and the result and the actual output.
     val call1 = addMe(2, 3)             // no work is done
     val result1 = call1.run()           // generate a result
     println(r1.output)                  // get the output: 5
