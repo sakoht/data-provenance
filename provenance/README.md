@@ -1,11 +1,6 @@
 Data Provenance
 ===============
 
-- Track function call input and output relationships.
-- Separate function call data flow and execution.
-- Prevent duplicate work.
-- Manage storage.
-
 Example:
 --------
 
