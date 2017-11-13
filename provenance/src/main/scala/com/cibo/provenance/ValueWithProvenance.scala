@@ -7,14 +7,14 @@ package com.cibo.provenance
   *
   *  ValueWithProvenance                             sealed trait
   *    Call                                          sealed trait
-  *      FunctionCallWithProvenance                  abstract class with N implementations
+  *      FunctionCallWithProvenance                  abstract class with N abstract subclasses
   *      FunctionCallWithProvenanceDeflated          sealed trait
   *        FunctionCallWithKnownProvenanceDeflated   case class
   *        FunctionCallWithUnknownProvenanceDeflated case class
   *      UnknownProvenance                           case class
   *
   *    Result                                        sealed trait
-  *      FunctionResultCallWithProvenance            abstract class with N implementations
+  *      FunctionResultCallWithProvenance            abstract class with N abstract subclasses
   *      FunctionResultCallWithProvenanceDeflated    case class
   *      UnknownProvenanceValue                      case classs
   *
