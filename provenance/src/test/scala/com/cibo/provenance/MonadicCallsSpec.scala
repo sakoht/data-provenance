@@ -1,6 +1,6 @@
 package com.cibo.provenance
 
-import com.cibo.provenance.FunctionCallWithProvenance.TraversableCall
+import com.cibo.provenance.FunctionCallWithProvenance.TraversableCallExt
 import org.scalatest.{FunSpec, Matchers}
 
 /**
@@ -28,10 +28,10 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       implicit val rt: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))
 
       val a = MakeDummyOutputList() // (11, 22, 33, 44)
-      val b = a.map(MyIncrement) // (12, 23, 34, 45)
-      val c = b.map(MyIncrement) // (13, 24, 35, 46)
-      val d = c.map(MyIncrement) // (14, 25, 36, 47)
-      val e = SumValues(d) // 122
+      val b = a.map(MyIncrement)    // (12, 23, 34, 45)
+      val c = b.map(MyIncrement)    // (13, 24, 35, 46)
+      val d = c.map(MyIncrement)    // (14, 25, 36, 47)
+      val e = SumValues(d)          // 122
 
       c(3).resolve.output shouldBe 46
       MyIncrement.runCount shouldBe 8 // we ran two of the three map calls
@@ -223,6 +223,31 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       TestUtils.diffOutputSubdir(subDir)
     }
   }
+
+  describe("Options") {
+    it("work") {
+      implicit val rt = ResultTrackerNone()
+
+      val s1: Option[String] = Some("hello")
+      val n1: Option[String] = None
+
+      val s1p = UnknownProvenance(s1)
+      val n1p = UnknownProvenance(n1)
+
+      s1p.isEmpty.resolve.output shouldBe false
+      n1p.isEmpty.resolve.output shouldBe true
+
+      s1p.nonEmpty.resolve.output shouldBe true
+      n1p.nonEmpty.resolve.output shouldBe false
+
+      s1p.get.resolve.output shouldBe "hello"
+      intercept[Exception] {
+        n1p.get.resolve
+      }
+
+      val s2p: FunctionCallWithProvenance.OptionalCallExt[String]#MapWithProvenance[String]#Call = s1p.map(AppendSuffix)
+    }
+  }
 }
 
 object MakeDummyOutputList extends Function0WithProvenance[Seq[Int]] {
@@ -244,7 +269,7 @@ object MyIncrement extends Function1WithProvenance[Int, Int] {
 }
 
 object CountList extends Function1WithProvenance[Int, Seq[Int]] {
-  val currentVersion: Version = NoVersion
+  val currentVersion: Version = Version("0.1")
   def impl(in: Seq[Int]) = {
     println(in)
     in.size
@@ -252,8 +277,14 @@ object CountList extends Function1WithProvenance[Int, Seq[Int]] {
 }
 
 object SumValues extends Function1WithProvenance[Int, Seq[Int]] {
-  val currentVersion: Version = NoVersion
+  val currentVersion: Version = Version("0.1")
   def impl(in: Seq[Int]) = in.sum
+}
+
+object AppendSuffix extends Function1WithProvenance[String, String] {
+  val currentVersion: Version = Version("0.1")
+  val suffix = "-mysuffix"
+  def impl(prefix: String): String = prefix + suffix
 }
 
 

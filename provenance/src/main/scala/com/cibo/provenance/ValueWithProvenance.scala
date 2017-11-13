@@ -48,7 +48,6 @@ package com.cibo.provenance
   *
   */
 
-import com.cibo.provenance.monadics._
 import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone}
 
 import scala.collection.immutable
@@ -73,69 +72,50 @@ sealed trait ValueWithProvenance[O] extends Serializable {
 }
 
 object ValueWithProvenance {
+  import com.cibo.provenance.monadics.GatherWithProvenance
+
   // Convert any value T to an UnknownProvenance[T] wherever a ValueWithProvenance is expected.
   // This is how "normal" data is passed into FunctionWithProvenance transparently.
   implicit def convertValueWithNoProvenance[T: ClassTag](v: T): ValueWithProvenance[T] =
     UnknownProvenance(v)
 
   // Convert Seq[ValueWithProvenance[T]] into a ValueWithProvenance[Seq[T]] implicitly.
-  implicit def convertSeqWithProvenance[A: ClassTag, S <: Seq[ValueWithProvenance[A]]](seq: S)(implicit rt: ResultTracker): GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call =
+  implicit def convertSeqWithProvenance[A: ClassTag, S <: Seq[ValueWithProvenance[A]]]
+    (seq: S)
+    (implicit rt: ResultTracker): GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call =
     GatherWithProvenance[A].apply(seq)
 }
 
 object FunctionCallWithProvenance {
+  import com.cibo.provenance.implicits._
 
-  // Add methods like .map to a FunctionCallWithProvenance[O] where O is S[A], and an implicit Traversable[S] exists.
-  implicit class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
-    implicit hok: Traversable[S],
-    ctsa: ClassTag[S[A]],
-    cta: ClassTag[A],
-    ctsi: ClassTag[S[Int]]
-  ) {
-    def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[S, A]#Call =
-      ApplyWithProvenance[S, A].apply(call, n)
+  implicit class OptionalCallExt[A]
+    (call: FunctionCallWithProvenance[Option[A]])
+    (implicit ctsa: ClassTag[Option[A]], cta: ClassTag[A])
+    extends OptionalCall[A](call)(ctsa, cta)
 
-    def indices: IndicesWithProvenance[S, A]#Call =
-      IndicesWithProvenance[S, A].apply(call)
-
-    def map[B](f: Function1WithProvenance[B, A])(implicit ctsb: ClassTag[S[B]], ctb: ClassTag[B]): MapWithProvenance[B, A, S]#Call =
-      MapWithProvenance[B, A, S].apply(call, f)
-
-    def scatter(implicit rt: ResultTracker): S[FunctionCallWithProvenance[A]] = {
-      val indices: Range = this.indices.resolve.output
-      indices.map {
-        n => ApplyWithProvenance[S, A].apply(call, n)
-      }.asInstanceOf[S[FunctionCallWithProvenance[A]]]
-    }
-  }
+  implicit class TraversableCallExt[S[_], A]
+    (call: FunctionCallWithProvenance[S[A]])
+    (implicit hok: Traversable[S],
+     ctsa: ClassTag[S[A]],
+     cta: ClassTag[A],
+     ctsi: ClassTag[S[Int]])
+    extends TraversableCall[S, A](call)(hok, ctsa, cta, ctsi)
 }
 
+
 object FunctionCallResultWithProvenance {
-  implicit class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])(
-    implicit hok: Traversable[S],
-    ctsa: ClassTag[S[A]],
-    cta: ClassTag[A],
-    ctsi: ClassTag[S[Int]]
-  ) {
-    import com.cibo.provenance.FunctionCallWithProvenance.TraversableCall
+  import com.cibo.provenance.implicits._
 
-    def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[S, A]#Call =
-      ApplyWithProvenance[S, A].apply(result, n)
+  implicit class OptionalResultExt[A]
+    (result: FunctionCallResultWithProvenance[Option[A]])
+    (implicit ctsa: ClassTag[Option[A]], cta: ClassTag[A])
+    extends OptionalResult[A](result: FunctionCallResultWithProvenance[Option[A]])(ctsa, cta)
 
-    def indices: IndicesWithProvenance[S, A]#Call =
-      IndicesWithProvenance[S, A].apply(result)
-
-    def map[B](f: Function1WithProvenance[B, A])(implicit ctsb: ClassTag[S[B]], ctb: ClassTag[B]): MapWithProvenance[B, A, S]#Call =
-      new MapWithProvenance[B, A, S].apply(result, f)
-
-    def scatter(implicit rt: ResultTracker): S[FunctionCallResultWithProvenance[A]] = {
-      val prov: FunctionCallWithProvenance[S[A]] = result.provenance
-      val prov2: TraversableCall[S, A] = TraversableCall[S, A](prov)
-      val calls: S[FunctionCallWithProvenance[A]] = prov2.scatter
-      def getResult(call: FunctionCallWithProvenance[A]): FunctionCallResultWithProvenance[A] = call.resolve
-      hok.map(getResult)(calls)
-    }
-  }
+  implicit class TraversableResultExt[S[_], A]
+    (result: FunctionCallResultWithProvenance[S[A]])
+    (implicit hok: Traversable[S], ctsa: ClassTag[S[A]], cta: ClassTag[A], ctsi: ClassTag[S[Int]])
+    extends TraversableResult[S, A](result)(hok, ctsa, cta, ctsi)
 }
 
 // The primary 2 types of value are the Call and Result.
@@ -517,6 +497,3 @@ case class FunctionCallResultWithProvenanceDeflated[O](
     }
   }
 }
-
-
-

@@ -1,4 +1,4 @@
-package com.cibo.provenance.monadics
+package com.cibo.provenance.implicits
 
 /**
   * Created by ssmith on 11/10/17 with significant help from @tel.
@@ -29,30 +29,13 @@ package com.cibo.provenance.monadics
 
 import scala.language.higherKinds
 
-
-trait Applicable[T[_]] extends Serializable {
+trait Traversable[T[_]] extends Serializable {
+  def map[A, B](f: A => B)(lok: T[A]): T[B]
   def apply[A](idx: Int)(lok: T[A]): A
   def indices[A](ta: T[A]): Range
-}
-
-trait Mappable[T[_]] extends Serializable {
-  def map[A, B](f: A => B)(lok: T[A]): T[B]
-}
-
-trait Traversable[T[_]] extends Applicable[T] with Mappable[T] with Serializable {
   def toSeq[A](lok: T[A]): Seq[A]
   def toList[A](lok: T[A]): List[A]
   def toVector[A](lok: T[A]): Vector[A]
-}
-
-object Mappable {
-  implicit object OptionMethods extends Mappable[Option] with Serializable {
-    def map[A, B](f: A => B)(lok: Option[A]): Option[B] = lok.map(f)
-    def toSeq[A](lok: Option[A]): Seq[A] = lok.toSeq
-    def toList[A](lok: Option[A]): List[A] = lok.toList
-    def toVector[A](lok: Option[A]): Vector[A] = lok.toVector
-    //def toArray[A](lok: Option[A]): Array[A] = lok.toArray
-  }
 }
 
 object Traversable {

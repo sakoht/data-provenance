@@ -1,14 +1,21 @@
 package com.cibo.provenance.monadics
 
+/**
+  * Created by ssmith on 11/06/17.
+  *
+  * A builtin FunctionWithProvenance that calls `map(A=>B)` on a Traversable.
+  *
+  */
+
 import scala.language.higherKinds
 import scala.reflect.ClassTag
-import com.cibo.provenance._
+import com.cibo.provenance.{implicits, _}
 import com.cibo.provenance.tracker.ResultTracker
 
-class MapWithProvenance[B, A, S[_]](implicit hok: Traversable[S], ctsb: ClassTag[S[B]], cta: ClassTag[A], ctb: ClassTag[B], ctsa: ClassTag[S[A]], ctsi: ClassTag[S[Int]])
+class MapWithProvenance[B, A, S[_]](implicit hok: implicits.Traversable[S], ctsb: ClassTag[S[B]], cta: ClassTag[A], ctb: ClassTag[B], ctsa: ClassTag[S[A]], ctsi: ClassTag[S[Int]])
   extends Function2WithProvenance[S[B], S[A], Function1WithProvenance[B, A]] {
 
-  val currentVersion: NoVersion.type = NoVersion
+  val currentVersion: Version = NoVersion
 
   override protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
     // Skip the bulk impl() call and construct the output result from the individual calls.
@@ -25,7 +32,7 @@ class MapWithProvenance[B, A, S[_]](implicit hok: Traversable[S], ctsb: ClassTag
 
   protected def runOnEach(call: Call)(implicit rt: ResultTracker): S[FunctionCallResultWithProvenance[B]] = {
     val aResolved: FunctionCallResultWithProvenance[S[A]] = call.v1.resolve
-    val aTraversable = FunctionCallResultWithProvenance.TraversableResult[S, A](aResolved)(hok, ctsa, cta, ctsi)
+    val aTraversable = FunctionCallResultWithProvenance.TraversableResultExt[S, A](aResolved)(hok, ctsa, cta, ctsi)
     val aGranular: S[FunctionCallResultWithProvenance[A]] = aTraversable.scatter
 
     val funcResolved: FunctionCallResultWithProvenance[Function1WithProvenance[B, A]] = call.v2.resolve
@@ -39,6 +46,6 @@ class MapWithProvenance[B, A, S[_]](implicit hok: Traversable[S], ctsb: ClassTag
 
 object MapWithProvenance {
   def apply[B, A, S[_]]
-    (implicit hok: Traversable[S], ctsb: ClassTag[S[B]], cta: ClassTag[A], ctb: ClassTag[B], ctsa: ClassTag[S[A]], ctsi: ClassTag[S[Int]]) =
+    (implicit hok: implicits.Traversable[S], ctsb: ClassTag[S[B]], cta: ClassTag[A], ctb: ClassTag[B], ctsa: ClassTag[S[A]], ctsi: ClassTag[S[Int]]) =
       new MapWithProvenance[B, A, S]()(hok, ctsb, cta, ctb, ctsa, ctsi)
 }
