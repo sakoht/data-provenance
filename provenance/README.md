@@ -8,34 +8,39 @@ Example:
 
 import com.cibo.provenance._
 
+package com.cibo.provenance.examples
+
+// Make this instead of `def addMe(a: Int, b: Int): Int = a + b`.
+// Don't make real functions with provenance that are this granular. :)
+
 object addMe extends Function2WithProvenance[Int, Int, Int] {
     val currentVersion = Version("0.1")
     def impl(a: Int, b: Int): Int = a + b
 }
 
-
-
 object MyApp extends App {
-    // Replace with your actual SbtBuildInfo object.  Steal info.sbt from this repo to have it autogenerate.
-    implicit val bi: BuildInfo = NoBuildInfo
+    implicit val bi: BuildInfo = BuildInfo
     
-    // Replace with an s3:// path for real things.  Use a resources/ path for test cases.
-    implicit val rt: ResultTracker = ResultTrackerSimple("/tmp/mydata")
+    implicit val rt: ResultTracker = ResultTrackerSimple("/tmp/mydata") // or s3://...
     
+    // Basic use: separa
     val call1 = addMe(2, 3)             // no work is done
     val result1 = call1.run()           // generate a result
     println(r1.output)                  // get the output: 5
     println(r1.provenance)              // geth the provenance: call1
-    rt.hasResult(call1)                 // true
+    
+    rt.hasResult(call1)                 // false (unless sonmeone else did this)
     
     // Check a db for a result, and run only if necessary:
     result1b = call1.resolve            // grabs the implicit rt
-    result1b == result1
+    result1b == result1                 // makes a similar result
+    rt.hasResult(call1)                 // true (now saved)
 
-    // This calculates 1+2, but then looks-up 2+3 in storage:
-    val sameOutputDifferentProvenance = addMe(2, addMe(1, 2).resolve()
-    sameOutputDifferentProvenance.output == result1.output
-    sameOutputDifferentProvenance.provenance != result1.provenance
+    // Nest:
+    val call2 = addMe(2, addMe(1, 2)    
+    val result2 = call2.resolve                 // adds 1+2, but is lazy about adding 2+3 since it already did that
+    result2.output == result1.output            // same output
+    result2.provenance != result1.provenance    // different provenance
 
     // Compose arbitarily:
     val bigPlan = addMe(addMe(addMe(2, 2), addMe(10, addMe(r1, c1)), addMe(5, 5))
@@ -48,18 +53,31 @@ object MyApp extends App {
     assert(c4.output == c1.output)      // same answer
     assert(c4.provenance != c1)         // different provenance
 
-    // Track a list as a single thing.
-    val lst = trioToList(10, 20, 30)    
+    // Builtin Functions for Map, Apply, etc.
     
+    // Track a list as a single thing.
+    val lst: trioToList.Call = trioToList(10, 20, 30)
+    
+    // The apply method works direclty 
     // Dip into results that are sequences and pull out individual values, but keep provenance
     val call3 = addMe(lst(0), lst(1)).resolve.output == 30
     val call4 = addMe(lst(1), lst(2)).resolve.output == 50
 
-    // Map over functions with provenance tracking.
-    val bigPlan2 = sumList(lst.map(incrementMe).map(incrementMe))
-    bigPlan2).resolve.output == 66
-}
+    // Make a result that is a List with provenance, and extract individual alues with provenance.
+    val lst = trioToList(1, 2, 3, 4, 5, 6, 7)       // FunctionCallWWithProvenance[List[Int]]
+    val item = lst(2)                               // ApplyWithProvenance[Int, List[Int], Int]
+    item.resolve.output == 3
 
+    // Map over functions with provenance tracking.
+    val lst2 = lst.map(incrementMe).map(incrementMe)    // The .map method is also added.
+    lst2(2) == 5                                        // And .apply works on the resultint maps.
+    
+    // Or pass the full result of map in.
+    val bigCall2 = sumList(lst.map(incrementMe).map(incrementMe))
+    val bigResult2 = bigCall2.resolve
+    bigResult2.output == 66
+
+}
 
 object trioToList extends Function4WithProvenance[List[Int], Int, Int, Int] {
     val currentVersion = Version("0.1")
