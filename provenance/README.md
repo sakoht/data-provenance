@@ -169,6 +169,16 @@ val r3 = s3.resolve()
 // ^^ calls 3+4, but skips 5+7 and 10+12 
 ```
 
+Data Fabric
+-----------
+The default storage for is:
+- append-only
+- idempotent
+- broker-free (no central server required let N apps extend the data store without conflict)
+- tracks commit and build ID on each output
+- retroactively self-healing: append evidence that a commit, build, or version is untrusted to inv
+
+See the README for ResultTrackerSimple for details.
 
 
 
