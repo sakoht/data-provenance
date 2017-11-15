@@ -26,8 +26,8 @@ object MyApp extends App {
     // Basic use: separate objects to represent the logical call and the result and the actual output.
     val call1 = addMe(2, 3)             // no work is done
     val result1 = call1.run()           // generate a result
-    println(r1.output)                  // get the output: 5
-    println(r1.provenance)              // geth the provenance: call1
+    println(result1.output)             // get the output: 5
+    println(result1.provenance)         // geth the provenance: call1
     
     rt.hasResult(call1)                 // false (unless sonmeone else did this)
     
