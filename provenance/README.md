@@ -34,21 +34,21 @@ object MyApp extends App {
     rt.hasResult(call1)                 // true
     
     // Check a db for a result, and run only if necessary:
-    result1b = call1.resolve            // grabs the implicit rt
+    val result1b = call1.resolve            // grabs the implicit rt
     result1b == result1
 
     // This calculates 1+2, but then looks-up 2+3 in storage:
-    val sameOutputDifferentProvenance = addMe(2, addMe(1, 2).resolve()
+    val sameOutputDifferentProvenance = addMe(2, addMe(1, 2)).resolve()
     sameOutputDifferentProvenance.output == result1.output
     sameOutputDifferentProvenance.provenance != result1.provenance
 
     // Compose arbitarily:
-    val bigPlan = addMe(addMe(addMe(2, 2), addMe(10, addMe(r1, c1)), addMe(5, 5))
+    val bigPlan = addMe(addMe(addMe(2, 2), addMe(10, addMe(r1, c1)), addMe(5, 5)))
     
     // Don't repeat any call with the same inputs even with different provenance:
-    c2 = addMe(1, 1)                    // (? <- addMe(raw(1), raw(1)))
-    c3 = addMe(2, 1)                    // (? <- addMe(raw(2), raw(1)))
-    c4 = addMe(c2, c3)                  // (? <- addMe(addMe(raw(1), raw(1)), addMe(raw(2), raw(1)))
+    val c2 = addMe(1, 1)                    // (? <- addMe(raw(1), raw(1)))
+    val c3 = addMe(2, 1)                    // (? <- addMe(raw(2), raw(1)))
+    val c4 = addMe(c2, c3)                  // (? <- addMe(addMe(raw(1), raw(1)), addMe(raw(2), raw(1))))
     c4.resolve()                        // runs 1+1, then 2+1, but shortcuts past running 2+3 because we r1 was saved above.
     assert(c4.output == c1.output)      // same answer
     assert(c4.provenance != c1)         // different provenance
