@@ -35,7 +35,7 @@ Adding Provenance
 To add data-provenance we modify the long version of a function declaration:
 - `Function2WithProvenance` replaces `Function2`
 - `def impl` replaces `def apply`
-- `val currentVersion: Version = ??? // example: Version("0.1")
+- `val currentVersion: Version = Version("x.x")` is added
 
 ```scala
 import com.cibo.provenance._
