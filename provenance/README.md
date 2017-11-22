@@ -65,7 +65,7 @@ After that, you could "resolve" the call, which will run the implementation _if_
 val result1: foo.Result = call1.resolve     // see also resolveFuture to get back `Future[foo.Result]`
 ```
 
-The result contains both the `output` and the `provenance` of the call.  That "provenance" is actually just a refernence back to the call.
+The result contains both the `output` and the `provenance` of the call.  That "provenance" is actually just a reference back to the call that produced it.  While the call contains the logical "version", the result contains a concrete commmit and build that was actually used to run the `impl()`.
 ```
 result1.output == "123,9.99"   // the actual output of impl()
 result1.provenance == call1    // the call that made it
@@ -73,11 +73,9 @@ result1.provenance == call1    // the call that made it
 
 Nesting
 -------
-A call can take raw input values, but ideally it takes:
-- the result of _another_ call that has the correct output type for the input in question
-- another call, unresolved, where the other call's output type matches the required input type
+A call can take raw input values, but ideally it takes the result of _other_ call that produced the input, so the provenance chain can be extended.  It can also simply take a call, and the system will convert that into a result by running it or looking up an existing answer.
 
-We would really only use this for bigger chunks of work, but as a toy example:
+An example of nesting using a toy function:
 ```
 object addMe extends Function2WithProvenance[Int, Int, Int] {
     val currentVersion = Version("0.1")
@@ -272,12 +270,34 @@ The default storage for is:
 - tracks commit and build ID on each output
 - retroactively self-healing: append evidence that a commit, build, or version is untrusted to inv
 
-See the README for ResultTrackerSimple for details.
+(implemented, show the details)
 
 Idempotency, Consistency, Concurrency and Testing
 -------------------------------------------------
 (this is implemented, and has tests, but needs a careful description)
 
+Mapping Results, Partial Inputs and Outputs
+--------------------------------------------
+(also basic implementation in place, describe)
 
+Futures and I/O
+---------------
+For functions that do I/O, or have other reasons to return a future, use the `WithFutureProvenance` version of the functions.  These are built to transparently let your `implFuture` return a `Future[O]`, and the system give back a `Future[Result[O]]`, instead of a `Result[Future[O]]`.
 
+Cross-App Tracking
+------------------
+The result of one function with provenance might be used by another application, and the second app might not have access to all of the upstream classes that were used to make its input data. The provenance classes has a degenerate form for which the output type is "real" in scala, but the inputs are merely strings of SHA1 values of the input types.  This degenerate form is fully decomposed when we save, and only inflates into the full form when used in a library that recognizes tye types.
+
+Deleted Code Tracking
+---------------------
+When a function vanishes, the same logic used for externally generated results applies.  The same SHA1 digest for the inputs is known, and the original function name, version, commit and build can be seen as strings.  But the types become inaccessible as real scala data.
+
+Best Practices
+--------------
+1. Don't go too granular.  Wrap units of work in provenance tracking where they would take noticable time to repeat, and where a small amount of I/O is worth it to circumvent repetition.
+2. Be granular enough.  If the first part of your pipeline rarely changes and the second part changes often, be sure they are at wrapped in at least two different functions with provenance.  And if you go too broad _every_ change will iterate the master version.  Which defeats the purpose.
+3. Pick a new function name when you change signatures dramatically.  You are safe to just iterate the version when the interface remains stable, or the new interface is a superset of the old, with automatic defaults.
+4. If you want default parameters, make additional overrides to `apply()`.
+5. If you want to track non-deterministic functions, make the last parameter an `Instant`, and set it to `Instant.now` on each run.  You will re-run the function, but when you happen to get identical outputs, the rest of the pipeline will complete like dominos.  This is perfect for downloaders.
+6. If you use random number generation, generate the seed outside the call, and pass the seed into the call.  This lets the call become deterministic.  Even better: calculate a seed based on other inputs, if you can.  This will let you get "consistent random" results.
 
