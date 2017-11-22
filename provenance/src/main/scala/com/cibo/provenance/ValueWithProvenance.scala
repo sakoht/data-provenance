@@ -3,6 +3,24 @@ package com.cibo.provenance
 /**
   * Created by ssmith on 9/12/17.
   *
+  * The following classes and traits are in this file:
+  *
+  *  ValueWithProvenance                             sealed trait
+  *    Call                                          sealed trait
+  *      FunctionCallWithProvenance                  abstract class with N abstract subclasses
+  *        UnknownProvenance                         case class
+  *      FunctionCallWithProvenanceDeflated          sealed trait
+  *        FunctionCallWithKnownProvenanceDeflated   case class
+  *        FunctionCallWithUnknownProvenanceDeflated case class
+  *
+  *    Result                                        sealed trait
+  *      FunctionCallResultWithProvenance            abstract class with N abstract subclasses
+  *        UnknownProvenanceValue                    case classs
+  *      FunctionCallResultWithProvenanceDeflated    case class
+  *
+  *    ValueWithProvenanceDeflated                   sealed trait applying to both deflated types above
+  *
+  *
   * ValueWithProvenance[O] is a sealed trait with the following primary implementations:
   * - FunctionCallWithProvenance[O]: a function, its version, and its inputs (each a ValueWithProvenance[I*], etc)
   * - FunctionCallResultWithProvenance[O]: adds output (the return value) plus the BuildInfo (commit and build metadata)
@@ -25,14 +43,17 @@ package com.cibo.provenance
   * and can represent parts of the provenance tree in external applications.  The ResultTracker
   * API returns these as it saves.
   *
+  * NOTE: Function calls/results that are not deflated and that have an output type that typically
+  * supports monadic functions (.map, etc.) have those added by implicits in the companion objects.
+  *
   */
 
-import com.cibo.provenance.monaidcs._
 import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone}
 
 import scala.collection.immutable
-import scala.language.implicitConversions
 import scala.reflect.ClassTag
+import scala.language.implicitConversions
+import scala.language.higherKinds
 
 
 sealed trait ValueWithProvenance[O] extends Serializable {
@@ -50,55 +71,52 @@ sealed trait ValueWithProvenance[O] extends Serializable {
       newObj
 }
 
-
 object ValueWithProvenance {
+  import com.cibo.provenance.monadics.GatherWithProvenance
 
   // Convert any value T to an UnknownProvenance[T] wherever a ValueWithProvenance is expected.
   // This is how "normal" data is passed into FunctionWithProvenance transparently.
-  implicit def convertValueWithNoProvenance[T : ClassTag](v: T): ValueWithProvenance[T] =
+  implicit def convertValueWithNoProvenance[T: ClassTag](v: T): ValueWithProvenance[T] =
     UnknownProvenance(v)
 
   // Convert Seq[ValueWithProvenance[T]] into a ValueWithProvenance[Seq[T]] implicitly.
-  implicit def convertSeqWithProvenance[A : ClassTag, S <: Seq[ValueWithProvenance[A]]](seq: S)(implicit rt: ResultTracker): GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call =
+  implicit def convertSeqWithProvenance[A: ClassTag, S <: Seq[ValueWithProvenance[A]]]
+    (seq: S)
+    (implicit rt: ResultTracker): GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call =
     GatherWithProvenance[A].apply(seq)
-
-  // Add methods to a call where the output is a Seq.
-  implicit class MappableCall[A: ClassTag](seq: FunctionCallWithProvenance[Seq[A]]) {
-    import com.cibo.provenance.monaidcs._
-
-    def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[A]#Call =
-      ApplyWithProvenance[A](seq, n)
-
-    def indices: IndicesWithProvenance[A]#Call =
-      IndicesWithProvenance[A].apply(seq)
-
-    // Mapping over a function with provenance tracking keeps the provenance.
-    def map[B: ClassTag](f: Function1WithProvenance[B, A]): MapWithProvenance[B, A]#Call =
-      MapWithProvenance[B, A].apply(seq, f)
-  }
-
-  // Add methods to a Result where the output is a Seq.
-  implicit class MappableResult[A: ClassTag](seq: FunctionCallResultWithProvenance[Seq[A]]) {
-    import com.cibo.provenance.monaidcs._
-
-    def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[A]#Call =
-      ApplyWithProvenance[A](seq, n)
-
-    def indices: IndicesWithProvenance[A]#Call =
-      IndicesWithProvenance[A].apply(seq)
-
-    def map[B: ClassTag](f: Function1WithProvenance[B, A]): MapWithProvenance[B, A]#Call =
-      MapWithProvenance[B, A].apply(seq, f)
-
-    // Return a regular Seq where each element retains provenance.
-    // Note that this is reversed by the implicit convertSeqWithProvenance above.
-    def scatter(implicit rt: ResultTracker): Seq[ApplyWithProvenance[A]#Result] =
-      seq.output.indices.map {
-        n => ApplyWithProvenance[A](seq, n).resolve
-      }
-  }
 }
 
+object FunctionCallWithProvenance {
+  import com.cibo.provenance.implicits._
+
+  implicit class OptionalCallExt[A]
+    (call: FunctionCallWithProvenance[Option[A]])
+    (implicit ctsa: ClassTag[Option[A]], cta: ClassTag[A])
+    extends OptionalCall[A](call)(ctsa, cta)
+
+  implicit class TraversableCallExt[S[_], A]
+    (call: FunctionCallWithProvenance[S[A]])
+    (implicit hok: Traversable[S],
+     ctsa: ClassTag[S[A]],
+     cta: ClassTag[A],
+     ctsi: ClassTag[S[Int]])
+    extends TraversableCall[S, A](call)(hok, ctsa, cta, ctsi)
+}
+
+
+object FunctionCallResultWithProvenance {
+  import com.cibo.provenance.implicits._
+
+  implicit class OptionalResultExt[A]
+    (result: FunctionCallResultWithProvenance[Option[A]])
+    (implicit ctsa: ClassTag[Option[A]], cta: ClassTag[A])
+    extends OptionalResult[A](result: FunctionCallResultWithProvenance[Option[A]])(ctsa, cta)
+
+  implicit class TraversableResultExt[S[_], A]
+    (result: FunctionCallResultWithProvenance[S[A]])
+    (implicit hok: Traversable[S], ctsa: ClassTag[S[A]], cta: ClassTag[A], ctsi: ClassTag[S[Int]])
+    extends TraversableResult[S, A](result)(hok, ctsa, cta, ctsi)
+}
 
 // The primary 2 types of value are the Call and Result.
 
@@ -322,7 +340,6 @@ case class UnknownProvenanceValue[O : ClassTag](
   override def toString: String = f"rawv($output)"
 }
 
-
 /*
  * "Deflated" equivalents of the call and result are still functional as ValueWithProvenance[O],
  * but require conversion to instantiate fully.
@@ -480,6 +497,3 @@ case class FunctionCallResultWithProvenanceDeflated[O](
     }
   }
 }
-
-
-

@@ -1,5 +1,10 @@
 package com.cibo.provenance
 
+import com.cibo.provenance.monadics.{ApplyWithProvenance, IndicesWithProvenance, MapWithProvenance}
+import com.cibo.provenance.tracker.ResultTracker
+
+import scala.reflect.ClassTag
+
 /**
   * Created by ssmith on 9/12/17.
   *

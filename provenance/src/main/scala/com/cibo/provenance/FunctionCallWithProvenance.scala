@@ -9,11 +9,11 @@ package com.cibo.provenance
   *
   */
 
+import com.cibo.provenance.monadics.{ApplyWithProvenance, IndicesWithProvenance, MapWithProvenance}
 import com.cibo.provenance.tracker.ResultTracker
 
 import scala.language.implicitConversions
 import scala.reflect.ClassTag
-
 
 abstract class Function0CallWithProvenance[O : ClassTag](v: ValueWithProvenance[Version])(f: (Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
   val impl = f
