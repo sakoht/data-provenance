@@ -23,6 +23,11 @@ A function like the above is a `Function2`, meaning it takes two inputs.  Note t
 
 Scala implements `Function0` - `Function22`.  This pattern is similar for many builtin classes (`Tuple1`-`Tuple22`, etc.).
 
+Both are called the same way:
+```
+val out: String = foo(123, 9.99)
+out == "123,9.99"
+```
 
 Adding Provenance
 -----------------
