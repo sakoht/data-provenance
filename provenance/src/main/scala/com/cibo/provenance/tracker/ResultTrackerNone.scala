@@ -28,7 +28,7 @@ case class ResultTrackerNone()(implicit val currentBuildInfo: BuildInfo) extends
   }
 
 
-  def hasResultFor[O](v: FunctionCallWithProvenance[O]): Boolean = true // always
+  def hasResultForCall[O](v: FunctionCallWithProvenance[O]): Boolean = true // always
 
   def loadResultForCallOption[O](f: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] = {
     // just re-run anything we need to "load"

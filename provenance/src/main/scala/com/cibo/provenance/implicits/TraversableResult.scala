@@ -26,17 +26,17 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
     def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[S, A]#Call =
       ApplyWithProvenance[S, A].apply(result, n)
 
-    def indices: IndicesWithProvenance[S, A]#Call =
-      IndicesWithProvenance[S, A].apply(result)
+    def indices: IndicesRangeWithProvenance[S, A]#Call =
+      IndicesRangeWithProvenance[S, A].apply(result)
 
     def map[B](f: Function1WithProvenance[B, A])(implicit ctsb: ClassTag[S[B]], ctb: ClassTag[B]): MapWithProvenance[B, A, S]#Call =
       new MapWithProvenance[B, A, S].apply(result, f)
 
     def scatter(implicit rt: ResultTracker): S[FunctionCallResultWithProvenance[A]] = {
-      val prov: FunctionCallWithProvenance[S[A]] = result.provenance
-      val prov2: TraversableCall[S, A] = TraversableCallExt[S, A](prov)
-      val calls: S[FunctionCallWithProvenance[A]] = prov2.scatter
+      val call1: FunctionCallWithProvenance[S[A]] = result.provenance
+      val call2: TraversableCall[S, A] = TraversableCallExt[S, A](call1)(hok,ctsa,cta,ctsi) // not automatic here
+      val oneCallPerMember: S[FunctionCallWithProvenance[A]] = call2.scatter
       def getResult(call: FunctionCallWithProvenance[A]): FunctionCallResultWithProvenance[A] = call.resolve
-      hok.map(getResult)(calls)
+      hok.map(getResult)(oneCallPerMember)
     }
   }

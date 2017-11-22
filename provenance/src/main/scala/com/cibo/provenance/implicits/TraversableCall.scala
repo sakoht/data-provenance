@@ -8,7 +8,7 @@ package com.cibo.provenance.implicits
   *
   */
 
-import com.cibo.provenance.monadics.{ApplyWithProvenance, IndicesWithProvenance, MapWithProvenance}
+import com.cibo.provenance.monadics.{ApplyWithProvenance, IndicesRangeWithProvenance, IndicesTraversableWithProvenance, MapWithProvenance}
 import com.cibo.provenance.tracker.ResultTracker
 import com.cibo.provenance.{Function1WithProvenance, FunctionCallWithProvenance, ValueWithProvenance}
 
@@ -25,16 +25,16 @@ class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
   def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[S, A]#Call =
     ApplyWithProvenance[S, A].apply(call, n)
 
-  def indices: IndicesWithProvenance[S, A]#Call =
-    IndicesWithProvenance[S, A].apply(call)
+  def indices: IndicesRangeWithProvenance[S, A]#Call =
+    IndicesRangeWithProvenance[S, A].apply(call)
 
   def map[B](f: Function1WithProvenance[B, A])(implicit ctsb: ClassTag[S[B]], ctb: ClassTag[B]): MapWithProvenance[B, A, S]#Call =
     MapWithProvenance[B, A, S].apply(call, f)
 
   def scatter(implicit rt: ResultTracker): S[FunctionCallWithProvenance[A]] = {
-    val indices: Range = this.indices.resolve.output
-    indices.map {
-      n => ApplyWithProvenance[S, A].apply(call, n)
-    }.asInstanceOf[S[FunctionCallWithProvenance[A]]]
+    val indicesResult: IndicesTraversableWithProvenance[S, A]#Result = IndicesTraversableWithProvenance[S, A].apply(call).resolve
+    val indexesTraversable: S[Int] = indicesResult.output
+    def getApply(n: Int): FunctionCallWithProvenance[A] = ApplyWithProvenance[S, A].apply(call, n)
+    hok.map(getApply)(indexesTraversable)
   }
 }

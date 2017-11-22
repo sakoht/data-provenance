@@ -24,13 +24,7 @@ class MapWithProvenance[B, A, S[_]](implicit hok: implicits.Traversable[S], ctsb
     call.newResult(VirtualValue(unifiedOutputs))(rt.getCurrentBuildInfo)
   }
 
-  def impl(s: S[A], f: Function1WithProvenance[B, A]): S[B] =
-    // The runCall method circumvents actually calling impl, but composes the same output as this function.
-    // It also generates results with provenance for each element, such that
-    // This is provided for completeness since `.impl` is externally exposed.
-    hok.map(f.impl)(s)
-
-  protected def runOnEach(call: Call)(implicit rt: ResultTracker): S[FunctionCallResultWithProvenance[B]] = {
+  private def runOnEach(call: Call)(implicit rt: ResultTracker): S[FunctionCallResultWithProvenance[B]] = {
     val aResolved: FunctionCallResultWithProvenance[S[A]] = call.v1.resolve
     val aTraversable = FunctionCallResultWithProvenance.TraversableResultExt[S, A](aResolved)(hok, ctsa, cta, ctsi)
     val aGranular: S[FunctionCallResultWithProvenance[A]] = aTraversable.scatter
@@ -42,6 +36,11 @@ class MapWithProvenance[B, A, S[_]](implicit hok: implicits.Traversable[S], ctsb
     val bGranular: S[FunctionCallResultWithProvenance[B]] = hok.map(a2b)(aGranular)
     bGranular
   }
+
+  def impl(s: S[A], f: Function1WithProvenance[B, A]): S[B] =
+    // The runCall method circumvents actually calling impl, but composes the same output as this function.
+    // This is provided for completeness since `.impl` is externally exposed, and should be testable.
+    hok.map(f.impl)(s)
 }
 
 object MapWithProvenance {
