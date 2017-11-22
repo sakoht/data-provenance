@@ -5,7 +5,7 @@ Background
 ----------
 
 
-A normal scala function might be declared like this.  
+A normal scala function might be declared like this:  
 ```
 def foo(a: Int, b: Double): String = a.toString + "," + b.toString
 ```
