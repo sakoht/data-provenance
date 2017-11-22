@@ -47,9 +47,9 @@ object foo extends Function2WithProvenance[String, Int, Double] {
 ```
 
 The implicit contract is:
-- the function is produces deterministic results for the same input at any given declared version
-- the author will update the version number when a change intentionally changes results for the same inputs
-- the system has ways to handle failure to do the above correctly, retroactively
+- the function produces deterministic results for the same input at any given declared version
+- the the version number will be updated when a software change intentionally change results
+- the system will track enough data that, when the above fails, the system self-corrects
 
 Using a FunctionWithProvenance
 ------------------------------
