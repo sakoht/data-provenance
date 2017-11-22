@@ -225,7 +225,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
     path.exists
   }
 
-  def hasResultFor[O](f: FunctionCallWithProvenance[O]): Boolean =
+  def hasResultForCall[O](f: FunctionCallWithProvenance[O]): Boolean =
     loadOutputIdsForCallOption(f).nonEmpty
 
   def loadCallDeflatedOption[O : ClassTag](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =

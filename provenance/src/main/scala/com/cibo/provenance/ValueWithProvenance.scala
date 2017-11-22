@@ -15,16 +15,19 @@ package com.cibo.provenance
   *
   *    Result                                        sealed trait
   *      FunctionCallResultWithProvenance            abstract class with N abstract subclasses
-  *        UnknownProvenanceValue                    case classs
+  *        UnknownProvenanceValue                    case class
   *      FunctionCallResultWithProvenanceDeflated    case class
   *
   *    ValueWithProvenanceDeflated                   sealed trait applying to both deflated types above
+  *
+  * Each Function{n}WithProvenance has internal subclasses .Call and .Result, which extend
+  * FunctionCall{,Result}WithProvenance, and ensure that the types returned are as specific as possible.
   *
   *
   * ValueWithProvenance[O] is a sealed trait with the following primary implementations:
   * - FunctionCallWithProvenance[O]: a function, its version, and its inputs (each a ValueWithProvenance[I*], etc)
   * - FunctionCallResultWithProvenance[O]: adds output (the return value) plus the BuildInfo (commit and build metadata)
-  * - UnknownProvenance[O]: a special case of FunctionCallWithProvenance[O] for data w/o history.
+  * - UnknownProvenance[O]: a special case of Function0CallWithProvenance[O] for data w/o history.
   *
   * The type parameter O refers to the return/output type of the function in question.
   *
@@ -96,10 +99,7 @@ object FunctionCallWithProvenance {
 
   implicit class TraversableCallExt[S[_], A]
     (call: FunctionCallWithProvenance[S[A]])
-    (implicit hok: Traversable[S],
-     ctsa: ClassTag[S[A]],
-     cta: ClassTag[A],
-     ctsi: ClassTag[S[Int]])
+    (implicit hok: Traversable[S], ctsa: ClassTag[S[A]], cta: ClassTag[A], ctsi: ClassTag[S[Int]])
     extends TraversableCall[S, A](call)(hok, ctsa, cta, ctsi)
 }
 

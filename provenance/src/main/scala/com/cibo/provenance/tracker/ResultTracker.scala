@@ -56,7 +56,7 @@ trait ResultTracker {
   def saveValue[T : ClassTag](obj: T): Digest
 
 
-  def hasResultFor[O](v: FunctionCallWithProvenance[O]): Boolean
+  def hasResultForCall[O](v: FunctionCallWithProvenance[O]): Boolean
 
   def hasValue[T : ClassTag](obj: T): Boolean
 

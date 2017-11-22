@@ -23,7 +23,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       implicit val bi: BuildInfo = DummyBuildInfo
       implicit val rt: ResultTrackerSimple = ResultTrackerSimple(SyncablePath(testDataDir))
 
-      val s1a = multMe(2, 2)
+      val s1a = mult2(2, 2)
       val _ = s1a.resolve
 
       val s1b = s1a.deflate
@@ -34,17 +34,17 @@ class InflateDeflateSpec extends FunSpec with Matchers {
     it("works on nested provenance") {
       val testDataDir = f"$outputBaseDir/deflate-nested"
       FileUtils.deleteDirectory(new File(testDataDir))
-      
+
       implicit val bi: BuildInfo = DummyBuildInfo
       implicit val rt: ResultTrackerSimple = ResultTrackerSimple(SyncablePath(testDataDir))
-      
-      val s1 = addMe(2, 2) 
-      val s2 = addMe(5, 7)
-      val s3 = multMe(s1, s2)
-      
-      val s4a: multMe.Call = multMe(s3, 2)
 
-      val s4b: multMe.Call = multMe(multMe(addMe(2,2), addMe(5,7)), 2)
+      val s1 = add2(2, 2)
+      val s2 = add2(5, 7)
+      val s3 = mult2(s1, s2)
+
+      val s4a: mult2.Call = mult2(s3, 2)
+
+      val s4b: mult2.Call = mult2(mult2(add2(2,2), add2(5,7)), 2)
       s4b shouldEqual s4a
 
       // Round-trip through deflation/inflation loses some type information.
@@ -52,8 +52,8 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       val s4bInflated: FunctionCallWithProvenance[Int] = s4bDeflated.inflate
 
       // But the inflated object is of the correct type, where the code is prepared to recognize it.
-      val s4c: multMe.Call = s4bInflated match {
-        case i1withTypeKnown: multMe.Call => i1withTypeKnown
+      val s4c: mult2.Call = s4bInflated match {
+        case i1withTypeKnown: mult2.Call => i1withTypeKnown
         case _ => throw new RuntimeException("Re-inflated object does not match expectred class.")
       }
       s4c shouldEqual s4b
@@ -62,12 +62,12 @@ class InflateDeflateSpec extends FunSpec with Matchers {
   }
 }
 
-object addMe extends Function2WithProvenance[Int, Int, Int] {
+object add2 extends Function2WithProvenance[Int, Int, Int] {
   val currentVersion: Version = Version("1.0")
   def impl(a: Int, b: Int): Int = a + b
 }
 
-object multMe extends Function2WithProvenance[Int, Int, Int] {
+object mult2 extends Function2WithProvenance[Int, Int, Int] {
   val currentVersion: Version = Version("1.0")
   def impl(a: Int, b: Int): Int = a * b
 }

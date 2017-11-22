@@ -176,89 +176,93 @@ Longer Example
 ```scala
 
 import com.cibo.provenance._
+import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerSimple}
 
-package com.cibo.provenance.examples
 
 object addMe extends Function2WithProvenance[Int, Int, Int] {
-    val currentVersion = Version("0.1")
-    def impl(a: Int, b: Int): Int = a + b
+  val currentVersion = Version("0.1")
+  def impl(a: Int, b: Int): Int = a + b
 }
 
 object MyApp extends App {
-    implicit val bi: BuildInfo = BuildInfo
-    
-    implicit val rt: ResultTracker = ResultTrackerSimple("/tmp/mydata") // or s3://...
-    
-    // Basic use: separate objects to represent the logical call and the result and the actual output.
-    val call1 = addMe(2, 3)             // no work is done
-    val result1 = call1.run()           // generate a result
-    println(result1.output)             // get the output: 5
-    println(result1.provenance)         // geth the provenance: call1
-    
-    rt.hasResult(call1)                 // false (unless sonmeone else did this)
-    
-    // Check a db for a result, and run only if necessary:
-    val result1b = call1.resolve        // grabs the implicit rt
-    result1b == result1                 // makes a similar result
-    rt.hasResult(call1)                 // true (now saved)
 
-    // Nest:
-    val call2 = addMe(2, addMe(1, 2)    
-    val result2 = call2.resolve                 // adds 1+2, but is lazy about adding 2+3 since it already did that
-    result2.output == result1.output            // same output
-    result2.provenance != result1.provenance    // different provenance
+  implicit val bi: BuildInfo = DummyBuildInfo
+  implicit val rt: ResultTracker = ResultTrackerSimple("/tmp/mydata") // or s3://...
 
-    // Compose arbitarily:
-    val bigPlan = addMe(addMe(addMe(2, 2), addMe(10, addMe(result1, call1)), addMe(5, 5)))
-    
-    // Don't repeat any call with the same inputs even with different provenance:
-    val c2 = addMe(1, 1)                    // (? <- addMe(raw(1), raw(1)))
-    val c3 = addMe(2, 1)                    // (? <- addMe(raw(2), raw(1)))
-    val c4 = addMe(c2, c3)                  // (? <- addMe(addMe(raw(1), raw(1)), addMe(raw(2), raw(1))))
-    c4.resolve()                        // runs 1+1, then 2+1, but shortcuts past running 2+3 because we r1 was saved above.
-    assert(c4.output == c1.output)      // same answer
-    assert(c4.provenance != c1)         // different provenance
+  // Basic use: separate objects to represent the logical call and the result and the actual output.
+  val call1 = addMe(2, 3)             // no work is done
+  rt.hasResultForCall(call1)          // false (unless someone else did this)
 
-    // Builtin Functions for Map, Apply, etc.
-    
-    // Track a list as a single thing.
-    val lst: trioToList.Call = trioToList(10, 20, 30)
-    
-    // The apply method works direclty 
-    // Dip into results that are sequences and pull out individual values, but keep provenance
-    val call3 = addMe(lst(0), lst(1)).resolve.output == 30
-    val call4 = addMe(lst(1), lst(2)).resolve.output == 50
+  val result1 = call1.resolve         // generate a result, if it does not already exist
+  println(result1.output)             // get the output: 5
+  println(result1.provenance)         // get the provenance: call1
+  rt.hasResultForCall(call1)          // true (now saved)
 
-    // Make a result that is a List with provenance, and extract individual alues with provenance.
-    val lst = trioToList(1, 2, 3, 4, 5, 6, 7)       // FunctionCallWWithProvenance[List[Int]]
-    val item = lst(2)                               // ApplyWithProvenance[Int, List[Int], Int]
-    item.resolve.output == 3
 
-    // Map over functions with provenance tracking.
-    val lst2 = lst.map(incrementMe).map(incrementMe)    // The .map method is also added.
-    lst2(2) == 5                                        // And .apply works on the resultint maps.
-    
-    // Or pass the full result of map in.
-    val bigCall2 = sumList(lst.map(incrementMe).map(incrementMe))
-    val bigResult2 = bigCall2.resolve
-    bigResult2.output == 66
+  val result1b = call1.resolve        // finds the previous result, doesn't run anything
+  result1b == result1
+
+  // Nest:
+  val call2 = addMe(2, addMe(1, 2))
+  val result2 = call2.resolve                     // adds 1+2, but is lazy about adding 2+3 since it already did that
+  result2.output == result1.output                // same output
+  result2.provenance != result1.provenance        // different provenance
+
+  // Compose arbitrarily:
+  val bigPlan = addMe(addMe(6, addMe(result2, call1)), addMe(result1, 10))
+
+  // Don't repeat any call with the same inputs even with different provenance:
+  val call3: addMe.Call = addMe(1, 1)             // (? <- addMe(raw(1), raw(1)))
+  val call4: addMe.Call = addMe(2, 1)             // (? <- addMe(raw(2), raw(1)))
+  val call5: addMe.Call = addMe(call3, call4)     // (? <- addMe(addMe(raw(1), raw(1)), addMe(raw(2), raw(1))))
+  val result5 = call5.resolve                          // runs 1+1, then 2+1, but shortcuts past running 2+3 because we r1 was saved above.
+  assert(result5.output == result1.output)             // same answer
+  assert(result5.provenance != result1.provenance)             // different provenance
+
+  // Builtin Functions for Map, Apply, etc.
+
+  // Track a list as a single thing.
+  val lstA: trioToList.Call = trioToList(10, 20, 30)
+
+  // The apply method works directly.
+  // Dip into results that are sequences and pull out individual values, but keep provenance.
+  val call6 = addMe(lstA(0), lstA(1)).resolve.output == 30
+  val call7 = addMe(lstA(1), lstA(2)).resolve.output == 50
+
+  // Make a result that is a List with provenance, and extract individual alues with provenance.
+  val lstB = trioToList(5, 6, 7)       // FunctionCallWWithProvenance[List[Int]]
+  val item = lstB(2)                   // ApplyWithProvenance[Int, List[Int], Int]
+  assert(item.resolve.output == 7)
+
+  val lstCx = lstB.map(incrementMe)
+  val r = lstCx.resolve
+
+  // Map over functions with provenance tracking.
+  val lstC = lstB.map(incrementMe).map(incrementMe)    // The .map method is also added.
+  lstC(2).resolve.output == 13                         // And .apply works on the resulting maps.
+
+  // Or pass the full result of map in.
+  val bigCall2 = sumList(lstB.map(incrementMe).map(incrementMe))
+  val bigResult2 = bigCall2.resolve
+  bigResult2.output == 66
 
 }
 
-object trioToList extends Function4WithProvenance[List[Int], Int, Int, Int] {
-    val currentVersion = Version("0.1")
-    def impl(a: Int, b: Int, c: Int): List[Int] = List(a, b, c)
+object trioToList extends Function3WithProvenance[List[Int], Int, Int, Int] {
+  val currentVersion = Version("0.1")
+  def impl(a: Int, b: Int, c: Int): List[Int] = List(a, b, c)
 }
 
 object incrementMe extends Function1WithProvenance[Int, Int] {
-    val currentVersion = Version("0.1")
-    def impl(x: Int): Int = x + 1
+  val currentVersion = Version("0.1")
+  def impl(x: Int): Int = x + 1
 }
 
 object sumList extends Function1WithProvenance[Int, List[Int]] {
-    val currentVersion = Version("0.1")
-    def impl(lst: List[Int]): Int = lst.sum 
+  val currentVersion = Version("0.1")
+  def impl(lst: List[Int]): Int = lst.sum
 }
+
 ```
 
 Data Fabric

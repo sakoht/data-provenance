@@ -6,7 +6,7 @@ import java.time.Instant
   * Created by ssmith on 10/23/17.
   *
   * Apps will have a BuildInfo that captures the source control and build information.
-  * This library does not.  For tests, we use this placeholder.
+  * This is used as a placeholder in test cases for this library, and for library users.
   *
   */
 

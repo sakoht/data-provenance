@@ -87,6 +87,15 @@ case class VirtualValue[T](
       val digest = Util.digestBytes(bytes)
       copy(digestOption = Some(digest)) // do not save the serialization as it is heavey and can be remade on the fly
   }
+
+  override def toString: String = {
+    lazy val valueString = valueOption.get.toString
+    if (valueOption.nonEmpty & valueString.length < 30) {
+      valueString
+    } else {
+      "digest(" + resolveDigest.digestOption.get.id.toString.substring(0,5) + ")"
+    }
+  }
 }
 
 object VirtualValue {

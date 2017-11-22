@@ -29,20 +29,22 @@ package com.cibo.provenance.implicits
 
 import scala.language.higherKinds
 
-trait Traversable[T[_]] extends Serializable {
-  def map[A, B](f: A => B)(lok: T[A]): T[B]
-  def apply[A](idx: Int)(lok: T[A]): A
-  def indices[A](ta: T[A]): Range
-  def toSeq[A](lok: T[A]): Seq[A]
-  def toList[A](lok: T[A]): List[A]
-  def toVector[A](lok: T[A]): Vector[A]
+trait Traversable[S[_]] extends Serializable {
+  def map[A, B](f: A => B)(lok: S[A]): S[B]
+  def apply[A](idx: Int)(lok: S[A]): A
+  def indicesRange[A](ta: S[A]): Range
+  def indicesTraversable[A](lok: S[A]): S[Int]
+  def toSeq[A](lok: S[A]): Seq[A]
+  def toList[A](lok: S[A]): List[A]
+  def toVector[A](lok: S[A]): Vector[A]
 }
 
 object Traversable {
   implicit object SeqMethods extends Traversable[Seq] with Serializable {
     def map[A, B](f: A => B)(lok: Seq[A]): Seq[B] = lok.map(f)
     def apply[A](idx: Int)(lok: Seq[A]): A = lok.apply(idx)
-    def indices[A](lok: Seq[A]): Range = lok.indices
+    def indicesRange[A](lok: Seq[A]): Range = lok.indices
+    def indicesTraversable[A](lok: Seq[A]): Seq[Int] = lok.indices.toList // don't use .toSeq it will keep Range
     def toSeq[A](lok: Seq[A]): Seq[A] = lok
     def toList[A](lok: Seq[A]): List[A] = lok.toList
     def toVector[A](lok: Seq[A]): Vector[A] = lok.toVector
@@ -51,7 +53,8 @@ object Traversable {
   implicit object ListMethods extends Traversable[List] with Serializable {
     def map[A, B](f: A => B)(lok: List[A]): List[B] = lok.map(f)
     def apply[A](idx: Int)(lok: List[A]): A = lok.apply(idx)
-    def indices[A](lok: List[A]): Range = lok.indices
+    def indicesRange[A](lok: List[A]): Range = lok.indices
+    def indicesTraversable[A](lok: List[A]): List[Int] = lok.indices.toList
     def toSeq[A](lok: List[A]): Seq[A] = lok
     def toList[A](lok: List[A]): List[A] = lok
     def toVector[A](lok: List[A]): Vector[A] = lok.toVector
@@ -60,7 +63,8 @@ object Traversable {
   implicit object VectorMethods extends Traversable[Vector] with Serializable {
     def map[A, B](f: A => B)(lok: Vector[A]): Vector[B] = lok.map(f)
     def apply[A](idx: Int)(lok: Vector[A]): A = lok.apply(idx)
-    def indices[A](lok: Vector[A]): Range = lok.indices
+    def indicesRange[A](lok: Vector[A]): Range = lok.indices
+    def indicesTraversable[A](lok: Vector[A]): Vector[Int] = lok.indices.toVector
     def toSeq[A](lok: Vector[A]): Seq[A] = lok
     def toList[A](lok: Vector[A]): List[A] = lok.toList
     def toVector[A](lok: Vector[A]): Vector[A] = lok
@@ -68,10 +72,11 @@ object Traversable {
   }
 
   /*
-  implicit object MappableArray extends Mappable[Array] with Applicable[Array] {
+  implicit object ArrayMethods extends Mappable[Array] with Applicable[Array] {
     def map[A, B](f: A => B)(va: Array[A]): Array[B] = va.map(f)
     def apply[A](idx: Int)(va: Array[A]): A = va.apply(idx)
     def indices[A](lok: Array[A]): Range = lok.indices
+    def indicesWithSameTraversable[A](lok: Seq[A]): Seq[Int] = lok.indices.toArray
     def toSeq[A](lok: Array[A]): Seq[A] = lok.toSeq
     def toList[A](lok: Array[A]): List[A] = lok.toList
     def toVector[A](lok: Array[A]): Vector[A] = lok.toVector
