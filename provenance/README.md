@@ -19,21 +19,22 @@ object foo extends Function2[String, Int, Double] {
 }
 ```
 
-A function like the above is a `Function2`, meaning it takes two inputs.  Note that the Function2 takes three parameterized types, starting with the output type, then the input types sequentially.
-
-Scala implements `Function0` - `Function22`.  This pattern is similar for many builtin classes (`Tuple1`-`Tuple22`, etc.).
-
 Both are called the same way:
 ```
 val out: String = foo(123, 9.99)
 out == "123,9.99"
 ```
 
+
+A `Function2` takes two inputs, and has three parameterized types: the output type followed by each of the input types.  Scala implements `Function0` - `Function22`.  This pattern is similar for many builtin classes (`Tuple1`-`Tuple22`, etc.).
+
+
 Adding Provenance
 -----------------
 
-To add data-provenance to our toy function above, we have equivalents to the above Function classes, but they have
-- `def impl` instead of `def apply`
+To add data-provenance we modify the long version of a function declaration:
+- `Function2WithProvenance` replaces `Function2`
+- `def impl` replaces `def apply`
 - `val currentVersion: Version = ??? // example: Version("0.1")
 
 ```
@@ -50,31 +51,25 @@ The implicit contract is:
 - the author will update the version number when a change intentionally changes results for the same inputs
 - the system has ways to handle failure to do the above correctly, retroactively
 
+Using a FunctionWithProvenance
+------------------------------
 
-With a `FunctionWithProvenance` that, calling actually returns a _handle_ describing the function call, of type `foo.Call`:
+Applying the function doesn't actually run the implementation.  It returns a handle, similar to a Future, except the
+wrapped value might be done in the past, or in another process on another machine, or never executed at all:
 ```
 val call1: foo.Call = foo(123, 9.99)
 ```
 
-Creating a `Call` doesn't do any "work".  It doesn't run anything, and is database agnostic.
-
-After that, you could "resolve" the call, which will run it if the answer is not already stored:
+After that, you could "resolve" the call, which will run the implementation _if_ the answer is not already stored:
 ```
-val result1: foo.Result = call1.resolve  // or reolveFuture
+val result1: foo.Result = call1.resolve     // see also resolveFuture to get back `Future[foo.Result]`
 ```
 
-The result contains both the `output` and the `provenance`.  That "provenance" is actually just a refernence back to the call.
+The result contains both the `output` and the `provenance` of the call.  That "provenance" is actually just a refernence back to the call.
 ```
 result1.output == "123,9.99"   // the actual output of impl()
 result1.provenance == call1    // the call that made it
 ```
-
-The result also contains build information.  It knows both the declared version of the function, and also the explicit
-commit, and the sbt build.  This means you actually have to have two implicits in place:
-```
-result1.buildInfo.buildId == BuildInfo.buildId      // true if the result was made by this software build
-```
-
 
 Nesting
 -------
@@ -152,6 +147,30 @@ val s3 = addInts(5, addInts(5, addInts(3, 4))
 val r3 = s3.resolve()
 // ^^ calls 3+4, but skips 5+7 and 10+12 
 ```
+
+Versions and BuildInfo
+----------------------
+The version in the function is an "asserted version".  A declaration by the programmer that outputs will be consistent for the same inputs.
+
+The call specifies the version, but with a default argument that sets it to the currentVersion.  You might create a call
+with an older version for purposes of explicitly querying for old data, or inspect the version of 
+a call handed to you when introspecting the provenance.
+
+When software is behaving as intended, the version is sufficient to describe a single iteration of funciton logic.  There will be multiple repository commits, and multiple source code builds, that have the same version number for a component, because other components will also be iterating.
+
+In theory, the versions will be updated appropriately.  In practice, errors will occur.
+
+There are three modes:
+- a function that does not really produce the same output for the same inputs repeatably
+- a function tis refactored at some commit, but a change in results is introduced inadvertently
+- a function that behaves differently for the same commit on differnt builds, due to some external factor in the build process
+
+Each actual output produced tracks the exact git commit and build ID used to produce it.  This comes from SbtBuildInfo.  Each
+project that uses the data-provenance library should use the `buildinfo.sbt` from the example repo to make this data available.  The BuildInfo created must be implicitly available to make a ResultTracker.
+
+The system can detects the three above failure modes retroactively, as the developer "posts evidence" to a future test suite,
+which casts light on the errors made at previous commits/builds.  (TODO: go into detail)
+
 
 Longer Example
 --------------
