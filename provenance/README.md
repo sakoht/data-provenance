@@ -5,12 +5,14 @@ Background
 ----------
 
 
-A normal (toy, illustrative) scala function might be declared like this.  It takes an `Int` and a `Double`, and returns a `String` by just concatenating the others with a comma:
+A normal scala function might be declared like this.  
 ```
 def foo(a: Int, b: Double): String = a.toString + "," + b.toString
 ```
 
-A longer form of the same thing is below.  A function like the above is a "Function2", meaning it takes two parameters.  Note that the 3 parameterized type start with the output type, then the input types sequentially.
+The above takes an `Int` and a `Double`, and returns a `String` by just concatenating the others with a comma.
+
+A longer form of the same thing is below.  A function like the above is a "Function2", meaning it takes two parameters.  Note that the Function2 takes three parameterized types, starting with the output type, then the input types sequentially.
 ```
 object foo extends Function2[String, Int, Double] {
     def apply(a: Int, b: Double): String = a.toString + "," + b.toString
@@ -18,6 +20,7 @@ object foo extends Function2[String, Int, Double] {
 ```
 
 Scala implements `Function0` - `Function22`.  This pattern is similar for many builtin classes (`Tuple1`-`Tuple22`, etc.).
+
 
 Adding Provenance
 -----------------
