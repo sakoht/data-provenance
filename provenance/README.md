@@ -12,12 +12,14 @@ def foo(a: Int, b: Double): String = a.toString + "," + b.toString
 
 The above takes an `Int` and a `Double`, and returns a `String` by just concatenating the others with a comma.
 
-A longer form of the same thing is below.  A function like the above is a "Function2", meaning it takes two parameters.  Note that the Function2 takes three parameterized types, starting with the output type, then the input types sequentially.
+A longer form of the same thing:
 ```
 object foo extends Function2[String, Int, Double] {
     def apply(a: Int, b: Double): String = a.toString + "," + b.toString
 }
 ```
+
+A function like the above is a `Function2`, meaning it takes two inputs.  Note that the Function2 takes three parameterized types, starting with the output type, then the input types sequentially.
 
 Scala implements `Function0` - `Function22`.  This pattern is similar for many builtin classes (`Tuple1`-`Tuple22`, etc.).
 
