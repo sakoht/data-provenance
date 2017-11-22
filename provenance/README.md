@@ -6,21 +6,21 @@ Background
 
 
 A normal scala function might be declared like this:  
-```
+```scala
 def foo(a: Int, b: Double): String = a.toString + "," + b.toString
 ```
 
 The above takes an `Int` and a `Double`, and returns a `String` by just concatenating the others with a comma.
 
 A longer form of the same thing:
-```
+```scala
 object foo extends Function2[String, Int, Double] {
     def apply(a: Int, b: Double): String = a.toString + "," + b.toString
 }
 ```
 
 Both are called the same way:
-```
+```scala
 val out: String = foo(123, 9.99)
 out == "123,9.99"
 ```
@@ -37,7 +37,7 @@ To add data-provenance we modify the long version of a function declaration:
 - `def impl` replaces `def apply`
 - `val currentVersion: Version = ??? // example: Version("0.1")
 
-```
+```scala
 import com.cibo.provenance._
 
 object foo extends Function2WithProvenance[String, Int, Double] {
@@ -56,17 +56,17 @@ Using a FunctionWithProvenance
 
 Applying the function doesn't actually run the implementation.  It returns a handle, similar to a Future, except the
 wrapped value might be done in the past, or in another process on another machine, or never executed at all:
-```
+```scala
 val call1: foo.Call = foo(123, 9.99)
 ```
 
 After that, you could "resolve" the call, which will run the implementation _if_ the answer is not already stored:
-```
+```scala
 val result1: foo.Result = call1.resolve     // see also resolveFuture to get back `Future[foo.Result]`
 ```
 
 The result contains both the `output` and the `provenance` of the call.  That "provenance" is actually just a reference back to the call that produced it.  While the call contains the logical "version", the result contains a concrete commmit and build that was actually used to run the `impl()`.
-```
+```scala
 result1.output == "123,9.99"   // the actual output of impl()
 result1.provenance == call1    // the call that made it
 ```
@@ -76,7 +76,7 @@ Nesting
 A call can take raw input values, but ideally it takes the result of _other_ call that produced the input, so the provenance chain can be extended.  It can also simply take a call, and the system will convert that into a result by running it or looking up an existing answer.
 
 An example of nesting using a toy function:
-```
+```scala
 object addMe extends Function2WithProvenance[Int, Int, Int] {
     val currentVersion = Version("0.1")
     def impl(a: Int, b: Int): Int = a + b
@@ -84,7 +84,7 @@ object addMe extends Function2WithProvenance[Int, Int, Int] {
 ```
 
 Then we could:
-```
+```scala
 val call1 = addMe(2, 3) 
 val result1 = call1.resolve)
 
@@ -102,14 +102,14 @@ Tracking Results
 
 The resolver consults an implicit `ResultTracker`, which is the is an interface to storage, and selectively calling implementations in a coordinated way.  The default implementation is "broker-free", in that a central server or central locking is not required for consistency, idempotency, or concurrency.  It can handles concurrent attempts to do similar work "optimisitically": in a race condition identical work may be done, but no data is corrupted or duplicated.
 
-```
+```scala
 implicit val rt = ResultTrackerSimple("s3://mybucket/mypath")   // can also use a local filesystem path 
 rt.hasResultForCall(call1) == true                              // perhaps
 val result1b = call1.resolve                                    // just loads the answer made previously
 ```
 
 There is a no-op `ResultTrackerNone` that records nothing, re-runs everything.  It can becombined with the `DummyBuildInfo` to do ad-hoc experiments with no setup.
-```
+```scala
 import com.cibo.provenance._
 implicit val bi = DummyBuildInfo            // a dummy stub commit and build
 implicit val rt = ResultTrackerNone()       // no tracking: re-run everything and save nothing
@@ -298,7 +298,7 @@ When a function vanishes, the same logic used for externally generated results a
 
 Best Practices
 --------------
-1. Don't go too granular.  Wrap units of work in provenance tracking where they would take noticable time to repeat, and where a small amount of I/O is worth it to circumvent repetition.
+1. Don't go too granular.  Wrap units of work in provenance tracking where they would take noticeable time to repeat, and where a small amount of I/O is worth it to circumvent repetition.
 2. Be granular enough.  If the first part of your pipeline rarely changes and the second part changes often, be sure they are at wrapped in at least two different functions with provenance.  And if you go too broad _every_ change will iterate the master version.  Which defeats the purpose.
 3. Pick a new function name when you change signatures dramatically.  You are safe to just iterate the version when the interface remains stable, or the new interface is a superset of the old, with automatic defaults.
 4. If you want default parameters, make additional overrides to `apply()`.
