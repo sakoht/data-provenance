@@ -3,8 +3,7 @@ package com.cibo.provenance.implicits
 /**
   * Created by ssmith on 11/12/17.
   *
-  * OptionCall[A] is extended by the implicit class OptionCallExt[A],
-  * which extends FunctionCallWithProvenance[O] when O is an Option[_].
+  * OptionCall[A] extends FunctionCallWithProvenance[O] when O is an Option[A].
   *
   */
 
