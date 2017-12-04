@@ -46,45 +46,49 @@ object MyApp extends App {
 
   // Nest:
   val call2 = addMe(2, addMe(1, 2))
-  val result2 = call2.resolve                     // adds 1+2, but is lazy about adding 2+3 since it already did that
-  result2.output == result1.output                // same output
-  result2.provenance != result1.provenance        // different provenance
+  val result2 = call2.resolve                       // adds 1+2, but is lazy about adding 2+3 since it already did that
+  result2.output == result1.output                  // same output
+  result2.provenance != result1.provenance          // different provenance
 
   // Compose arbitrarily:
   val bigPlan = addMe(addMe(6, addMe(result2, call1)), addMe(result1, 10))
 
   // Don't repeat any call with the same inputs even with different provenance:
-  val call3: addMe.Call = addMe(1, 1)             // (? <- addMe(raw(1), raw(1)))
-  val call4: addMe.Call = addMe(2, 1)             // (? <- addMe(raw(2), raw(1)))
-  val call5: addMe.Call = addMe(call3, call4)     // (? <- addMe(addMe(raw(1), raw(1)), addMe(raw(2), raw(1))))
-  val result5 = call5.resolve                          // runs 1+1, then 2+1, but shortcuts past running 2+3 because we r1 was saved above.
-  assert(result5.output == result1.output)             // same answer
-  assert(result5.provenance != result1.provenance)             // different provenance
+  val call3: addMe.Call = addMe(1, 1)               // (? <- addMe(raw(1), raw(1)))
+  val call4: addMe.Call = addMe(2, 1)               // (? <- addMe(raw(2), raw(1)))
+  val call5: addMe.Call = addMe(call3, call4)       // (? <- addMe(addMe(raw(1), raw(1)), addMe(raw(2), raw(1))))
+  val result5 = call5.resolve                       // runs 1+1, then 2+1, but shortcuts past running 2+3 because we r1 was saved above.
+  assert(result5.output == result1.output)          // same answer
+  assert(result5.provenance != result1.provenance)  // different provenance
 
   // Builtin Functions for Map, Apply, etc.
 
-  // Track a list as a single thing.
-  val lstA: trioToList.Call = trioToList(10, 20, 30)
+  val list1 = UnknownProvenance(List(10, 20, 30))
+  val list2 = list1.map(incrementMe)
+  val e1 = list2(2)
+  val r1 = e1.resolve
+
+  assert(r1.output == 31)
 
   // The apply method works directly.
   // Dip into results that are sequences and pull out individual values, but keep provenance.
-  val call6 = addMe(lstA(0), lstA(1)).resolve.output == 30
-  val call7 = addMe(lstA(1), lstA(2)).resolve.output == 50
+  val call6 = addMe(list1(0), list1(1)).resolve.output == 30
+  val call7 = addMe(list1(1), list1(2)).resolve.output == 50
 
   // Make a result that is a List with provenance, and extract individual alues with provenance.
-  val lstB = trioToList(5, 6, 7)       // FunctionCallWWithProvenance[List[Int]]
-  val item = lstB(2)                   // ApplyWithProvenance[Int, List[Int], Int]
+  val list3  = trioToList(5, 6, 7)      // FunctionCallWWithProvenance[List[Int]]
+  val item = list3(2)                   // ApplyWithProvenance[Int, List[Int], Int]
   assert(item.resolve.output == 7)
 
-  val lstCx = lstB.map(incrementMe)
+  val lstCx = list2.map(incrementMe)
   val r = lstCx.resolve
 
   // Map over functions with provenance tracking.
-  val lstC = lstB.map(incrementMe).map(incrementMe)    // The .map method is also added.
-  lstC(2).resolve.output == 13                         // And .apply works on the resulting maps.
+  val lstC = list2.map(incrementMe).map(incrementMe)    // The .map method is also added.
+  lstC(2).resolve.output == 13                          // And .apply works on the resulting maps.
 
   // Or pass the full result of map in.
-  val bigCall2 = sumList(lstB.map(incrementMe).map(incrementMe))
+  val bigCall2 = sumList(list2.map(incrementMe).map(incrementMe))
   val bigResult2 = bigCall2.resolve
   bigResult2.output == 66
 
