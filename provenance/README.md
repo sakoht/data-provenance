@@ -319,3 +319,5 @@ Project Setup:
 6. Convert key processes in your pipeline into FunctionNWithProvenance.
 7. Add test cases to defend your logic.
 
+Or, consider just copying the example1 project as a starting skeleton, and modifying to taste.
+
