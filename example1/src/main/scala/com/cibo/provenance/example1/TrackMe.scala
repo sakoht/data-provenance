@@ -7,7 +7,7 @@
  * or at https://opensource.org/licenses/BSD-3-Clause
  */
 
-package com.cibo.provenance.examples
+package com.cibo.provenance.example1
 
 import com.cibo.provenance._
 import com.cibo.provenance.tracker.ResultTrackerSimple
@@ -49,7 +49,7 @@ object TrackMe  {
     // A BuildInfo is required for the ResultTrackers.
     // The SbtBuildInfo plugin writes an object with build metadata before compiling.
     // This is configured in buildinfo.sbt in this repo.  The object lives here:
-    import com.cibo.provenance.examples.BuildInfo
+    import com.cibo.provenance.example1.BuildInfo
     implicit val bi: BuildInfo = BuildInfo
     logger.info(f"BUILD INFO: $bi")
 

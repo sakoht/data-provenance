@@ -2,8 +2,8 @@
 
 # Like cli.sh, but runs commands within the container locally.
 
-PROJECTNAME=queueable-example
-CLASSNAME=com.cibo.queueable.examples.HelloWorldCli
+PROJECTNAME=provenance-example1
+CLASSNAME=com.cibo.provenance.example1.TrackMe
 
 if [ "$TAG" == "" ]; then
   TAG=latest
