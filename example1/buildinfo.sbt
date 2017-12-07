@@ -1,5 +1,8 @@
 // This configures SbtBuildInfo for the current project for provenance tracking.
 // It presumes the project uses git for source control.
+// - Ensure that project/plugins has: addSbtPlugin("com.eed3si9n"     %  "sbt-buildinfo"         % "0.7.0")
+// - For a single-module sbt, put this file in the root.
+// - For a multi-module sbt, paste this content into your root, and include buildInfoSettings as necessary.
 
 // The sbt git plugins do not work w/ sbt 1.0 yet.  This suffices.
 import scala.sys.process._
@@ -45,3 +48,4 @@ enablePlugins(BuildInfoPlugin)
 
 // This content should be in project/plugins.sbt (or project/project/plugins.sbt for multi-module).
 //  addSbtPlugin("com.eed3si9n"     %  "sbt-buildinfo"         % "0.7.0")
+
