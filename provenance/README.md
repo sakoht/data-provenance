@@ -309,3 +309,13 @@ Best Practices
 5. If you want to track non-deterministic functions, make the last parameter an `Instant`, and set it to `Instant.now` on each run.  You will re-run the function, but when you happen to get identical outputs, the rest of the pipeline will complete like dominos.  This is perfect for downloaders.
 6. If you use random number generation, generate the seed outside the call, and pass the seed into the call.  This lets the call become deterministic.  Even better: calculate a seed based on other inputs, if you can.  This will let you get "consistent random" results.
 
+Project Setup:
+--------------
+1. Create `buildinfo.sbt` in your root by copying `buildinfo.sbt-example-{simple,multimodule}`
+2. Put `addSbtPlugin("com.eed3si9n" %  "sbt-buildinfo" % "0.7.0")` into project/plugins.
+3. Verify that `import YOURPACKAGE.BuildInfo works` after `sbt clean reload compile`.
+4. Decide on an S3 path for your data.
+5. Add one or more ResultTrackerSimple objects to your app for prod/test storage.
+6. Convert key processes in your pipeline into FunctionNWithProvenance.
+7. Add test cases to defend your logic.
+
