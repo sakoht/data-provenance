@@ -6,6 +6,14 @@
 // - put this into your project/plugins.sbt: `addSbtPlugin("com.eed3si9n" %  "sbt-buildinfo" % "0.7.0")``
 // - edit the `buildInfoPackage` to refer to a package owned exclusively by your project
 
+buildInfoPackage := "com.cibo.provenance.example1" 
+
+buildInfoObject := "BuildInfo"
+
+libraryDependencies ++= Seq(
+    "com.cibo" %% "provenance" % "0.1-SNAPSHOT" withSources(),
+)
+
 // This presumes the project uses git for source control.
 // The sbt git plugins do not work w/ sbt 1.0 yet.  This suffices.
 import scala.sys.process._
@@ -16,14 +24,6 @@ val gitDescribe: String        = "git log -1 --pretty=%B".!!.stripSuffix("\n")
 val gitHeadRev: String         = "git rev-parse HEAD".!!.stripSuffix("\n")
 val gitRepoClean: String       = if ("git status".!!.split("\n").length == 3) "true" else "false"
 
-buildInfoPackage := "com.cibo.provenance.example1" 
-
-buildInfoObject := "BuildInfo"
-
-libraryDependencies ++= Seq(
-    "com.cibo" %% "provenance" % "0.1-SNAPSHOT" withSources(),
-)
-
 buildInfoKeys := Seq[BuildInfoKey](
     name, version, scalaVersion, sbtVersion,
     BuildInfoKey("gitBranch", gitBranch),
@@ -33,6 +33,7 @@ buildInfoKeys := Seq[BuildInfoKey](
     BuildInfoKey("gitCommitDate", gitCommitDate),
     BuildInfoKey("gitDescribe", gitDescribe)
 )
+
 buildInfoOptions ++= Seq(
   BuildInfoOption.ToJson,
   BuildInfoOption.BuildTime,
@@ -40,3 +41,4 @@ buildInfoOptions ++= Seq(
 )
 
 enablePlugins(BuildInfoPlugin)
+
