@@ -108,7 +108,7 @@ rt.hasResultForCall(call1) == true                              // perhaps
 val result1b = call1.resolve                                    // just loads the answer made previously
 ```
 
-There is a no-op `ResultTrackerNone` that records nothing, re-runs everything.  It can becombined with the `DummyBuildInfo` to do ad-hoc experiments with no setup.
+There is a no-op `ResultTrackerNone` that records nothing, re-runs everything.  It can be combined with the `DummyBuildInfo` to do ad-hoc experiments with no setup.
 ```scala
 import com.cibo.provenance._
 implicit val bi = DummyBuildInfo            // a dummy stub commit and build
@@ -163,7 +163,7 @@ In theory, the versions will be updated appropriately.  In practice, errors will
 
 There are three modes:
 - a function that does not really produce the same output for the same inputs repeatably
-- a function tis refactored at some commit, but a change in results is introduced inadvertently
+- a function that is refactored at some commit, but a change in results is introduced inadvertently
 - a function that behaves differently for the same commit on differnt builds, due to some external factor in the build process
 
 Each actual output produced tracks the exact git commit and build ID used to produce it.  This comes from SbtBuildInfo.  Each
