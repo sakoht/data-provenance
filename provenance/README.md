@@ -410,7 +410,7 @@ This captures the FunctionCallResultWithProvenance to a given output/input pair.
 child paths under any parent path, when multiple inputs happen to produce the same outupt, or when multiple upstream
 paths lead to the same inputs. 
 
-##### `output-to-provenance`:
+##### `provenance-to-inputs`:
 ```
 functions/com.cibo.provenance.Add/1.0/provenance-to-inputs/54b994cc3625bd54213e4dc9017b98c85cabedff/805b0523984a5b175938cfbdcd04015d6ee41ec4
 ```
