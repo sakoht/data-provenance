@@ -2,8 +2,8 @@
 
 # Run the latest CLI locally directly. 
 
-PROJECTNAME=provenance-example
-CLASSNAME=com.cibo.provenance.examples.TrackMe
+PROJECTNAME=provenance-example1
+CLASSNAME=com.cibo.provenance.example1.TrackMe
 
 # The AWS cli will respect AWS_DEFAULT_PROFILE, but the Java SDK will not.
 # Xfer the ids to a more accessible place.

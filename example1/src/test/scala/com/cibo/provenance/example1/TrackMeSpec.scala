@@ -1,4 +1,4 @@
-package com.cibo.provenance.examples
+package com.cibo.provenance.example1
 
 import java.io.File
 
