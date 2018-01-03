@@ -4,7 +4,7 @@ releaseProcess := Seq[ReleaseStep](
   checkSnapshotDependencies,
   inquireVersions,
   runTest,
-  releaseStepCommand("createHeaders"),
+  //releaseStepCommand("createHeaders"),
   setReleaseVersion,
   commitReleaseVersion,
   tagRelease,
