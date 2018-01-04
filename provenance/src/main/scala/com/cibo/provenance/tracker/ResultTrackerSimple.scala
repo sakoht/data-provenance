@@ -340,7 +340,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
     loadObjectFromFile[T](baseSyncablePath.extendPath(path).getFile)
 
   private def loadOutputCommitAndBuildIdForInputGroupIdOption[O : ClassTag](fname: String, fversion: Version, inputGroupId: Digest): Option[(Digest,String, String)] = {
-      s3db.getSuffixesForPrefix(f"functions/$fname/${fversion.id}/inputs-to-output/${inputGroupId.id}/").toList match {
+      s3db.getSuffixesForPrefix(f"functions/$fname/${fversion.id}/inputs-to-output/${inputGroupId.id}").toList match {
       case Nil =>
         None
       case head :: Nil =>
