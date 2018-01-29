@@ -44,7 +44,11 @@ case class ResultTrackerNone()(implicit val currentBuildInfo: BuildInfo) extends
 
   def hasValue(digest: Digest): Boolean = false // never
 
-  def loadCallOption[O : ClassTag](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] = None // never
+  def loadCallDeflatedOption[O : ClassTag](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
+    None // never
+
+  def loadCallOption[O : ClassTag](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] =
+    None // never
 
   def loadValueOption[O : ClassTag](digest: Digest): Option[O] = None // never
 

@@ -20,19 +20,6 @@ trait ResultTracker {
 
   // core method
 
-  def resolve2[O](f: FunctionCallWithProvenance[O]): FunctionCallResultWithProvenance[O] = {
-    val f2 = f.resolveInputs(rt=this)
-    val f3 = f2.deflateInputs(rt=this)
-    loadResultForCallOption[O](f3) match {
-      case Some(existingResult) =>
-        existingResult
-      case None =>
-        val newResult = f2.run(this)
-        saveResult(newResult)
-        newResult
-    }
-  }
-
   def resolve[O](f: FunctionCallWithProvenance[O]): FunctionCallResultWithProvenance[O] = {
     val callWithInputDigests = f.resolveInputs(rt=this)
     loadResultForCallOption[O](callWithInputDigests) match {
@@ -67,6 +54,8 @@ trait ResultTracker {
 
   def loadCallOption[O : ClassTag](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]]
 
+  def loadCallDeflatedOption[O : ClassTag](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]]
+
   def loadValueOption[O : ClassTag](digest: Digest): Option[O]
 
   def loadValueSerializedDataOption(className: String, digest: Digest): Option[Array[Byte]]  // included to work with foreign data
@@ -79,7 +68,13 @@ trait ResultTracker {
   }
 
   def loadValue[T : ClassTag](id: Digest): T =
-    loadValueOption[T](id).get
+    loadValueOption[T](id) match {
+      case Some(obj) =>
+        obj
+      case None =>
+        val ct = implicitly[ClassTag[T]]
+        throw new NoSuchElementException(f"Failed to find content for $ct with ID $id!")
+    }
 
 
   // protected methods

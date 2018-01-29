@@ -18,4 +18,3 @@ Defaults.itSettings
 fork in IntegrationTest := true
 testOptions in IntegrationTest ++= Seq(Tests.Argument("-oDF"))
 
-scalaVersion in ThisBuild := "2.12.4"

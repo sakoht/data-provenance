@@ -32,3 +32,16 @@ class Function3CallResultWithProvenance[O, I1, I2, I3](f: Function3CallWithProve
 class Function4CallResultWithProvenance[O, I1, I2, I3, I4](f: Function4CallWithProvenance[O, I1, I2, I3, I4], output: VirtualValue[O])(implicit bi: BuildInfo) extends  FunctionCallResultWithProvenance(f, output, bi) {
   def provenance: Function4CallWithProvenance[O, I1, I2, I3, I4] = f
 }
+
+
+class Function5CallResultWithProvenance[O, I1, I2, I3, I4,I5](f: Function5CallWithProvenance[O, I1, I2, I3, I4, I5], output: VirtualValue[O])(implicit bi: BuildInfo) extends  FunctionCallResultWithProvenance(f, output, bi) {
+  def provenance: Function5CallWithProvenance[O, I1, I2, I3, I4, I5] = f
+}
+
+class Function6CallResultWithProvenance[O, I1, I2, I3, I4,I5, I6](f: Function6CallWithProvenance[O, I1, I2, I3, I4, I5, I6], output: VirtualValue[O])(implicit bi: BuildInfo) extends  FunctionCallResultWithProvenance(f, output, bi) {
+  def provenance: Function6CallWithProvenance[O, I1, I2, I3, I4, I5, I6] = f
+}
+
+class Function7CallResultWithProvenance[O, I1, I2, I3, I4,I5, I6, I7](f: Function7CallWithProvenance[O, I1, I2, I3, I4, I5, I6, I7], output: VirtualValue[O])(implicit bi: BuildInfo) extends  FunctionCallResultWithProvenance(f, output, bi) {
+  def provenance: Function7CallWithProvenance[O, I1, I2, I3, I4, I5, I6, I7] = f
+}

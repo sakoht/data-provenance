@@ -134,13 +134,14 @@ trait Result[O] extends ValueWithProvenance[O] with Serializable {
 abstract class FunctionCallWithProvenance[O : ClassTag](var version: ValueWithProvenance[Version]) extends Call[O] with Serializable {
   self =>
 
+  @transient
   lazy val getOutputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
 
   // Abstract interface.  These are implemented in each Function{n}CallSignatureWithProvenance subclass.
 
-  val functionName: String
+  def functionName: String
 
-  val impl: AnyRef // The subclasses are specific Function{N}.
+  def impl: AnyRef // The subclasses are specific Function{N}.
 
   def getInputs: Seq[ValueWithProvenance[_]]
 
@@ -177,13 +178,13 @@ abstract class FunctionCallWithProvenance[O : ClassTag](var version: ValueWithPr
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     unresolveInputs(rt)
 
-  protected[provenance]def getNormalizedDigest(implicit rt: ResultTracker): Digest =
+  protected[provenance] def getNormalizedDigest(implicit rt: ResultTracker): Digest =
     Util.digestObject(unresolve(rt))
 
-  protected[provenance]def getInputGroupDigest(implicit rt: ResultTracker): Digest =
+  protected[provenance] def getInputGroupDigest(implicit rt: ResultTracker): Digest =
     Util.digestObject(getInputDigests(rt))
 
-  protected[provenance]def getInputDigests(implicit rt: ResultTracker): List[String] = {
+  protected[provenance] def getInputDigests(implicit rt: ResultTracker): List[String] = {
     getInputs.toList.map {
       input =>
         val resolvedInput = input.resolve
@@ -194,7 +195,7 @@ abstract class FunctionCallWithProvenance[O : ClassTag](var version: ValueWithPr
     }
   }
 
-  def getInputsDigestWithSourceFunctionAndVersion(implicit rt: ResultTracker): Vector[FunctionCallResultWithProvenanceDeflated[_]] = {
+  def getInputsDeflated(implicit rt: ResultTracker): Vector[FunctionCallResultWithProvenanceDeflated[_]] = {
     val inputs = getInputs.toVector
     inputs.indices.map {
       i => inputs(i).resolve.deflate
@@ -202,13 +203,26 @@ abstract class FunctionCallWithProvenance[O : ClassTag](var version: ValueWithPr
   }
 
   def getInputGroupValuesDigest(implicit rt: ResultTracker): Digest = {
-    val inputsDeflated: immutable.Seq[FunctionCallResultWithProvenanceDeflated[_]] = getInputsDigestWithSourceFunctionAndVersion
-    val digests = inputsDeflated.map(_.outputDigest).toList
+    val digests = getInputs.map(_.resolve.getOutputVirtual.resolveDigest.digestOption.get).toList
     Digest(Util.digestObject(digests).id)
   }
 
-  def deflate(implicit rt: ResultTracker): FunctionCallWithProvenanceDeflated[O] =
+  def deflate(implicit rt: ResultTracker): FunctionCallWithProvenanceDeflated[O] = {
     rt.saveCall(this)
+    val version: Version = getVersionValueAlreadyResolved match {
+      case Some(version) =>
+        version
+      case None =>
+        throw new RuntimeException("Attempt to save a call with an unresolved version!")
+    }
+    rt.loadCallDeflatedOption[O](functionName, version, this.getNormalizedDigest) match {
+      case Some(deflated) =>
+        deflated
+      case None =>
+        rt.saveCall(this) // consider not
+    }
+  }
+
 
   def inflate(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     this
@@ -315,7 +329,7 @@ case class UnknownProvenance[O : ClassTag](value: O) extends Function0CallWithPr
     )
   }
 
-  override def getInputsDigestWithSourceFunctionAndVersion(implicit rt: ResultTracker): Vector[FunctionCallResultWithProvenanceDeflated[_]] =
+  override def getInputsDeflated(implicit rt: ResultTracker): Vector[FunctionCallResultWithProvenanceDeflated[_]] =
     cachedCollapsedDigests
 
   override def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = cachedResult
