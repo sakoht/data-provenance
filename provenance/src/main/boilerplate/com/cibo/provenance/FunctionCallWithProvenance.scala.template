@@ -31,27 +31,28 @@ abstract class Function0CallWithProvenance[O : ClassTag](v: ValueWithProvenance[
   def duplicate(vv: ValueWithProvenance[Version]): Function0CallWithProvenance[O]
 }
 
-abstract class Function1CallWithProvenance[O : ClassTag, I1](i1: ValueWithProvenance[I1], v: ValueWithProvenance[Version])(f: (I1, Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
+[1..21#abstract class Function1CallWithProvenance[O : ClassTag, [#I1#]]([#i1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version])(f: ([#I1#], Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
   val impl = f
-  def getInputs: Seq[ValueWithProvenance[_]] = Seq(i1)
-  def inputTuple: Tuple1[ValueWithProvenance[I1]] = Tuple1(i1)
-  def resolveInputs(implicit rt: ResultTracker): Function1CallWithProvenance[O, I1] =
-    nocopy(duplicate(i1.resolve, v.resolve), this)
-  def unresolveInputs(implicit rt: ResultTracker): Function1CallWithProvenance[O, I1] =
-    nocopy(duplicate(i1.unresolve, v.unresolve), this)
-  def inflateInputs(implicit rt: ResultTracker): Function1CallWithProvenance[O, I1] =
-    nocopy(duplicate(i1.inflate, v.inflate), this)
-  def deflateInputs(implicit rt: ResultTracker): Function1CallWithProvenance[O, I1] =
-    nocopy(duplicate(i1.deflate, v.inflate), this)
-  def run(implicit rt: ResultTracker): Function1CallResultWithProvenance[O, I1] = {
-    val output: O = f(i1.resolve.output, getVersionValue)
+  def getInputs: Seq[ValueWithProvenance[_]] = Seq([#i1#])
+  def inputTuple: Tuple1[[#ValueWithProvenance[I1]#]] = Tuple1([#i1#])
+  def resolveInputs(implicit rt: ResultTracker): Function1CallWithProvenance[O, [#I1#]] =
+    nocopy(duplicate([#i1.resolve#], v.resolve), this)
+  def unresolveInputs(implicit rt: ResultTracker): Function1CallWithProvenance[O, [#I1#]] =
+    nocopy(duplicate([#i1.unresolve#], v.unresolve), this)
+  def inflateInputs(implicit rt: ResultTracker): Function1CallWithProvenance[O, [#I1#]] =
+    nocopy(duplicate([#i1.inflate#], v.inflate), this)
+  def deflateInputs(implicit rt: ResultTracker): Function1CallWithProvenance[O, [#I1#]] =
+    nocopy(duplicate([#i1.deflate#], v.inflate), this)
+  def run(implicit rt: ResultTracker): Function1CallResultWithProvenance[O, [#I1#]] = {
+    val output: O = f([#i1.resolve.output#], getVersionValue)
     new Function1CallResultWithProvenance(this, output = VirtualValue(output))(rt.getCurrentBuildInfo)
   }
-  def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
-  def duplicate(v1: ValueWithProvenance[I1], vv: ValueWithProvenance[Version]): Function1CallWithProvenance[O, I1]
-}
+  def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): Function1CallResultWithProvenance[O, [#I1#]]
+  def duplicate([#v1: ValueWithProvenance[I1]#], vv: ValueWithProvenance[Version]): Function1CallWithProvenance[O, [#I1#]]
+}#
+]
 
-
+/*
 abstract class Function2CallWithProvenance[O : ClassTag, I1, I2](i1: ValueWithProvenance[I1], i2: ValueWithProvenance[I2], v: ValueWithProvenance[Version])(f: (I1, I2, Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
   val impl = f
   def getInputs: Seq[ValueWithProvenance[_]] = Seq(i1, i2)
@@ -194,3 +195,4 @@ abstract class Function7CallWithProvenance[O : ClassTag, I1, I2, I3, I4, I5, I6,
   def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
   def duplicate(v1: ValueWithProvenance[I1], v2: ValueWithProvenance[I2], v3: ValueWithProvenance[I3], v4: ValueWithProvenance[I4], v5: ValueWithProvenance[I5], v6: ValueWithProvenance[I6], v7: ValueWithProvenance[I7], vv: ValueWithProvenance[Version]): Function7CallWithProvenance[O, I1, I2, I3, I4, I5, I6, I7]
 }
+*/

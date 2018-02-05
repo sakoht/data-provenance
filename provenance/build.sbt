@@ -18,3 +18,6 @@ Defaults.itSettings
 fork in IntegrationTest := true
 testOptions in IntegrationTest ++= Seq(Tests.Argument("-oDF"))
 
+// Use boilerplate
+enablePlugins(spray.boilerplate.BoilerplatePlugin)
+

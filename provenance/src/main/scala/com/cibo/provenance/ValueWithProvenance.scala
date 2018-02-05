@@ -51,6 +51,8 @@ package com.cibo.provenance
   *
   */
 
+import com.cibo.provenance.exceptions.{UnknownVersionException, UnrunnableVersionException}
+
 import scala.reflect.ClassTag
 import scala.language.implicitConversions
 import scala.language.higherKinds
@@ -85,6 +87,32 @@ object ValueWithProvenance {
     (implicit rt: ResultTracker): GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call =
     GatherWithProvenance[A].apply(seq)
 }
+
+
+trait FunctionWithProvenance[O] extends Serializable {
+
+  val currentVersion: Version
+
+  lazy val loadableVersions: Seq[Version] = Seq(currentVersion)
+  lazy val runnableVersions: Seq[Version] = Seq(currentVersion)
+
+  lazy val loadableVersionSet: Set[Version] = loadableVersions.toSet
+  lazy val runnableVersionSet: Set[Version] = runnableVersions.toSet
+
+  def name = getClass.getName.stripSuffix("$")
+  override def toString = f"$name@$currentVersion"
+
+  protected def throwInvalidVersionException(v: Version): Unit = {
+    if (runnableVersions.contains(v)) {
+      throw new RuntimeException(f"Version $v of $this is in the runnableVersions list, but implVersion is not overridden to handle it!")
+    } else if (loadableVersions.contains(v)) {
+      throw UnrunnableVersionException(v, this)
+    } else {
+      throw UnknownVersionException(v, this)
+    }
+  }
+}
+
 
 object FunctionCallWithProvenance {
   import com.cibo.provenance.implicits._

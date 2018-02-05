@@ -28,7 +28,7 @@ import scala.reflect.ClassTag
   *
   *     ).foreach {
   *       call =>
-  *         it("$call resolves as expected...") {
+  *         it(call.toString + " resolves as expected...") {
   *           call.resolve
   *         }
   *     }

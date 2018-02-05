@@ -1,0 +1,122 @@
+package com.cibo.provenance
+
+/**
+  * Created by ssmith on 9/12/17.
+  */
+
+import com.cibo.provenance.exceptions.{UnknownVersionException, UnrunnableVersionException}
+import scala.language.implicitConversions
+import scala.reflect.ClassTag
+
+trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializable {
+  self =>
+
+  val currentVersion: Version
+
+  def impl(): O
+
+  def apply(v: ValueWithProvenance[Version] = currentVersion)(implicit outputClassTag: ClassTag[O]): Call = Call(v)(outputClassTag)
+
+  protected def implVersion(v: Version): O = {
+    if (v != currentVersion)
+      throwInvalidVersionException(v)
+    impl()
+  }
+
+  case class Call(vv: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O])
+    extends Function0CallWithProvenance[O](vv)(implVersion) {
+
+      val function = self
+      val functionName: String = self.getClass.getName.stripSuffix("$")
+
+      override def toString: String =
+        self.getClass.getSimpleName.stripSuffix("$") + "()" // no Tuple0
+
+      override def run(implicit rt: ResultTracker): Result =
+        newResult(super.run(rt).getOutputVirtual)(rt.getCurrentBuildInfo)
+
+      override def resolve(implicit rt: ResultTracker): Result =
+        super.resolve(rt).asInstanceOf[Result]
+
+      def newResult(output: VirtualValue[O])(implicit bi: BuildInfo): Result =
+        Result(this, output)(bi)
+
+      def duplicate(vv: ValueWithProvenance[Version]): Call =
+        copy(vv)
+  }
+
+  case class Result(call: Call, data: VirtualValue[O])(implicit bi: BuildInfo)
+    extends Function0CallResultWithProvenance(call, data)(bi)
+
+  implicit private def convertResult(r: Function0CallResultWithProvenance[O]): Result =
+    Result(r.provenance, r.getOutputVirtual)(r.getOutputBuildInfoBrief)
+
+  implicit private def convertProvenance(f: Function0CallWithProvenance[O]): Call =
+    Call(f.getVersion)(f.getOutputClassTag)
+}
+
+
+[1..21#trait Function1WithProvenance[O, [#I1#]] extends FunctionWithProvenance[O] with Serializable {
+  self =>
+
+  val currentVersion: Version
+
+  def impl([#i1: I1#]): O
+
+  def apply([#i1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version] = currentVersion)(implicit outputClassTag: ClassTag[O]): Call =
+    Call([#i1#], v)
+
+  protected def implVersion([#i1: I1#], v: Version): O = {
+    if (v != currentVersion)
+      throwInvalidVersionException(v)
+    impl([#i1#])
+  }
+
+  // This method is "pulled-up" from Call into the function so they can be overridden
+  // by provenance infrastructural functions.  In general, the impl() has access to only the raw values,
+  // not the ValueWithProvenance[T] wrappers.
+
+  protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
+    implicit val ct: ClassTag[O] = call.getOutputClassTag
+    val output: O = implVersion([#call.v1.resolve.output#], call.getVersionValue)
+    call.newResult(VirtualValue(output))(rt.getCurrentBuildInfo)
+  }
+
+  case class Call([#v1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O])
+    extends Function1CallWithProvenance[O, [#I1#]]([#v1#], v)(implVersion) with Serializable {
+
+      val function = self
+
+      val functionName: String = self.getClass.getName.stripSuffix("$")
+
+      override def toString: String =
+        self.getClass.getSimpleName.stripSuffix("$") + inputTuple.toString
+
+      override def run(implicit rt: ResultTracker): Result =
+        runCall(this)(rt)
+
+      override def resolve(implicit rt: ResultTracker): Result =
+        rt.resolve(this).asInstanceOf[Result]
+
+      override def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
+        unresolveInputs(rt).asInstanceOf[Call]
+
+      def newResult(output: VirtualValue[O])(implicit bi: BuildInfo): Result =
+        Result(this, output)(bi)
+
+      def duplicate([#v1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version]): Call =
+        copy([#v1#], v)
+  }
+
+  case class Result(call: Call, data: VirtualValue[O])(implicit bi: BuildInfo)
+    extends Function1CallResultWithProvenance(call, data)(bi)
+
+  implicit private def convertResult(r: Function1CallResultWithProvenance[O, [#I1#]]): Result =
+    Result(r.provenance, r.getOutputVirtual)(r.getOutputBuildInfoBrief)
+
+  implicit private def convertProvenance(f: Function1CallWithProvenance[O, [#I1#]]): Call = {
+    val i = f.inputTuple
+    Call([#i._1#], f.getVersion)(f.getOutputClassTag)
+  }
+}#
+]
