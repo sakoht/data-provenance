@@ -1,6 +1,5 @@
 package com.cibo.provenance
 
-import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone}
 import org.scalatest.{FunSpec, Matchers}
 import org.slf4j.{Logger, LoggerFactory}
 

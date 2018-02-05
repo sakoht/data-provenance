@@ -5,18 +5,16 @@ package com.cibo.provenance
   */
 
 
+import com.cibo.provenance.exceptions.InconsistentVersionException
 import com.typesafe.scalalogging.LazyLogging
 import org.scalatest.{FunSpec, Matchers}
 
 
 class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
   import java.io.File
-  import java.nio.file.{Files, Paths}
   import org.apache.commons.io.FileUtils
 
   import com.cibo.io.s3.SyncablePath
-  import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone, ResultTrackerSimple}
-  import com.cibo.io.Shell.getOutputAsBytes
 
   // This is the root for test output.
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir
@@ -293,7 +291,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
         r3.getOutputBuildInfoBrief shouldEqual build1     // On the same build.
         r3.output shouldEqual 3                           // That has an inconsistent value for 1+1
 
-        intercept[com.cibo.provenance.InconsistentVersionException] {
+        intercept[InconsistentVersionException] {
           // Detect the collision on load.
           // We will eventually flag the bad commit and detect further attempts to use it.
           rt2.saveResult(r3)                                // And save it.
@@ -325,7 +323,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
         r4.getOutputBuildInfoBrief shouldEqual build2 // On a new commit and build.
         r4.output shouldEqual 4                       // That has an inconsistent value for 1+1
 
-        intercept[com.cibo.provenance.InconsistentVersionException] {
+        intercept[InconsistentVersionException] {
           // For now we complain.
           // Eventually we flag the newer commit as inconsistent, and resolve will load the original value.
           // If the original value was wrong, the version can/should be bumped.

@@ -3,7 +3,6 @@ package com.cibo.provenance
 import java.io.File
 
 import com.cibo.io.s3.SyncablePath
-import com.cibo.provenance.tracker.ResultTrackerSimple
 import org.apache.commons.io.FileUtils
 import org.scalatest.{FunSpec, Matchers}
 

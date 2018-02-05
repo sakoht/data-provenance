@@ -17,7 +17,7 @@ class OptionalResult[A]
   (result: FunctionCallResultWithProvenance[Option[A]])
   (implicit ctsa: ClassTag[Option[A]], cta: ClassTag[A]) {
 
-  import com.cibo.provenance.tracker.ResultTracker
+  import com.cibo.provenance.ResultTracker
 
   def get(implicit rt: ResultTracker) = result.provenance.get.resolve
   def isEmpty(implicit rt: ResultTracker) = result.provenance.isEmpty.resolve

@@ -1,14 +1,12 @@
 package com.cibo.provenance
 
-import com.cibo.provenance.tracker.ResultTracker
 import org.scalatest.{FunSpec, Matchers}
 
 class DevelopmentVersionSpec extends FunSpec with Matchers {
 
   import java.io.File
-  import org.apache.commons.io.FileUtils
 
-  import com.cibo.provenance.tracker.ResultTrackerSimple
+  import org.apache.commons.io.FileUtils
   import com.cibo.io.s3.SyncablePath
 
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir

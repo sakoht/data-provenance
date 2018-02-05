@@ -1,7 +1,6 @@
 package com.cibo.provenance
 
 import com.cibo.provenance.monadics.{ApplyWithProvenance, IndicesRangeWithProvenance, MapWithProvenance}
-import com.cibo.provenance.tracker.ResultTracker
 
 import scala.reflect.ClassTag
 

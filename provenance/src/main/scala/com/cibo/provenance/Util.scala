@@ -19,26 +19,37 @@ import scala.reflect.ClassTag
 
 object Util extends LazyLogging {
 
-  def serialize[T](obj: T): Array[Byte] = {
+  def getBytesAndDigest[T](obj: T): (Array[Byte], Digest) = {
+    val bytes1 = serialize1(obj)
+    val digest1 = digestBytes(bytes1)
+    val obj2 = deserialize[T](bytes1)
+    val bytes2 = serialize1(obj2)
+    val digest2 = digestBytes(bytes2)
+    if (digest2 != digest1) {
+      val obj3 = Util.deserialize[T](bytes2)
+      val bytes3 = Util.serialize1(obj3)
+      val digest3 = Util.digestBytes(bytes3)
+      if (digest3 == digest2)
+        logger.warn(f"The re-constituted version of $obj digests differently $digest1 -> $digest2!  But the reconstituted object saves consistently.")
+      else
+        throw new RuntimeException(f"Object $obj digests as $digest1, re-digests as $digest2 and $digest3!")
+    }
+    (bytes2, digest2)
+  }
+
+  def serialize[T](obj: T): Array[Byte] = getBytesAndDigest(obj)._1
+
+  def serialize0[T](obj: T): Array[Byte] = {
+
+    ???
+  }
+
+  def serialize1[T](obj: T): Array[Byte] = {
     val baos = new ByteArrayOutputStream
     val oos = new ObjectOutputStream(baos)
     oos.writeObject(obj)
     oos.close()
     baos.toByteArray
-  }
-
-  def serialize[T](obj: T, file: File): Unit = {
-    obj match {
-      case _: Array[Byte] => throw new RuntimeException("Input object is already byte array?")
-      case _ =>
-    }
-    val parentDir = file.getParentFile
-    if (!parentDir.exists)
-      parentDir.mkdirs()
-    val baos = new FileOutputStream(file)
-    val oos = new ObjectOutputStream(baos)
-    oos.writeObject(obj)
-    oos.close()
   }
 
   def saveBytes(bytes: Array[Byte], file: File): Unit = {
@@ -74,12 +85,55 @@ object Util extends LazyLogging {
         //logger.warn("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
         throw new RuntimeException("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
       case _ =>
+        getBytesAndDigest(value)._2
     }
-    digestBytes(serialize(value))
   }
-
 
   def digestBytes(bytes: Array[Byte]): Digest =
     Digest(DigestUtils.sha1Hex(bytes))
+
+  // Digest check functions
+
+  sealed trait Problem[T]
+  case class InconsistentDigestProblem[T](obj: T, attr: String) extends Problem[T]
+  case class UnserializableProblem[T](obj: T, attr: String) extends Problem[T]
+
+  def checkSerialization[T](obj: T, prefix: String = ""): List[Problem[_]] = {
+    val childProblems: List[Util.Problem[_]] =
+      obj match {
+        case p: Product =>
+          val parts = p.productIterator.toList
+          val problems = parts.zipWithIndex.flatMap {
+            case (part: Any, i: Int) =>
+              checkSerialization(part, prefix + "." + i.toString)
+          }
+          problems.toList
+        case _ =>
+          Nil
+      }
+
+    try {
+      if (hasSerializationSymmetry(obj, prefix)) {
+        childProblems
+      } else {
+        InconsistentDigestProblem[T](obj, prefix) +: childProblems
+      }
+    } catch {
+      case e: java.io.NotSerializableException =>
+        UnserializableProblem[T](obj, prefix) +: childProblems
+    }
+  }
+
+  def hasSerializationSymmetry[T](obj: T, prefix: String): Boolean = {
+    val bytes1 = Util.serialize(obj)
+    val digest1 = Util.digestBytes(bytes1)
+    //val os = obj.toString
+    //val os2 = if (os.size > 100) os.substring(0, 100) else os
+    //println(prefix + " : " + digest1 + " for " + os2)
+    val obj2 = Util.deserialize[T](bytes1)
+    val bytes2 = Util.serialize(obj2)
+    val digest2 = Util.digestBytes(bytes2)
+    digest2 == digest1
+  }
 
 }

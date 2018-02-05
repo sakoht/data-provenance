@@ -1,7 +1,5 @@
 package com.cibo.provenance
 
-import com.cibo.provenance.tracker.ResultTracker
-
 /**
   * Created by ssmith on 10/22/17.
   *

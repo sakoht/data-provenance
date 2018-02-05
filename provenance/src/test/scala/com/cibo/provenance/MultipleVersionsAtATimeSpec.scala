@@ -1,6 +1,6 @@
 package com.cibo.provenance
 
-import com.cibo.provenance.tracker.ResultTrackerNone
+import com.cibo.provenance.exceptions.{InvalidVersionException, UnknownVersionException, UnrunnableVersionException}
 import org.scalatest.{FunSpec, Matchers}
 
 /**

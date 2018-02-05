@@ -1,13 +1,10 @@
-package com.cibo.provenance.tracker
+package com.cibo.provenance
 
 import java.io.{ByteArrayInputStream, ObjectInputStream}
 
 import com.cibo.io.s3.{S3DB, SyncablePath}
-import com.cibo.provenance._
-import com.cibo.provenance.monadics.GatherWithProvenance
+import com.cibo.provenance.exceptions.InconsistentVersionException
 import com.typesafe.scalalogging.LazyLogging
-
-import scala.collection.immutable
 
 /**
   * Created by ssmith on 5/16/17.
@@ -16,35 +13,48 @@ import scala.collection.immutable
   *
   * It is shaped to be idempotent, contention-free, and to retroactively correct versioning errors.
   *
-  * All data is at paths like this, stored as serialized objects.
+  * All data is at paths like this, stored as serialized objects, and keyed by the SHA1 of the serialized bytes:
   *   data/VALUE_DIGEST
   *
   * A master index of provenance data is stored in this form:
-  *   data-provenance/VALUE_DIGEST/from/FUNCTION_NAME/VERSION/with-inputs/INPUT_GROUP_DIGEST/with-provenance/PROVENANCE_DIGEST/at/COMMIT_ID/BUILD_ID
+  *   data-provenance/VALUE_DIGEST/as/OUTUT_CLASS_NAME/from/FUNCTION_NAME/VERSION/with-inputs/INPUT_GROUP_DIGEST/with-provenance/PROVENANCE_DIGEST/at/COMMIT_ID/BUILD_ID
   *
   * Per-function provenance metadata lives under:
   *   functions/FUNCTION_NAME/VERSION/
   *
   * These paths under a function/version hold serialized data:
   *   - input-group-values/INPUT_GROUP_DIGEST
-  *   - provenance/PROVENANCE_DIGEST
+  *   - provenance-values-typed/REGULAR_PROVENANCE_DIGEST
+  *   - provenance-values-deflated/DEFLATED_PROVENANCE_DIGEST (contains the ID for the fully-typed object)
   *
   * These these paths under a function/version record associations as they are made (zero-size: info is in the placement):
-  *   - provenance-to-inputs/PROVENANCE_DIGEST/INPUT_GROUP_DIGEST
+  *   - provenance-to-inputs/PROVENANCE_DIGEST_TYPED/INPUT_GROUP_DIGEST
   *   - inputs-to-output/INPUT_GROUP_DIGEST/OUTPUT_DIGEST/COMMIT_ID/BUILD_ID
-  *   - output-to-provenance/OUTPUT_DIGEST/INPUT_GROUP_DIGEST/PROVENANCE_DIGEST
+  *   - output-to-provenance/OUTPUT_DIGEST/INPUT_GROUP_DIGEST/DEFLATED_PROVENANCE_DIGEST
+  *
+  * Note that, for the three paths above that link output->input->provenance, an output can come from one or more
+  * different inputs, and the same input can come from one-or more distinct provenance paths.  So the outputs-to-provenance
+  * path could have a full tree of data, wherein each "subdir" has multiple values, and the one under it does too.
+  *
+  * The converse is _not_ true.  An input should have only one output (at a given version), and provenance value
+  * should have only one input digest. When an input gets multiple outputs, we flag the version as bad at the current
+  * commit/build.  When a provenance gets multiple inputs, the same is true, but the fault is in the inconsistent
+  * serialization of the inputs, typically.
   *
   */
 
 class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBuildInfo: BuildInfo) extends ResultTracker with LazyLogging {
 
   import scala.reflect.ClassTag
-  import org.apache.commons.codec.digest.DigestUtils
 
   private val s3db = S3DB.fromSyncablePath(baseSyncablePath)
-  protected val overwrite: Boolean = false
 
-  val recheck: Boolean = true // during testing re-verify each save
+  protected def checkForOverwrite: Boolean = false
+  protected def checkForInconsistentSerialization(newResult: FunctionCallResultWithProvenance[_]): Boolean = false
+  protected def checkForConflictedOutputBeforeSave(newResult: FunctionCallResultWithProvenance[_]): Boolean = false
+  protected def checkForResultAfterSave(newResult: FunctionCallResultWithProvenance[_]): Boolean = false
+
+  protected def blockSavingConflicts(newResult: FunctionCallResultWithProvenance[_]): Boolean = false
 
   // public interface
 
@@ -52,8 +62,30 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
 
   def getCurrentBuildInfo: BuildInfo = currentBuildInfo
 
-  //scalastyle:off
+  override def resolve[O](f: FunctionCallWithProvenance[O]): FunctionCallResultWithProvenance[O] = {
+    val callWithInputDigests = f.resolveInputs(rt=this)
+    loadResultForCallOption[O](callWithInputDigests) match {
+      case Some(existingResult) =>
+        existingResult
+      case None =>
+        val newResult = callWithInputDigests.run(this)
+        if (checkForInconsistentSerialization(newResult)) {
+          val problems = Util.checkSerialization(newResult.output(this))
+          if (problems.nonEmpty) {
+            throw new FailedSave(f"New result does not serialize consistently!: $newResult: $problems")
+          }
+        }
+        saveResult(newResult)
+        newResult
+    }
+  }
+
   def saveResult[O](result: FunctionCallResultWithProvenance[O]): FunctionCallResultWithProvenanceDeflated[O] = {
+    saveResultImpl(result)
+  }
+
+  //scalastyle:off
+  def saveResultImpl[O](result: FunctionCallResultWithProvenance[O]): FunctionCallResultWithProvenanceDeflated[O] = {
     implicit val rt: ResultTracker = this
 
     // TODO: This function should be idempotent for a given result and tracker pair.
@@ -126,78 +158,36 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
     val provenanceDeflatedSerialized = Util.serialize(provenanceDeflated)
     val provenanceDeflatedKey = Util.digestBytes(provenanceDeflatedSerialized).id
 
-    if (recheck) {
-      val callDeflatedOption = loadCallDeflatedOption(functionName, version, Digest(provenanceDeflatedKey))
-      callDeflatedOption match {
-        case Some(callDeflated) =>
-          if (callDeflated != provenanceDeflated)
-            logger.error("Mismatch!")
-          else
-            logger.warn("ok")
-          val callInflatedWithDeflatedInputs = provenanceDeflated match {
-            case u: FunctionCallWithUnknownProvenanceDeflated[O] =>
-              val i1 = u.inflate
-              if (i1 != call)
-                logger.error("Mismatch!")
-              else
-                logger.debug("ok")
-            case k: FunctionCallWithKnownProvenanceDeflated[O] =>
-              val i1Option: Option[FunctionCallWithProvenance[Nothing]] = loadCallOption(functionName, version, k.inflatedCallDigest)
-              i1Option match {
-                case Some(i1) =>
-                  val i1i = i1.inflate
-                  val i1ii = i1i.inflateInputs
-                  if (i1ii != call)
-                    logger.error("Mismatch!")
-                  else
-                    logger.debug("ok")
-                  try {
-                    val ki: FunctionCallWithProvenance[O] = k.inflate
-                    val kii = ki.inflateInputs
-                    if (kii != i1ii)
-                      logger.error("Inflation mismatch!")
-                    else if (i1ii.resolveInputs != call.unresolveInputs)
-                      logger.error("Mismatch!")
-                    else
-                      logger.debug("ok")
-                  }
-                  catch {
-                    case e: Exception =>
-                      logger.error("Error inflating?")
-                      throw e
-                  }
-                  i1
-                case None =>
-                  throw new FailedSave("Failed to find inflated call?")
-              }
-          }
-        case None =>
-          throw new FailedSave("failed to find call after saving?!")
-      }
-    }
+    /*  In production, this flag is NOT set.  We skip the slow check for a possible conflict, and
+        if one is found later, we it records a taint in the data fabric.
 
+        During development, it is more helpful to throw an exception before recording the conflict.  It
+        is most likely that the inconsistency is present only in the developer's environment, and the conflict
+        can be remedied before the code is published.
+    */
 
-    // For debugging: see if the output already exists.
-    val prevIds: Option[(Digest, String, String)] =
+    if (blockSavingConflicts(result))
       try {
         loadOutputCommitAndBuildIdForInputGroupIdOption(functionName, version, inputGroupDigest)(outputClassTag) match {
           case Some((prevOutputId, prevCommitId, prevBuildId)) =>
             if (prevOutputId != outputDigest) {
-              throw new FailedSave(f"Saving a second output for the same input!")
-              //logger.error(f"Saving a second output for the same input!")
-              //Some(ids)
+              val prevOutput = loadValueOption(prevOutputId)
+              throw new FailedSave(
+                f"Blocked attempt to save a second output ($outputDigest) for the same input!  " +
+                f"Original output was $prevOutputId." +
+                f"\nOld output: $prevOutput" +
+                f"\nNew output: $output"
+              )
             } else {
-              logger.warn(f"Re-saving the same output for the same input!")
-              Some((prevOutputId, prevCommitId, prevBuildId))
+              logger.debug(f"Previous output matches new output.")
             }
           case None =>
             logger.debug(f"No previous output found.")
-            None
         }
       } catch {
           case e: Exception =>
-            logger.debug(f"Error checking for previous results!")
-            loadOutputCommitAndBuildIdForInputGroupIdOption(functionName, version, inputGroupDigest)(outputClassTag)
+            val ee = e
+            throw new FailedSave(f"Error checking for conflicting output before saving! $e")
       }
 
     // Link each of the above.
@@ -207,7 +197,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
     // Offer a primary entry point on the value to get to the things that produce it.
     // This key could be shorter, but since it is immutable and zero size, we do it just once here now.
     // Refactor to be more brief as needed.
-    saveObjectToPath(f"data-provenance/$outputKey/from/$functionName/$versionId/with-inputs/$inputGroupKey/with-provenance/$provenanceDeflatedKey/at/$commitId/$buildId", "")
+    saveObjectToPath(f"data-provenance/$outputKey/as/$outputClassName/from/$functionName/$versionId/with-inputs/$inputGroupKey/with-provenance/$provenanceDeflatedKey/at/$commitId/$buildId", "")
 
     // Make each of the up-stream functions behind the inputs link to this one as progeny.
     inputsDeflated.indices.map {
@@ -239,10 +229,39 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
     // If a save partially completes, this will not be present, the next attempt will run again, and some of the data
     // it saves will already be there.  This effectively completes the transaction, though the partial states above
     // are not incorrect/invalid.
-    saveObjectToPath(f"$prefix/inputs-to-output/$inputGroupKey/$outputKey/$commitId/$buildId", "")
 
-    // TODO: For debugging: verify that we have exactly one
-    if (recheck) {
+    val savePath = f"$prefix/inputs-to-output/$inputGroupKey/$outputKey/$commitId/$buildId"
+
+    if (checkForConflictedOutputBeforeSave(result)) {
+      // Perform extra checks before saving to the tracking system.
+      val previousSavePaths = s3db.getSuffixesForPrefix(f"$prefix/inputs-to-output/$inputGroupKey").toList
+      if (previousSavePaths.isEmpty) {
+        logger.debug("New data.")
+        saveObjectToPath(savePath, "")
+      } else {
+        previousSavePaths.find(previousSavePath => savePath.endsWith(previousSavePath)) match {
+          case Some(_) =>
+            logger.debug("Skip re-saving.")
+          case None =>
+            if (blockSavingConflicts(result)) {
+              throw new FailedSave(
+                f"Blocked attempt to save a second output ($outputDigest) for the same input!  " +
+                  f"New output is $savePath.  Previous paths: $previousSavePaths"
+              )
+            } else {
+              logger.error(f"SAVING CONFLICTING OUTPUT.  Previous paths: $previousSavePaths.  " +
+                "New path $savePath."
+              )
+              saveObjectToPath(savePath, "")
+            }
+        }
+      }
+    } else {
+      // Save without checking.  This is the default, since presumably the test suite checks.
+      saveObjectToPath(savePath, "")
+    }
+
+    if (checkForResultAfterSave(result)) {
       try {
         loadOutputCommitAndBuildIdForInputGroupIdOption(functionName, version, inputGroupDigest)(outputClassTag) match {
           case Some(ids) =>
@@ -254,7 +273,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
         case f: FailedSave =>
           throw f
         case e: Exception =>
-          logger.warn("Error finding a single result for the inputs!")
+          throw new FailedSave(f"Error finding a single output for result after save!: $e")
           loadOutputCommitAndBuildIdForInputGroupIdOption(functionName, version, inputGroupDigest)(outputClassTag)
       }
     }
@@ -338,9 +357,46 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
         deflatedCall
     }
 
+  val recheckSaves: Boolean = true
+
+  def getBytesAndDigest[T](obj: T): (Array[Byte], Digest) = {
+    val bytes1 = Util.serialize(obj)
+    val digest1 = Util.digestBytes(bytes1)
+    if (recheckSaves) {
+      val obj2 = Util.deserialize[T](bytes1)
+      val bytes2 = Util.serialize(obj2)
+      val digest2 = Util.digestBytes(bytes2)
+      if (digest2 != digest1) {
+        val obj3 = Util.deserialize[T](bytes2)
+        val bytes3 = Util.serialize(obj3)
+        val digest3 = Util.digestBytes(bytes3)
+        if (digest3 == digest2)
+          logger.warn(f"The re-constituted version of $obj digests differently $digest1 -> $digest2!  But the reconstituted object saves consistently.")
+        else
+          throw new RuntimeException(f"Object $obj digests as $digest1, re-digests as $digest2 and $digest3!")
+      }
+      (bytes2, digest2)
+    } else {
+      (bytes1, digest1)
+    }
+  }
+
+  def isTainted[T](obj: T): Boolean = {
+    val bytes1 = Util.serialize(obj)
+    val digest1 = Util.digestBytes(bytes1)
+    val obj2 = Util.deserialize[T](bytes1)
+    val bytes2 = Util.serialize(obj2)
+    val digest2 = Util.digestBytes(bytes2)
+    if (digest2 != digest1) {
+      logger.warn(f"The re-constituted version of $obj digests differently $digest1 -> $digest2!  But the reconstituted object saves consistently.")
+      true
+    } else {
+      false
+    }
+  }
+
   def saveValue[T : ClassTag](obj: T): Digest = {
-    val bytes = Util.serialize(obj)
-    val digest = Util.digestBytes(bytes)
+    val (bytes, digest) = getBytesAndDigest(obj)
     if (!hasValue(digest)) {
       val path = f"data/${digest.id}"
         logger.debug(f"Saving raw $obj to $path")
@@ -379,15 +435,28 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
   def loadCallDeflatedSerializedDataOption(functionName: String, version: Version, digest: Digest): Option[Array[Byte]] =
     loadSerializedDataForPath(f"functions/$functionName/${version.id}/provenance-values-deflated/${digest.id}")
 
-  def loadResultForCallOption[O](f: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] =
+  def loadResultForCallOption[O](f: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] = {
+    // TODO: Remove debug code
+    val inputDigests: Seq[Digest] = f.getInputs.map(i => i.resolve(this).getOutputVirtual.resolveDigest.digestOption.get)
     loadOutputIdsForCallOption(f).map {
       case (outputId, commitId, buildId) =>
         val ct = f.getOutputClassTag
-        val output: O = loadValue[O](outputId)(ct)
+        val output: O = try {
+          loadValue[O](outputId)(ct)
+        } catch {
+          case e: Exception =>
+            println(e.toString)
+            loadValue[O](outputId)(ct)
+        }
+        val outputId2 = Util.digestObject(output)(f.getOutputClassTag)
+        if (outputId2 != outputId) {
+          throw new RuntimeException(f"Output value saved as $outputId reloads with a digest of $outputId2: $output")
+        }
         val outputWrapped = VirtualValue(valueOption = Some(output), digestOption = Some(outputId), serializedDataOption = None)(ct)
         val bi = BuildInfoBrief(commitId, buildId)
         f.newResult(outputWrapped)(bi)
     }
+  }
 
   def loadValueOption[T : ClassTag](digest: Digest): Option[T] = {
     loadValueSerializedDataOption(digest) map {
@@ -456,19 +525,14 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
       case _ : Array[Byte] =>
         throw new RuntimeException("Attempt to save pre-serialized data?")
       case _ =>
-        val bytes = Util.serialize(obj)
-        val digest = DigestUtils.sha1Hex(bytes)
+        val (bytes, digest) = getBytesAndDigest(obj)
         saveSerializedDataToPath(path, bytes)
-        digest
-
+        digest.id
     }
   }
 
-  private def saveSerializedDataToPath(path: String, serializedData: Array[Byte]): Unit = {
-    val fullPath: SyncablePath = baseSyncablePath.extendPath(path)
-    if (overwrite || !fullPath.exists)
-      Util.saveBytes(serializedData, fullPath.getFile)
-  }
+  private def saveSerializedDataToPath(path: String, serializedData: Array[Byte]): Unit =
+    s3db.putObject(f"$path", serializedData)
 
   private def saveObjectToSubPathByDigest[T : ClassTag](path: String, obj: T): Digest = {
     val bytes = Util.serialize(obj)
@@ -492,14 +556,35 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
         logger.debug(f"Got $outputId at commit $commitId from $buildId")
         Some((Digest(outputId), commitId, buildId))
       case tooMany =>
+        val ids: List[String] = tooMany
         flagConflict[O](
           fname,
           fversion,
           inputGroupId,
           tooMany
         )
+        // Do some verbose logging
+        try {
+          val objects = tooMany.map {
+            key =>
+              val words = key.split("/")
+              val outputId = words.head
+              loadValueOption(Digest(outputId))
+          }
+          logger.error(f"Multiple outputs for $fname $fversion $inputGroupId")
+          objects.foreach {
+            obj =>
+              logger.error(f"output: $obj")
+          }
+        } catch {
+          case e: Exception =>
+        }
         throw new InconsistentVersionException(fname, fversion, tooMany, Some(inputGroupId))
     }
+  }
+
+  def loadInputIds[O : ClassTag](fname: String, fversion: Version, inputGroupId: Digest): Seq[Digest] = {
+    loadObjectFromPath[List[Digest]](f"functions/$fname/${fversion.id}/input-group-values/${inputGroupId.id}")
   }
 
   def loadInputs[O : ClassTag](fname: String, fversion: Version, inputGroupId: Digest): Seq[Any] = {
@@ -555,7 +640,6 @@ object ResultTrackerSimple {
   def apply(basePath: String)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
     apply(SyncablePath(basePath))(currentAppBuildInfo)
 }
-
 
 class UnresolvedVersionException[O](call: FunctionCallWithProvenance[O])
   extends RuntimeException(f"Cannot deflate calls with an unresolved version: $call") {

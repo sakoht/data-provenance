@@ -1,4 +1,4 @@
-package com.cibo.provenance.tracker
+package com.cibo.provenance
 
 /**
   * Created by ssmith on 5/16/17.
@@ -10,8 +10,6 @@ package com.cibo.provenance.tracker
   */
 
 import java.io.{ByteArrayInputStream, File, FileInputStream, ObjectInputStream}
-
-import com.cibo.provenance._
 
 import scala.reflect.ClassTag
 
@@ -87,7 +85,6 @@ trait ResultTracker {
     val o = ois.readObject
     o.asInstanceOf[T]
   }
-
 
 }
 

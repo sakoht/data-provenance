@@ -4,7 +4,7 @@ package com.cibo.provenance
   * Created by ssmith on 9/12/17.
   */
 
-import com.cibo.provenance.tracker.ResultTracker
+import com.cibo.provenance.exceptions.{UnknownVersionException, UnrunnableVersionException}
 
 import scala.language.implicitConversions
 import scala.reflect.ClassTag

@@ -1,6 +1,4 @@
-package com.cibo.provenance.tracker
-
-import com.cibo.provenance._
+package com.cibo.provenance
 
 import scala.reflect.ClassTag
 

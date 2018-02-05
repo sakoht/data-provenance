@@ -13,7 +13,6 @@ class MonadicCallsSpec extends FunSpec with Matchers {
   import org.apache.commons.io.FileUtils
 
   import com.cibo.io.s3.SyncablePath
-  import com.cibo.provenance.tracker._
   import com.cibo.provenance.monadics._
 
   val outputBaseDir: String = TestUtils.testOutputBaseDir

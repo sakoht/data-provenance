@@ -1,4 +1,6 @@
-package com.cibo.provenance
+package com.cibo.provenance.exceptions
+
+import com.cibo.provenance._
 
 /**
   * Created by ssmith on 9/20/17.

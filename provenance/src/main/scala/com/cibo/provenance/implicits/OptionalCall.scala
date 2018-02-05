@@ -18,7 +18,7 @@ class OptionalCall[A]
 
   self =>
 
-  import com.cibo.provenance.tracker.ResultTracker
+  import com.cibo.provenance.ResultTracker
 
   def get = GetWithProvenance(call)
   def isEmpty = IsEmptyWithProvenance(call)

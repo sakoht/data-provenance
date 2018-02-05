@@ -9,8 +9,7 @@ package com.cibo.provenance.implicits
   */
 
 import com.cibo.provenance.monadics.{ApplyWithProvenance, IndicesRangeWithProvenance, IndicesTraversableWithProvenance, MapWithProvenance}
-import com.cibo.provenance.tracker.ResultTracker
-import com.cibo.provenance.{Function1WithProvenance, FunctionCallWithProvenance, ValueWithProvenance}
+import com.cibo.provenance.{Function1WithProvenance, FunctionCallWithProvenance, ResultTracker, ValueWithProvenance}
 
 import scala.language.higherKinds
 import scala.reflect.ClassTag

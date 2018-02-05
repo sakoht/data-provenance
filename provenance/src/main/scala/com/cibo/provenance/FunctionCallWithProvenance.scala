@@ -9,8 +9,6 @@ package com.cibo.provenance
   *
   */
 
-import com.cibo.provenance.tracker.ResultTracker
-
 import scala.language.implicitConversions
 import scala.reflect.ClassTag
 

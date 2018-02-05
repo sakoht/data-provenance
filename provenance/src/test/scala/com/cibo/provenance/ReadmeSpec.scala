@@ -4,8 +4,6 @@ package com.cibo.provenance
 import org.scalatest.{FunSpec, Matchers}
 
 class ReadmeSpec extends FunSpec with Matchers {
-  import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone}
-  import org.slf4j.{Logger, LoggerFactory}
 
   describe("code in the README") {
     it("runs") {
@@ -16,10 +14,6 @@ class ReadmeSpec extends FunSpec with Matchers {
 }
 
 // Example code from the README.  Always edit it here, and place it there.
-
-import com.cibo.provenance._
-import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerSimple}
-
 
 object addMe extends Function2WithProvenance[Int, Int, Int] {
   val currentVersion = Version("0.1")

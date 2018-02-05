@@ -1,7 +1,6 @@
 package com.cibo.provenance
 
 import com.cibo.io.s3.SyncablePath
-import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerSimple}
 
 case class TestResultTrackerSimple(testSubdirName: String, buildInfo: BuildInfo = DummyBuildInfo)
   extends ResultTrackerSimple(SyncablePath(TestUtils.testOutputBaseDir + "/" + testSubdirName))(buildInfo) {

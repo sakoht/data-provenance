@@ -9,8 +9,7 @@ package com.cibo.provenance.implicits
   */
 
 import com.cibo.provenance.monadics._
-import com.cibo.provenance.tracker.ResultTracker
-import com.cibo.provenance._
+import com.cibo.provenance.{ResultTracker, _}
 
 import scala.language.higherKinds
 import scala.reflect.ClassTag

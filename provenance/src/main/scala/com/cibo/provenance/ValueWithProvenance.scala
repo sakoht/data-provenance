@@ -51,9 +51,6 @@ package com.cibo.provenance
   *
   */
 
-import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone}
-
-import scala.collection.immutable
 import scala.reflect.ClassTag
 import scala.language.implicitConversions
 import scala.language.higherKinds
