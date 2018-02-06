@@ -43,16 +43,16 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
     
       //
       
-      override def resolveInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+      override def resolveInputs(implicit rt: ResultTracker): Call =
         nocopy(duplicate(v.resolve), this)
 
-      override def unresolveInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+      override def unresolveInputs(implicit rt: ResultTracker): Call =
         nocopy(duplicate(v.unresolve), this)
 
-      override def inflateInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+      override def inflateInputs(implicit rt: ResultTracker): Call =
         nocopy(duplicate(v.inflate), this)
 
-      override def deflateInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+      override def deflateInputs(implicit rt: ResultTracker): Call =
         nocopy(duplicate(v.inflate), this)
 
       override def run(implicit rt: ResultTracker): Result = {
@@ -103,8 +103,7 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
   protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
     implicit val ct: ClassTag[O] = call.getOutputClassTag
     val output: O = implVersion ([#call.v1.resolve.output#], call.getVersionValue)
-    call.newResult (VirtualValue (output) ) (rt.getCurrentBuildInfo)
-    //Result(this, output = VirtualValue (output) ) (rt.getCurrentBuildInfo)
+    Result(this, VirtualValue(output) ) (rt.getCurrentBuildInfo)
   }
 
   case class Call([#v1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O])
@@ -123,7 +122,7 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
       override def resolve(implicit rt: ResultTracker): Result =
         rt.resolve(this).asInstanceOf[Result]
 
-      override def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
+      override def unresolve(implicit rt: ResultTracker): Call =
         unresolveInputs(rt).asInstanceOf[Call]
 
       def newResult(output: VirtualValue[O])(implicit bi: BuildInfo): Result =
