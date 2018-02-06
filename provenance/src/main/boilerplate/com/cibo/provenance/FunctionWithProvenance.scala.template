@@ -23,17 +23,14 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
     impl()
   }
 
-  case class Call(vv: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O])
-    extends Function0CallWithProvenance[O](vv)(implVersion) {
+  case class Call(v: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O])
+    extends Function0CallWithProvenance[O](v)(implVersion) {
 
       val function = self
       val functionName: String = self.getClass.getName.stripSuffix("$")
 
       override def toString: String =
         self.getClass.getSimpleName.stripSuffix("$") + "()" // no Tuple0
-
-      override def run(implicit rt: ResultTracker): Result =
-        newResult(super.run(rt).getOutputVirtual)(rt.getCurrentBuildInfo)
 
       override def resolve(implicit rt: ResultTracker): Result =
         super.resolve(rt).asInstanceOf[Result]
@@ -42,7 +39,34 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
         Result(this, output)(bi)
 
       def duplicate(vv: ValueWithProvenance[Version]): Call =
-        copy(vv)
+        copy(v)
+    
+      //
+      
+      override def resolveInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+        nocopy(duplicate(v.resolve), this)
+
+      override def unresolveInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+        nocopy(duplicate(v.unresolve), this)
+
+      override def inflateInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+        nocopy(duplicate(v.inflate), this)
+
+      override def deflateInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+        nocopy(duplicate(v.inflate), this)
+
+      override def run(implicit rt: ResultTracker): Result = {
+        val output: O = implVersion(getVersionValue)
+        Result(this, VirtualValue(output))(rt.getCurrentBuildInfo)
+      }
+  }
+
+  case class Woo[T](i: T) {
+    def woo: String = self.toString + ": " +  i.toString
+  }
+
+  case class Zoo(v: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O]) {
+    def woo: String = self.toString + ": " + v.toString
   }
 
   case class Result(call: Call, data: VirtualValue[O])(implicit bi: BuildInfo)
@@ -72,14 +96,15 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
     impl([#i1#])
   }
 
-  // This method is "pulled-up" from Call into the function so they can be overridden
+  // This method is "pulled-up" from Call into the function so it can be overridden
   // by provenance infrastructural functions.  In general, the impl() has access to only the raw values,
   // not the ValueWithProvenance[T] wrappers.
 
   protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
     implicit val ct: ClassTag[O] = call.getOutputClassTag
-    val output: O = implVersion([#call.v1.resolve.output#], call.getVersionValue)
-    call.newResult(VirtualValue(output))(rt.getCurrentBuildInfo)
+    val output: O = implVersion ([#call.v1.resolve.output#], call.getVersionValue)
+    call.newResult (VirtualValue (output) ) (rt.getCurrentBuildInfo)
+    //Result(this, output = VirtualValue (output) ) (rt.getCurrentBuildInfo)
   }
 
   case class Call([#v1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O])
@@ -106,7 +131,23 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
 
       def duplicate([#v1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version]): Call =
         copy([#v1#], v)
-  }
+
+      //
+  
+      override def inputTuple: Tuple1[[#ValueWithProvenance[I1]#]] = Tuple1([#v1#])
+
+      override def resolveInputs(implicit rt: ResultTracker): Call =
+        nocopy(duplicate([#v1.resolve#], v.resolve), this)
+
+      override def unresolveInputs(implicit rt: ResultTracker): Call =
+        nocopy(duplicate([#v1.unresolve#], v.unresolve), this)
+
+      override def inflateInputs(implicit rt: ResultTracker): Call =
+        nocopy(duplicate([#v1.inflate#], v.inflate), this)
+
+      override def deflateInputs(implicit rt: ResultTracker): Call =
+        nocopy(duplicate([#v1.deflate#], v.inflate), this)
+ }
 
   case class Result(call: Call, data: VirtualValue[O])(implicit bi: BuildInfo)
     extends Function1CallResultWithProvenance(call, data)(bi)
