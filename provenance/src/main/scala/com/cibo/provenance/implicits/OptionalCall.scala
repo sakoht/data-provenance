@@ -8,22 +8,32 @@ package com.cibo.provenance.implicits
   */
 
 import com.cibo.provenance._
+import io.circe.{Decoder, Encoder}
 
 import scala.language.existentials
 import scala.reflect.ClassTag
 
-class OptionalCall[A]
-  (call: FunctionCallWithProvenance[Option[A]])
-  (implicit ctsa: ClassTag[Option[A]], cta: ClassTag[A]) {
+class OptionalCall[A](call: FunctionCallWithProvenance[Option[A]])
+  (implicit
+    ctsa: ClassTag[Option[A]],
+    cta: ClassTag[A],
+    esa: Encoder[Option[A]],
+    dsa: Decoder[Option[A]],
+    ea: Encoder[A],
+    da: Decoder[A]
+  ) {
 
   self =>
 
   import com.cibo.provenance.ResultTracker
 
+  val currentVersion = NoVersion
+
   def get = GetWithProvenance(call)
   def isEmpty = IsEmptyWithProvenance(call)
   def nonEmpty = NonEmptyWithProvenance(call)
-  def map[B : ClassTag](f: Function1WithProvenance[B, A]) = new MapWithProvenance[B].apply(call, f)
+  def map[B : ClassTag : Encoder : Decoder](f: ValueWithProvenance[Function1WithProvenance[B, A]]) =
+    new MapWithProvenance[B].apply(call, f, UnknownProvenance(currentVersion))
 
   object GetWithProvenance extends Function1WithProvenance[A, Option[A]] {
     val currentVersion: Version = NoVersion
@@ -40,7 +50,7 @@ class OptionalCall[A]
     def impl(o: Option[A]) = o.nonEmpty
   }
 
-  class MapWithProvenance[B : ClassTag] extends Function2WithProvenance[Option[B], Option[A], Function1WithProvenance[B, A]] {
+  class MapWithProvenance[B : ClassTag : Encoder : Decoder] extends Function2WithProvenance[Option[B], Option[A], Function1WithProvenance[B, A]] {
     val currentVersion: Version = NoVersion
     override protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
       val aOptionResolved: FunctionCallResultWithProvenance[Option[A]] = call.v1.resolve

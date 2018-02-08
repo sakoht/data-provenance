@@ -46,6 +46,8 @@ trait TrackerRegressionChecking extends ResultTracker with LazyLogging {
    * identical to any previous result already saved.  When it is not, the data fabric will record the conflict.
    *
    */
+
+  /*
   override def resolve[O](f: FunctionCallWithProvenance[O]): FunctionCallResultWithProvenance[O] = {
     implicit val ct: ClassTag[O] = f.getOutputClassTag
 
@@ -85,4 +87,5 @@ trait TrackerRegressionChecking extends ResultTracker with LazyLogging {
         throw new RuntimeException(f"Failed to re-load saved result $newResult!")
     }
   }
+  */
 }

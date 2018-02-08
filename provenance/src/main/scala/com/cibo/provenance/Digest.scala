@@ -8,4 +8,6 @@ package com.cibo.provenance
   *
   */
 
+import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._
+
 case class Digest(id: String)

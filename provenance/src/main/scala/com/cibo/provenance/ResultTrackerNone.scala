@@ -1,5 +1,7 @@
 package com.cibo.provenance
 
+import io.circe.{Decoder, Encoder}
+
 import scala.reflect.ClassTag
 
 /**
@@ -33,22 +35,22 @@ case class ResultTrackerNone()(implicit val currentBuildInfo: BuildInfo) extends
     Some(f.run(this))
   }
 
-  def saveValue[T : ClassTag](obj: T): Digest = {
+  def saveValue[T : ClassTag: Encoder : Decoder](obj: T): Digest = {
     // also a no-op that just calculates the ID and returns it
     Util.digestObject(obj)
   }
 
-  def hasValue[T : ClassTag](obj: T): Boolean = false // never
+  def hasValue[T : ClassTag : Encoder : Decoder](obj: T): Boolean = false // never
 
   def hasValue(digest: Digest): Boolean = false // never
 
-  def loadCallDeflatedOption[O : ClassTag](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
+  def loadCallDeflatedOption[O : ClassTag : Encoder : Decoder](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
     None // never
 
-  def loadCallOption[O : ClassTag](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] =
+  def loadCallOption[O : ClassTag : Encoder : Decoder](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] =
     None // never
 
-  def loadValueOption[O : ClassTag](digest: Digest): Option[O] = None // never
+  def loadValueOption[O : ClassTag : Encoder : Decoder](digest: Digest): Option[O] = None // never
 
   def loadValueSerializedDataOption(className: String, digest: Digest): Option[Array[Byte]] = None // never
 

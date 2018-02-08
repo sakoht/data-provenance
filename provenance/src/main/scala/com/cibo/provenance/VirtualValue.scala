@@ -10,6 +10,7 @@ package com.cibo.provenance
 import scala.language.implicitConversions
 import scala.reflect.ClassTag
 
+import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._
 
 case class VirtualValue[T](
   valueOption: Option[T],
@@ -24,7 +25,7 @@ case class VirtualValue[T](
 
   def className: String = ct.runtimeClass.getName
 
-  def resolveValue(implicit rt: ResultTracker): VirtualValue[T] =
+  def resolveValue(implicit rt: ResultTracker, e: Encoder[T], d: Decoder[T]): VirtualValue[T] =
     valueOption match {
       case Some(_) =>
         this
@@ -45,7 +46,7 @@ case class VirtualValue[T](
         copy(valueOption = Some(value))
     }
 
-  def resolveSerialization(implicit rt: ResultTracker): VirtualValue[T] =
+  def resolveSerialization(implicit rt: ResultTracker, e: Encoder[T], d: Decoder[T]): VirtualValue[T] =
     serializedDataOption match {
       case Some(_) =>
         this
@@ -67,7 +68,7 @@ case class VirtualValue[T](
         copy(serializedDataOption = Some(serialization))
     }
 
-  def resolveDigest: VirtualValue[T] = digestOption match {
+  def resolveDigest(implicit e: Encoder[T], d: Decoder[T]): VirtualValue[T] = digestOption match {
     case Some(_) =>
       this
     case None =>
@@ -91,7 +92,12 @@ case class VirtualValue[T](
     if (valueOption.nonEmpty & valueString.length < 30) {
       valueString
     } else {
-      "digest(" + resolveDigest.digestOption.get.id.toString.substring(0,5) + ")"
+      digestOption match {
+        case Some(digest) =>
+          "#" + digest.id.toString.substring(0,5) + " " + super.toString
+        case None =>
+          super.toString
+      }
     }
   }
 }
@@ -100,13 +106,13 @@ object VirtualValue {
   def apply[T](obj: T)(implicit ct: ClassTag[T]): VirtualValue[T] =
     VirtualValue(valueOption = Some(obj), digestOption = None, serializedDataOption = None)
 
-  def unapply[T : ClassTag](v: VirtualValue[T])(implicit rt: ResultTracker): T =
+  def unapply[T : ClassTag : Encoder : Decoder](v: VirtualValue[T])(implicit rt: ResultTracker): T =
     v.resolveValue.valueOption.get
 
-  implicit def toDeflatable[T : ClassTag](obj: T): VirtualValue[T] =
+  implicit def toDeflatable[T : ClassTag : Encoder : Decoder](obj: T): VirtualValue[T] =
     apply(obj)
 
-  implicit def fromDeflatable[T : ClassTag](v: VirtualValue[T])(implicit rt: ResultTracker): T =
+  implicit def fromDeflatable[T : ClassTag : Encoder : Decoder](v: VirtualValue[T])(implicit rt: ResultTracker): T =
     unapply(v)
 
 }

@@ -9,18 +9,27 @@ package com.cibo.provenance.implicits
   */
 
 import com.cibo.provenance._
+import io.circe.{Decoder, Encoder}
 
 import scala.language.existentials
 import scala.reflect.ClassTag
 
-class OptionalResult[A]
-  (result: FunctionCallResultWithProvenance[Option[A]])
-  (implicit ctsa: ClassTag[Option[A]], cta: ClassTag[A]) {
-
-  import com.cibo.provenance.ResultTracker
+class OptionalResult[A](result: FunctionCallResultWithProvenance[Option[A]])
+  (implicit
+    ctsa: ClassTag[Option[A]],
+    cta: ClassTag[A],
+    esa: Encoder[Option[A]],
+    dsa: Decoder[Option[A]],
+    ea: Encoder[A],
+    da: Decoder[A]
+  ) {
 
   def get(implicit rt: ResultTracker) = result.provenance.get.resolve
+
   def isEmpty(implicit rt: ResultTracker) = result.provenance.isEmpty.resolve
+
   def nonEmpty(implicit rt: ResultTracker) = result.provenance.nonEmpty.resolve
-  def map[B : ClassTag](f: Function1WithProvenance[B, A])(implicit rt: ResultTracker) = result.provenance.map(f).resolve
+
+  def map[B : ClassTag : Encoder : Decoder](f: ValueWithProvenance[Function1WithProvenance[B, A]])(implicit rt: ResultTracker) =
+    result.provenance.map(f).resolve
 }

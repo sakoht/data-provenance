@@ -1,10 +1,11 @@
 package com.cibo.provenance
 
+import com.typesafe.scalalogging.LazyLogging
+import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._
 import java.io.{ByteArrayInputStream, ObjectInputStream}
 
 import com.cibo.io.s3.{S3DB, SyncablePath}
 import com.cibo.provenance.exceptions.InconsistentVersionException
-import com.typesafe.scalalogging.LazyLogging
 
 /**
   * Created by ssmith on 5/16/17.
@@ -70,10 +71,14 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
       case None =>
         val newResult = callWithInputDigests.run(this)
         if (checkForInconsistentSerialization(newResult)) {
+          /*
+          implicit val e = f.getEncoder
+          implicit val d = f.getDecoder
           val problems = Util.checkSerialization(newResult.output(this))
           if (problems.nonEmpty) {
             throw new FailedSave(f"New result does not serialize consistently!: $newResult: $problems")
           }
+          */
         }
         saveResult(newResult)
         newResult
@@ -120,9 +125,12 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
     val prefix = f"functions/$functionName/$versionId"
 
     // Save the output.
-    val outputClassTag = result.getOutputClassTag
+    implicit val outputClassTag = result.getOutputClassTag
+    implicit val outputEncoder = result.provenance.getEncoder
+    implicit val outputDecoder = result.provenance.getDecoder
+
     val outputClassName = outputClassTag.runtimeClass.getName
-    val outputDigest = saveValue(output)(outputClassTag)
+    val outputDigest = saveValue(output)
     val outputKey = outputDigest.id
 
     // TODO: This is for testing.  Remove if it matches code below.
@@ -153,6 +161,8 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
     val inputGroupDigest = saveObjectToSubPathByDigest(f"$prefix/input-group-values", inputDigests)
     val inputGroupKey = inputGroupDigest.id
 
+    import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._
+
     // Save the deflated version of the all.  This recursively decomposes the call into DeflatedCall objects.
     val provenanceDeflated: FunctionCallWithProvenanceDeflated[O] = saveCall(callWithDeflatedInputsExcludingVersion) // TODO: Pass-in the callWithDeflatedInputs?
     val provenanceDeflatedSerialized = Util.serialize(provenanceDeflated)
@@ -168,7 +178,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
 
     if (blockSavingConflicts(result))
       try {
-        loadOutputCommitAndBuildIdForInputGroupIdOption(functionName, version, inputGroupDigest)(outputClassTag) match {
+        loadOutputCommitAndBuildIdForInputGroupIdOption(functionName, version, inputGroupDigest) match {
           case Some((prevOutputId, prevCommitId, prevBuildId)) =>
             if (prevOutputId != outputDigest) {
               val prevOutput = loadValueOption(prevOutputId)
@@ -223,7 +233,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
       inputGroupDigest = inputGroupDigest,
       outputDigest = outputDigest,
       buildInfo = buildInfo
-    )(outputClassTag)
+    )(outputClassTag, outputEncoder, outputDecoder)
 
     // Save the final link from inputs to outputs after the others.
     // If a save partially completes, this will not be present, the next attempt will run again, and some of the data
@@ -263,7 +273,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
 
     if (checkForResultAfterSave(result)) {
       try {
-        loadOutputCommitAndBuildIdForInputGroupIdOption(functionName, version, inputGroupDigest)(outputClassTag) match {
+        loadOutputCommitAndBuildIdForInputGroupIdOption(functionName, version, inputGroupDigest) match {
           case Some(ids) =>
             logger.debug(f"Found ${ids}")
           case None =>
@@ -274,7 +284,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
           throw f
         case e: Exception =>
           throw new FailedSave(f"Error finding a single output for result after save!: $e")
-          loadOutputCommitAndBuildIdForInputGroupIdOption(functionName, version, inputGroupDigest)(outputClassTag)
+          loadOutputCommitAndBuildIdForInputGroupIdOption(functionName, version, inputGroupDigest)
       }
     }
 
@@ -283,39 +293,42 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
 
   class FailedSave(m: String) extends RuntimeException(m)
 
-  def saveCall[O](call: FunctionCallWithProvenance[O]): FunctionCallWithProvenanceDeflated[O] =
+  def saveCall[O](call: FunctionCallWithProvenance[O]): FunctionCallWithProvenanceDeflated[O] = {
+    implicit val rt: ResultTracker = this
+    implicit val ct: ClassTag[O] = call.getOutputClassTag
+    implicit val ec: io.circe.Encoder[O] = call.getEncoder
+    implicit val dc: io.circe.Decoder[O] = call.getDecoder
+
     call match {
 
       case unknown: UnknownProvenance[O] =>
         // Skip saving calls with unknown provenance.
         // Whatever uses them can re-constitute the value from the input values.
         // But ensure the raw input value is saved as data.
-        val digest = Util.digestObject(unknown.value)(unknown.getOutputClassTag)
+        val digest = Util.digestObject(unknown.value)
         if (!hasValue(digest)) {
-          val digest = saveValue(unknown.value)(unknown.getOutputClassTag)
+          val digest = saveValue(unknown.value)
           saveObjectToPath(f"data-provenance/${digest.id}/from/-", "")
         }
         // Return a deflated object.
-        FunctionCallWithProvenanceDeflated(call)(rt=this)
+        FunctionCallWithProvenanceDeflated(call)(rt = this)
 
       case known =>
         // Save and let the saver produce the deflated version it saves.
-        implicit val rt: ResultTracker = this
-        implicit val ct: ClassTag[O] = known.getOutputClassTag
 
         // Deflate the current call, saving upstream calls as needed.
         // This will stop deflating when it encounters an already deflated call.
         val inflatedCallWithDeflatedInputs: FunctionCallWithProvenance[O] =
-          try {
-            known.deflateInputs
-          } catch {
-            case e : UnresolvedVersionException[_] =>
-              // An upstream call used a version that was not a raw value.
-              // Don't deflate further in this corner case.
-              // Just let the call contain the indirect form of the version.
-              logger.warn(f"Unresolved version when saving call to $call: $e.")
-              known
-          }
+        try {
+          known.deflateInputs
+        } catch {
+          case e: UnresolvedVersionException[_] =>
+            // An upstream call used a version that was not a raw value.
+            // Don't deflate further in this corner case.
+            // Just let the call contain the indirect form of the version.
+            logger.warn(f"Unresolved version when saving call to $call: $e.")
+            known
+        }
 
         // Extract the version Value.
         val versionValue: Version = known.getVersionValueAlreadyResolved match {
@@ -332,6 +345,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
 
         // Save the provenance object w/ the inputs deflated, but the type known.
         // Re-constituting the tree can happen one layer at a time.
+        // TODO: Delete this if things work without it (including re-inflation)
         val inflatedProvenanceWithDeflatedInputsBytes: Array[Byte] = Util.serialize(inflatedCallWithDeflatedInputs)
         val inflatedProvenanceWithDeflatedInputsDigest = Util.digestBytes(inflatedProvenanceWithDeflatedInputsBytes)
         saveSerializedDataToPath(
@@ -356,10 +370,11 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
 
         deflatedCall
     }
+  }
 
   val recheckSaves: Boolean = true
 
-  def getBytesAndDigest[T](obj: T): (Array[Byte], Digest) = {
+  def getBytesAndDigest[T : io.circe.Encoder : io.circe.Decoder](obj: T): (Array[Byte], Digest) = {
     val bytes1 = Util.serialize(obj)
     val digest1 = Util.digestBytes(bytes1)
     if (recheckSaves) {
@@ -381,7 +396,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
     }
   }
 
-  def isTainted[T](obj: T): Boolean = {
+  def isTainted[T : io.circe.Encoder : io.circe.Decoder](obj: T): Boolean = {
     val bytes1 = Util.serialize(obj)
     val digest1 = Util.digestBytes(bytes1)
     val obj2 = Util.deserialize[T](bytes1)
@@ -395,7 +410,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
     }
   }
 
-  def saveValue[T : ClassTag](obj: T): Digest = {
+  def saveValue[T : ClassTag : Encoder : Decoder](obj: T): Digest = {
     val (bytes, digest) = getBytesAndDigest(obj)
     if (!hasValue(digest)) {
       val path = f"data/${digest.id}"
@@ -405,7 +420,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
     digest
   }
 
-  def hasValue[T : ClassTag](obj: T): Boolean = {
+  def hasValue[T : ClassTag : Encoder : Decoder](obj: T): Boolean = {
     val digest = Util.digestObject(obj)
     hasValue(digest)
   }
@@ -418,12 +433,12 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
   def hasResultForCall[O](f: FunctionCallWithProvenance[O]): Boolean =
     loadOutputIdsForCallOption(f).nonEmpty
 
-  def loadCallDeflatedOption[O : ClassTag](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
+  def loadCallDeflatedOption[O : ClassTag : Encoder : Decoder](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
     loadCallDeflatedSerializedDataOption(functionName, version, digest) map {
       bytes => bytesToObject[FunctionCallWithProvenanceDeflated[O]](bytes)
     }
 
-  def loadCallOption[O : ClassTag](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] =
+  def loadCallOption[O : ClassTag : Encoder : Decoder](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] =
     loadCallSerializedDataOption(functionName, version, digest) map {
       bytes =>
         bytesToObject[FunctionCallWithProvenance[O]](bytes)
@@ -435,30 +450,47 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
   def loadCallDeflatedSerializedDataOption(functionName: String, version: Version, digest: Digest): Option[Array[Byte]] =
     loadSerializedDataForPath(f"functions/$functionName/${version.id}/provenance-values-deflated/${digest.id}")
 
+
+  private def extractDigest[Z](i: ValueWithProvenance[Z]) = {
+    val iCall = i.unresolve(this)
+    val iResult = i.resolve(this)
+    val iValueDigested = iResult.getOutputVirtual.resolveDigest(iCall.getEncoder, iCall.getDecoder)
+    iValueDigested.digestOption.get
+  }
+
   def loadResultForCallOption[O](f: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] = {
     // TODO: Remove debug code
-    val inputDigests: Seq[Digest] = f.getInputs.map(i => i.resolve(this).getOutputVirtual.resolveDigest.digestOption.get)
+
+    val inputDigests: Seq[Digest] = f.getInputs.map {
+      i => extractDigest(i)
+    }
+
+    // Real code
     loadOutputIdsForCallOption(f).map {
       case (outputId, commitId, buildId) =>
-        val ct = f.getOutputClassTag
+        implicit val c: ClassTag[O] = f.getOutputClassTag
+        implicit val e: Encoder[O] = f.getEncoder
+        implicit val d: Decoder[O] = f.getDecoder
+
         val output: O = try {
-          loadValue[O](outputId)(ct)
+          loadValue[O](outputId)
         } catch {
           case e: Exception =>
+            // TODO: Remove debug code
             println(e.toString)
-            loadValue[O](outputId)(ct)
+            loadValue[O](outputId)(f.getOutputClassTag, f.getEncoder, f.getDecoder)
         }
-        val outputId2 = Util.digestObject(output)(f.getOutputClassTag)
+        val outputId2 = Util.digestObject(output)
         if (outputId2 != outputId) {
           throw new RuntimeException(f"Output value saved as $outputId reloads with a digest of $outputId2: $output")
         }
-        val outputWrapped = VirtualValue(valueOption = Some(output), digestOption = Some(outputId), serializedDataOption = None)(ct)
+        val outputWrapped = VirtualValue(valueOption = Some(output), digestOption = Some(outputId), serializedDataOption = None)
         val bi = BuildInfoBrief(commitId, buildId)
         f.newResult(outputWrapped)(bi)
     }
   }
 
-  def loadValueOption[T : ClassTag](digest: Digest): Option[T] = {
+  def loadValueOption[T : ClassTag : Encoder : Decoder](digest: Digest): Option[T] = {
     loadValueSerializedDataOption(digest) map {
       bytes => bytesToObject[T](bytes)
     }
@@ -479,13 +511,16 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
   }
 
   def loadOutputIdsForCallOption[O](f: FunctionCallWithProvenance[O]): Option[(Digest, String, String)] = {
-    val inputGroupValuesDigest = {//f.getInputGroupValuesDigest(this)
-      val digests = f.getInputs.map(_.resolve(this).getOutputVirtual.resolveDigest.digestOption.get).toList
+    f.getInputGroupValuesDigest(this)
+    val inputGroupValuesDigest = {
+      val digests = f.getInputs.map(i => extractDigest(i)).toList
       Digest(Util.digestObject(digests).id)
     }
 
     implicit val outputClassTag: ClassTag[O] = f.getOutputClassTag
-    loadOutputCommitAndBuildIdForInputGroupIdOption(f.functionName, f.getVersionValue(this), inputGroupValuesDigest)(f.getOutputClassTag) match {
+    implicit val e: Encoder[O] = f.getEncoder
+    implicit val d: Decoder[O] = f.getDecoder
+    loadOutputCommitAndBuildIdForInputGroupIdOption(f.functionName, f.getVersionValue(this), inputGroupValuesDigest) match {
       case Some(ids) =>
         Some(ids)
       case None =>
@@ -520,7 +555,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
     digest
   }
 
-  private def saveObjectToPath[T : ClassTag](path: String, obj: T): String = {
+  private def saveObjectToPath[T : ClassTag: Encoder: Decoder](path: String, obj: T): String = {
     obj match {
       case _ : Array[Byte] =>
         throw new RuntimeException("Attempt to save pre-serialized data?")
@@ -534,17 +569,17 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
   private def saveSerializedDataToPath(path: String, serializedData: Array[Byte]): Unit =
     s3db.putObject(f"$path", serializedData)
 
-  private def saveObjectToSubPathByDigest[T : ClassTag](path: String, obj: T): Digest = {
+  private def saveObjectToSubPathByDigest[T : ClassTag : Encoder : Decoder](path: String, obj: T): Digest = {
     val bytes = Util.serialize(obj)
     val digest = Util.digestBytes(bytes)
     s3db.putObject(f"$path/${digest.id}", bytes)
     digest
   }
 
-  private def loadObjectFromPath[T : ClassTag](path: String): T =
+  private def loadObjectFromPath[T : ClassTag : Encoder : Decoder](path: String): T =
     loadObjectFromFile[T](baseSyncablePath.extendPath(path).getFile)
 
-  private def loadOutputCommitAndBuildIdForInputGroupIdOption[O : ClassTag](fname: String, fversion: Version, inputGroupId: Digest): Option[(Digest,String, String)] = {
+  private def loadOutputCommitAndBuildIdForInputGroupIdOption[O : ClassTag : Encoder : Decoder](fname: String, fversion: Version, inputGroupId: Digest): Option[(Digest,String, String)] = {
     s3db.getSuffixesForPrefix(f"functions/$fname/${fversion.id}/inputs-to-output/${inputGroupId.id}").toList match {
       case Nil =>
         None
@@ -583,11 +618,11 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
     }
   }
 
-  def loadInputIds[O : ClassTag](fname: String, fversion: Version, inputGroupId: Digest): Seq[Digest] = {
+  def loadInputIds[O : ClassTag : Encoder : Decoder](fname: String, fversion: Version, inputGroupId: Digest): Seq[Digest] = {
     loadObjectFromPath[List[Digest]](f"functions/$fname/${fversion.id}/input-group-values/${inputGroupId.id}")
   }
 
-  def loadInputs[O : ClassTag](fname: String, fversion: Version, inputGroupId: Digest): Seq[Any] = {
+  def loadInputs[O : ClassTag : Encoder : Decoder](fname: String, fversion: Version, inputGroupId: Digest): Seq[Any] = {
     val digests = loadObjectFromPath[List[Digest]](f"functions/$fname/${fversion.id}/input-group-values/${inputGroupId.id}")
     digests.map {
       digest =>
@@ -601,7 +636,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
     }
   }
 
-  def flagConflict[O : ClassTag](fname: String, fversion: Version, inputGroupId: Digest, conflictingOutputKeys: Seq[String]): Unit = {
+  def flagConflict[O : ClassTag : Encoder : Decoder](fname: String, fversion: Version, inputGroupId: Digest, conflictingOutputKeys: Seq[String]): Unit = {
     // When this happens we recognize that there was, previously, a failure to set the version correctly.
     // This hopefully happens during testing, and the error never gets committed.
     // If it ends up in production data, we can compensate after the fact.

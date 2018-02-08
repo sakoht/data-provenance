@@ -7,6 +7,7 @@ package com.cibo.provenance
 import com.cibo.provenance.exceptions.{UnknownVersionException, UnrunnableVersionException}
 import scala.language.implicitConversions
 import scala.reflect.ClassTag
+import io.circe.{Encoder, Decoder}
 
 trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializable {
   self =>
@@ -15,7 +16,7 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
 
   def impl(): O
 
-  def apply(v: ValueWithProvenance[Version] = currentVersion)(implicit outputClassTag: ClassTag[O]): Call = Call(v)(outputClassTag)
+  def apply(v: ValueWithProvenance[Version] = currentVersion)(implicit ct: ClassTag[O], ec: Encoder[O], dc: Decoder[O]): Call = Call(v)(ct, ec, dc)
 
   protected def implVersion(v: Version): O = {
     if (v != currentVersion)
@@ -23,7 +24,7 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
     impl()
   }
 
-  case class Call(v: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O])
+  case class Call(v: ValueWithProvenance[Version] = currentVersion)(implicit ct: ClassTag[O], ec: Encoder[O], dc: Decoder[O])
     extends Function0CallWithProvenance[O](v)(implVersion) {
 
       val function = self
@@ -61,14 +62,6 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
       }
   }
 
-  case class Woo[T](i: T) {
-    def woo: String = self.toString + ": " +  i.toString
-  }
-
-  case class Zoo(v: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O]) {
-    def woo: String = self.toString + ": " + v.toString
-  }
-
   case class Result(call: Call, data: VirtualValue[O])(implicit bi: BuildInfo)
     extends Function0CallResultWithProvenance(call, data)(bi)
 
@@ -76,7 +69,7 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
     Result(r.provenance, r.getOutputVirtual)(r.getOutputBuildInfoBrief)
 
   implicit private def convertProvenance(f: Function0CallWithProvenance[O]): Call =
-    Call(f.getVersion)(f.getOutputClassTag)
+    Call(f.getVersion)(f.getOutputClassTag, f.getEncoder, f.getDecoder)
 }
 
 
@@ -87,7 +80,7 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
 
   def impl([#i1: I1#]): O
 
-  def apply([#i1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version] = currentVersion)(implicit outputClassTag: ClassTag[O]): Call =
+  def apply([#i1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version] = currentVersion)(implicit ct: ClassTag[O], ec: Encoder[O], dc: Decoder[O]): Call =
     Call([#i1#], v)
 
   protected def implVersion([#i1: I1#], v: Version): O = {
@@ -102,11 +95,11 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
 
   protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
     implicit val ct: ClassTag[O] = call.getOutputClassTag
-    val output: O = implVersion ([#call.v1.resolve.output#], call.getVersionValue)
-    Result(this, VirtualValue(output) ) (rt.getCurrentBuildInfo)
+    val output: O = implVersion([#call.v1.resolve.output#], call.getVersionValue)
+    Result(call, VirtualValue(output))(rt.getCurrentBuildInfo)
   }
 
-  case class Call([#v1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version])(implicit outputClassTag: ClassTag[O])
+  case class Call([#v1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version])(implicit ct: ClassTag[O], ec: Encoder[O], dc: Decoder[O])
     extends Function1CallWithProvenance[O, [#I1#]]([#v1#], v)(implVersion) with Serializable {
 
       val function = self
@@ -146,7 +139,7 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
 
       override def deflateInputs(implicit rt: ResultTracker): Call =
         nocopy(duplicate([#v1.deflate#], v.inflate), this)
- }
+  }
 
   case class Result(call: Call, data: VirtualValue[O])(implicit bi: BuildInfo)
     extends Function1CallResultWithProvenance(call, data)(bi)
@@ -156,7 +149,7 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
 
   implicit private def convertProvenance(f: Function1CallWithProvenance[O, [#I1#]]): Call = {
     val i = f.inputTuple
-    Call([#i._1#], f.getVersion)(f.getOutputClassTag)
+    Call([#i._1#], f.getVersion)(f.getOutputClassTag, f.getEncoder, f.getDecoder)
   }
 }#
 ]

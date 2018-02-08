@@ -12,8 +12,16 @@ import java.time.Instant
   *
   */
 
+
+
 case class Version(id: String, dev: Boolean = false) extends Serializable {
   override def toString: String = f"v$id" + (if (dev) DevVersion.suffix else "")
+}
+
+object Version {
+  import io.circe._, io.circe.generic.semiauto._
+  implicit val decoder: Decoder[Version] = deriveDecoder
+  implicit val encoder: Encoder[Version] = deriveEncoder
 }
 
 object NoVersion extends Version("-") with Serializable

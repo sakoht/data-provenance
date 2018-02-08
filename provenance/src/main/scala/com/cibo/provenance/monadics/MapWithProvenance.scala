@@ -7,12 +7,32 @@ package com.cibo.provenance.monadics
   *
   */
 
+import io.circe._
 import scala.language.higherKinds
 import scala.reflect.ClassTag
 import com.cibo.provenance.{ResultTracker, implicits, _}
 
-class MapWithProvenance[B, A, S[_]](implicit hok: implicits.Traversable[S], ctsb: ClassTag[S[B]], cta: ClassTag[A], ctb: ClassTag[B], ctsa: ClassTag[S[A]], ctsi: ClassTag[S[Int]])
-  extends Function2WithProvenance[S[B], S[A], Function1WithProvenance[B, A]] {
+class MapWithProvenance[B, A, S[_]](
+  implicit hok: implicits.Traversable[S],
+  ctb: ClassTag[B],
+  cta: ClassTag[A],
+  ctsb: ClassTag[S[B]],
+  ctsa: ClassTag[S[A]],
+  ctsi: ClassTag[S[Int]],
+  ctr: ClassTag[Range],
+  eb: Encoder[B],
+  ea: Encoder[A],
+  esb: Encoder[S[B]],
+  esa: Encoder[S[A]],
+  esi: Encoder[S[Int]],
+  er: Encoder[Range],
+  db: Decoder[B],
+  da: Decoder[A],
+  dsb: Decoder[S[B]],
+  dsa: Decoder[S[A]],
+  dsi: Decoder[S[Int]],
+  dr: Decoder[Range]
+) extends Function2WithProvenance[S[B], S[A], Function1WithProvenance[B, A]] {
 
   val currentVersion: Version = NoVersion
 
@@ -25,10 +45,10 @@ class MapWithProvenance[B, A, S[_]](implicit hok: implicits.Traversable[S], ctsb
 
   private def runOnEach(call: Call)(implicit rt: ResultTracker): S[FunctionCallResultWithProvenance[B]] = {
     val aResolved: FunctionCallResultWithProvenance[S[A]] = call.v1.resolve
-    val aTraversable = FunctionCallResultWithProvenance.TraversableResultExt[S, A](aResolved)(hok, ctsa, cta, ctsi)
+    val aTraversable = FunctionCallResultWithProvenance.TraversableResultExt[S, A](aResolved)(hok, cta, ctsa, ctsi, ctr, ea, esa, esi, er, da, dsa, dsi, dr)
     val aGranular: S[FunctionCallResultWithProvenance[A]] = aTraversable.scatter
 
-    val funcResolved: FunctionCallResultWithProvenance[Function1WithProvenance[B, A]] = call.v2.resolve
+    val funcResolved: FunctionCallResultWithProvenance[Function1WithProvenance[B, A]] = call.v2.resolve(rt)
     val func: Function1WithProvenance[B, A] = funcResolved.output
     def a2b(a: FunctionCallResultWithProvenance[A]): FunctionCallResultWithProvenance[B] = func(a).resolve(rt)
 
@@ -43,7 +63,25 @@ class MapWithProvenance[B, A, S[_]](implicit hok: implicits.Traversable[S], ctsb
 }
 
 object MapWithProvenance {
-  def apply[B, A, S[_]]
-    (implicit hok: implicits.Traversable[S], ctsb: ClassTag[S[B]], cta: ClassTag[A], ctb: ClassTag[B], ctsa: ClassTag[S[A]], ctsi: ClassTag[S[Int]]) =
-      new MapWithProvenance[B, A, S]()(hok, ctsb, cta, ctb, ctsa, ctsi)
+  def apply[B, A, S[_]](
+    implicit hok: implicits.Traversable[S],
+    ctb: ClassTag[B],
+    cta: ClassTag[A],
+    ctsb: ClassTag[S[B]],
+    ctsa: ClassTag[S[A]],
+    ctsi: ClassTag[S[Int]],
+    ctr: ClassTag[Range],
+    eb: Encoder[B],
+    ea: Encoder[A],
+    esb: Encoder[S[B]],
+    esa: Encoder[S[A]],
+    esi: Encoder[S[Int]],
+    er: Encoder[Range],
+    db: Decoder[B],
+    da: Decoder[A],
+    dsb: Decoder[S[B]],
+    dsa: Decoder[S[A]],
+    dsi: Decoder[S[Int]],
+    dr: Decoder[Range]
+  ) = new MapWithProvenance[B, A, S]()(hok, ctb, cta, ctsb, ctsa, ctsi, ctr, eb, ea, esb, esa, esi, er, db, da, dsb, dsa, dsi, dr)
 }

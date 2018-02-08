@@ -10,6 +10,8 @@ import java.time.Instant
   *
   */
 
+import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._
+
 trait DummyBuildInfo extends BuildInfo {
   def name: String = "DUMMY-NAME"
   def version: String = "DUMMY-VERSION"

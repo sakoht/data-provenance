@@ -11,6 +11,8 @@ package com.cibo.provenance
 
 import java.io.{ByteArrayInputStream, File, FileInputStream, ObjectInputStream}
 
+import io.circe.{Decoder, Encoder}
+
 import scala.reflect.ClassTag
 
 
@@ -38,34 +40,34 @@ trait ResultTracker {
 
   def saveResult[O](v: FunctionCallResultWithProvenance[O]): FunctionCallResultWithProvenanceDeflated[O]
 
-  def saveValue[T : ClassTag](obj: T): Digest
+  def saveValue[T : ClassTag : Encoder : Decoder](obj: T): Digest
 
 
   def hasResultForCall[O](v: FunctionCallWithProvenance[O]): Boolean
 
-  def hasValue[T : ClassTag](obj: T): Boolean
+  def hasValue[T : ClassTag : Encoder : Decoder](obj: T): Boolean
 
   def hasValue(digest: Digest): Boolean
 
 
   def loadResultForCallOption[O](f: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]]
 
-  def loadCallOption[O : ClassTag](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]]
+  def loadCallOption[O : ClassTag : Encoder : Decoder](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]]
 
-  def loadCallDeflatedOption[O : ClassTag](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]]
+  def loadCallDeflatedOption[O : ClassTag : Encoder : Decoder](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]]
 
-  def loadValueOption[O : ClassTag](digest: Digest): Option[O]
+  def loadValueOption[O : ClassTag : Encoder : Decoder](digest: Digest): Option[O]
 
   def loadValueSerializedDataOption(className: String, digest: Digest): Option[Array[Byte]]  // included to work with foreign data
 
   // support methods
 
-  def loadValueSerializedDataOption[O : ClassTag](digest: Digest): Option[Array[Byte]] = {
+  def loadValueSerializedDataOption[O : ClassTag : Encoder : Decoder](digest: Digest): Option[Array[Byte]] = {
     val ct = implicitly[ClassTag[O]]
     loadValueSerializedDataOption(ct.runtimeClass.getName, digest)
   }
 
-  def loadValue[T : ClassTag](id: Digest): T =
+  def loadValue[T : ClassTag : Encoder : Decoder](id: Digest): T =
     loadValueOption[T](id) match {
       case Some(obj) =>
         obj
