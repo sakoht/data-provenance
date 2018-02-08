@@ -8,7 +8,10 @@ package com.cibo.provenance
 import com.cibo.provenance.exceptions.InconsistentVersionException
 import com.typesafe.scalalogging.LazyLogging
 import org.scalatest.{FunSpec, Matchers}
-
+import io.circe._
+import io.circe.generic.auto._
+import io.circe.generic.semiauto._
+import io.circe.generic._
 
 class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
   import java.io.File

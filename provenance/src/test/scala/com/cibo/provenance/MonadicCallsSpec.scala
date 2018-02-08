@@ -18,6 +18,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
   val outputBaseDir: String = TestUtils.testOutputBaseDir
   implicit val buildInfo: BuildInfo = DummyBuildInfo
 
+  /*
   describe("Calls and results that return a Traversable") {
 
     it("handle granularity shifts") {
@@ -273,6 +274,7 @@ object CountList extends Function1WithProvenance[Int, Seq[Int]] {
     println(in)
     in.size
   }
+  */
 }
 
 object SumValues extends Function1WithProvenance[Int, Seq[Int]] {

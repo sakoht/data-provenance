@@ -1,8 +1,7 @@
 package com.cibo.provenance
 
 import com.typesafe.scalalogging.LazyLogging
-import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._
-import java.io.{ByteArrayInputStream, ObjectInputStream}
+import io.circe._, io.circe.generic.auto._
 
 import com.cibo.io.s3.{S3DB, SyncablePath}
 import com.cibo.provenance.exceptions.InconsistentVersionException
@@ -414,7 +413,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
     val (bytes, digest) = getBytesAndDigest(obj)
     if (!hasValue(digest)) {
       val path = f"data/${digest.id}"
-        logger.debug(f"Saving raw $obj to $path")
+        logger.info(f"Saving raw $obj to $path")
       s3db.putObject(path, bytes)
     }
     digest
@@ -435,13 +434,13 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
 
   def loadCallDeflatedOption[O : ClassTag : Encoder : Decoder](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
     loadCallDeflatedSerializedDataOption(functionName, version, digest) map {
-      bytes => bytesToObject[FunctionCallWithProvenanceDeflated[O]](bytes)
+      bytes => Util.deserialize[FunctionCallWithProvenanceDeflated[O]](bytes)
     }
 
   def loadCallOption[O : ClassTag : Encoder : Decoder](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] =
     loadCallSerializedDataOption(functionName, version, digest) map {
       bytes =>
-        bytesToObject[FunctionCallWithProvenance[O]](bytes)
+        Util.deserialize[FunctionCallWithProvenance[O]](bytes)
     }
 
   def loadCallSerializedDataOption(functionName: String, version: Version, digest: Digest): Option[Array[Byte]] =
@@ -492,7 +491,8 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
 
   def loadValueOption[T : ClassTag : Encoder : Decoder](digest: Digest): Option[T] = {
     loadValueSerializedDataOption(digest) map {
-      bytes => bytesToObject[T](bytes)
+      bytes =>
+        Util.deserialize[T](bytes)
     }
   }
 
@@ -576,8 +576,10 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
     digest
   }
 
-  private def loadObjectFromPath[T : ClassTag : Encoder : Decoder](path: String): T =
-    loadObjectFromFile[T](baseSyncablePath.extendPath(path).getFile)
+  private def loadObjectFromPath[T : ClassTag : Encoder : Decoder](path: String): T = {
+    val bytes = s3db.getBytesForPrefix(path)
+    Util.deserialize[T](bytes)
+  }
 
   private def loadOutputCommitAndBuildIdForInputGroupIdOption[O : ClassTag : Encoder : Decoder](fname: String, fversion: Version, inputGroupId: Digest): Option[(Digest,String, String)] = {
     s3db.getSuffixesForPrefix(f"functions/$fname/${fversion.id}/inputs-to-output/${inputGroupId.id}").toList match {
@@ -628,8 +630,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
       digest =>
         loadValueSerializedDataOption(digest) match {
           case Some(bytes) =>
-            val ois = new ObjectInputStream(new ByteArrayInputStream(bytes))
-            ois.readObject
+            Util.deserialize(bytes)
           case None =>
             throw new RuntimeException(f"Failed to find data for input digest $digest for $fname $fversion!")
         }

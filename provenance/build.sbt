@@ -3,7 +3,7 @@ name         := "provenance"
 licenses     += ("BSD Simplified", url("https://opensource.org/licenses/BSD-3-Clause"))
 
 crossScalaVersions := Seq("2.12.4", "2.11.11")
-scalaVersion := crossScalaVersions.value.head
+scalaVersion := crossScalaVersions.value.last
 
 lazy val provenance = project.in(file(".")).configs(IntegrationTest)
 

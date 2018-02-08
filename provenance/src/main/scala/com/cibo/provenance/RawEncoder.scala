@@ -13,8 +13,6 @@ package com.cibo.provenance
   */
 trait RawEncoder[T] {
   import io.circe._
-  implicit val decoder: Decoder[T] = Decoder.forProduct1("bytes")(Util.deserializeRaw)
-  implicit val encoder: Encoder[T] = Encoder.forProduct1("bytes") {
-    obj => Tuple1(Util.serializeRaw(obj))
-  }
+  implicit val decoder: Decoder[T] = Util.rawDecoder[T]
+  implicit val encoder: Encoder[T] = Util.rawEncoder[T]
 }

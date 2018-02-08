@@ -62,6 +62,11 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
       }
   }
 
+  object Call {
+    implicit def encoder = Util.rawEncoder[Call]
+    implicit def decoder = Util.rawDecoder[Call]
+  }
+
   case class Result(call: Call, data: VirtualValue[O])(implicit bi: BuildInfo)
     extends Function0CallResultWithProvenance(call, data)(bi)
 
@@ -139,6 +144,11 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
 
       override def deflateInputs(implicit rt: ResultTracker): Call =
         nocopy(duplicate([#v1.deflate#], v.inflate), this)
+  }
+
+  object Call {
+    implicit def encoder = Util.rawEncoder[Call]
+    implicit def decoder = Util.rawDecoder[Call]
   }
 
   case class Result(call: Call, data: VirtualValue[O])(implicit bi: BuildInfo)

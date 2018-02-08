@@ -68,7 +68,7 @@ object Util extends LazyLogging {
     getBytesAndDigestRaw(obj)._1
 
   def getBytesAndDigestRaw[T](obj: T): (Array[Byte], Digest) = {
-    val bytes1 = serializeRaw(obj)
+    val bytes1 = serializeRaw1(obj)
     val digest1 = digestBytes(bytes1)
     val obj2 = deserializeRaw[T](bytes1)
     val bytes2 = serializeRaw1(obj2)
@@ -94,9 +94,14 @@ object Util extends LazyLogging {
   }
   
   def deserialize[T](bytes: Array[Byte])(implicit e: io.circe.Encoder[T], d: io.circe.Decoder[T]): T = {
-    decode[T](new String(bytes, "UTF-8")) match {
-      case Left(error) => throw error
-      case Right(obj) => obj
+    val s = new String(bytes, "UTF-8")
+    decode[T](s) match {
+      case Left(error) =>
+        val x = decode[T](s)
+        println(x)
+        throw error
+      case Right(obj) =>
+        obj
     }
   }
 
@@ -178,4 +183,27 @@ object Util extends LazyLogging {
     digest2 == digest1
   }
   */
+
+  def getObj[O](bytes: Array[Byte], foo: Int): O = {
+    try {
+      Util.deserializeRaw(bytes)
+    } catch {
+      case e: Exception =>
+        Util.deserializeRaw(bytes)
+    }
+  }
+
+  def rawDecoder[T]: Decoder[T] = {
+    val d: Decoder[T] = Decoder.forProduct2("bytes", "foo")(getObj[T])
+    d
+  }
+
+  def rawEncoder[T]: Encoder[T] = {
+    Encoder.forProduct2("bytes", "foo") {
+      obj =>
+        val bytes = Util.serializeRaw(obj)
+        Tuple2(bytes, bytes.length)
+    }
+  }
+
 }

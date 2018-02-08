@@ -161,13 +161,11 @@ object FunctionCallWithProvenance {
       dr: Decoder[Range]
     ) extends TraversableCall[S, A](call)(hok, cta, ctsa, ctsi, ctr, ea, esa, esi, er, da, dsa, dsi, dr)
 
-  implicit def createDecoder[O]: Decoder[FunctionCallWithProvenance[O]] = {
-    ???
-  }
+  implicit def createDecoder[O]: Decoder[FunctionCallWithProvenance[O]] =
+    Util.rawDecoder[FunctionCallWithProvenance[O]]
 
-  implicit def createEncoder[O]: Encoder[FunctionCallWithProvenance[O]] = {
-    ???
-  }
+  implicit def createEncoder[O]: Encoder[FunctionCallWithProvenance[O]] =
+    Util.rawEncoder[FunctionCallWithProvenance[O]]
 }
 
 
@@ -524,6 +522,7 @@ case class FunctionCallWithKnownProvenanceDeflated[O](
   }
 }
 
+/*
 object FunctionCallWithKnownProvenanceDeflated {
   import io.circe._, io.circe.generic.semiauto._
 
@@ -535,6 +534,7 @@ object FunctionCallWithKnownProvenanceDeflated {
   //implicit def fooDecoder[O]: Decoder[FunctionCallWithKnownProvenanceDeflated[O]] = deriveDecoder
   //implicit def fooEncoder[O]: Encoder[FunctionCallWithKnownProvenanceDeflated[O]] = deriveEncoder
 }
+*/
 
 case class FunctionCallWithUnknownProvenanceDeflated[O : ClassTag : Encoder : Decoder](
   outputClassName: String,

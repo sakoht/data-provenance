@@ -76,18 +76,6 @@ trait ResultTracker {
         throw new NoSuchElementException(f"Failed to find content for $ct with ID $id!")
     }
 
-
-  // protected methods
-
-  protected def loadObjectFromFile[T](f: File): T =
-    new ObjectInputStream(new FileInputStream(f)).readObject.asInstanceOf[T]
-
-  protected def bytesToObject[T](a: Array[Byte]): T = {
-    val ois = new ObjectInputStream(new ByteArrayInputStream(a))
-    val o = ois.readObject
-    o.asInstanceOf[T]
-  }
-
 }
 
 
