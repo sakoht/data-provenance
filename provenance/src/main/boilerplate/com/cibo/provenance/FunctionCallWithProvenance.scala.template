@@ -14,9 +14,7 @@ import scala.reflect.ClassTag
 import io.circe._
 
 
-abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: ValueWithProvenance[Version])(f: (Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
-
-  def impl = f
+abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: ValueWithProvenance[Version])(implVersion: (Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
 
   def getInputs: Seq[ValueWithProvenance[_]] = Seq.empty
 
@@ -38,8 +36,8 @@ abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: 
     nocopy(duplicate(v.inflate), this)
 
   def run(implicit rt: ResultTracker): Function0CallResultWithProvenance[O] = {
-    val o: O = f(getVersionValue)
-    new Function0CallResultWithProvenance(this, output = VirtualValue(o))(rt.getCurrentBuildInfo)
+    val o: O = implVersion(getVersionValue)
+    new Function0CallResultWithProvenance(this, VirtualValue(o))(rt.getCurrentBuildInfo)
   }
 
   def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
@@ -47,9 +45,7 @@ abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: 
   def duplicate(vv: ValueWithProvenance[Version]): Function0CallWithProvenance[O]
 }
 
-[1..21#abstract class Function1CallWithProvenance[O : ClassTag : Encoder : Decoder, [#I1#]]([#i1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version])(f: ([#I1#], Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
-
-  def impl = f
+[1..21#abstract class Function1CallWithProvenance[O : ClassTag : Encoder : Decoder, [#I1#]]([#i1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version])(implVersion: ([#I1#], Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
 
   def getInputs: Seq[ValueWithProvenance[_]] = Seq([#i1#])
 
@@ -71,8 +67,8 @@ abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: 
     nocopy(duplicate([#i1.deflate#], v.inflate), this)
 
   def run(implicit rt: ResultTracker): Function1CallResultWithProvenance[O, [#I1#]] = {
-    val output: O = f([#i1.resolve.output#], getVersionValue)
-    new Function1CallResultWithProvenance(this, output = VirtualValue(output))(rt.getCurrentBuildInfo)
+    val output: O = implVersion([#i1.resolve.output#], getVersionValue)
+    new Function1CallResultWithProvenance(this, VirtualValue(output))(rt.getCurrentBuildInfo)
   }
 
   def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): Function1CallResultWithProvenance[O, [#I1#]]

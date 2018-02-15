@@ -18,7 +18,6 @@ class MonadicCallsSpec extends FunSpec with Matchers {
   val outputBaseDir: String = TestUtils.testOutputBaseDir
   implicit val buildInfo: BuildInfo = DummyBuildInfo
 
-  /*
   describe("Calls and results that return a Traversable") {
 
     it("handle granularity shifts") {
@@ -27,7 +26,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))
 
-      val a = MakeDummyOutputList() // (11, 22, 33, 44)
+      val a: MakeDummyOutputList.Call = MakeDummyOutputList() // (11, 22, 33, 44)
       val b = a.map(MyIncrement)    // (12, 23, 34, 45)
       val c = b.map(MyIncrement)    // (13, 24, 35, 46)
       val d = c.map(MyIncrement)    // (14, 25, 36, 47)
@@ -274,7 +273,6 @@ object CountList extends Function1WithProvenance[Int, Seq[Int]] {
     println(in)
     in.size
   }
-  */
 }
 
 object SumValues extends Function1WithProvenance[Int, Seq[Int]] {

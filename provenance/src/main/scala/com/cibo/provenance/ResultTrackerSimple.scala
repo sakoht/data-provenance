@@ -1,10 +1,12 @@
 package com.cibo.provenance
 
 import com.typesafe.scalalogging.LazyLogging
-import io.circe._, io.circe.generic.auto._
-
+import io.circe._
+import io.circe.generic.auto._
 import com.cibo.io.s3.{S3DB, SyncablePath}
 import com.cibo.provenance.exceptions.InconsistentVersionException
+
+import scala.util.Try
 
 /**
   * Created by ssmith on 5/16/17.
@@ -99,7 +101,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
 
     // The is broken down into its constituent parts: the call, the output, and the build info (including commit),
     // and these three identities are saved.
-    val call: FunctionCallWithProvenance[O] = result.provenance
+    val call: FunctionCallWithProvenance[O] = result.call
     val output: O = result.output
     val buildInfo: BuildInfo = result.getOutputBuildInfoBrief
 
@@ -125,8 +127,8 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
 
     // Save the output.
     implicit val outputClassTag = result.getOutputClassTag
-    implicit val outputEncoder = result.provenance.getEncoder
-    implicit val outputDecoder = result.provenance.getDecoder
+    implicit val outputEncoder = result.call.getEncoder
+    implicit val outputDecoder = result.call.getDecoder
 
     val outputClassName = outputClassTag.runtimeClass.getName
     val outputDigest = saveValue(output)
@@ -150,7 +152,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
       case u: UnknownProvenance[_] =>
         saveCall(u)
       case u: UnknownProvenanceValue[_] =>
-        saveCall(u.provenance)
+        saveCall(u.call)
       case _ =>
     }
 
@@ -344,8 +346,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
 
         // Save the provenance object w/ the inputs deflated, but the type known.
         // Re-constituting the tree can happen one layer at a time.
-        // TODO: Delete this if things work without it (including re-inflation)
-        val inflatedProvenanceWithDeflatedInputsBytes: Array[Byte] = Util.serialize(inflatedCallWithDeflatedInputs)
+        val inflatedProvenanceWithDeflatedInputsBytes: Array[Byte] = Util.serializeRaw(inflatedCallWithDeflatedInputs)
         val inflatedProvenanceWithDeflatedInputsDigest = Util.digestBytes(inflatedProvenanceWithDeflatedInputsBytes)
         saveSerializedDataToPath(
           f"functions/$functionName/$versionId/provenance-values-typed/${inflatedProvenanceWithDeflatedInputsDigest.id}",
@@ -440,7 +441,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
   def loadCallOption[O : ClassTag : Encoder : Decoder](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] =
     loadCallSerializedDataOption(functionName, version, digest) map {
       bytes =>
-        Util.deserialize[FunctionCallWithProvenance[O]](bytes)
+        Util.deserializeRaw[FunctionCallWithProvenance[O]](bytes)
     }
 
   def loadCallSerializedDataOption(functionName: String, version: Version, digest: Digest): Option[Array[Byte]] =
@@ -453,7 +454,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
   private def extractDigest[Z](i: ValueWithProvenance[Z]) = {
     val iCall = i.unresolve(this)
     val iResult = i.resolve(this)
-    val iValueDigested = iResult.getOutputVirtual.resolveDigest(iCall.getEncoder, iCall.getDecoder)
+    val iValueDigested = iResult.outputAsVirtualValue.resolveDigest(iCall.getEncoder, iCall.getDecoder)
     iValueDigested.digestOption.get
   }
 

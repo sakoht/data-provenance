@@ -39,7 +39,7 @@ class FunctionWithProvenanceSpec extends FunSpec with Matchers {
 
       result.output shouldEqual "1.23,1.23,1.23"
 
-      result.provenance shouldEqual sig
+      result.call shouldEqual sig
 
       assert(sig.isInstanceOf[myFunc.Call])
       assert(result.isInstanceOf[myFunc.Result])
@@ -52,33 +52,33 @@ class FunctionWithProvenanceSpec extends FunSpec with Matchers {
       val f1 = AddInts(1, 2)
       val r1 = f1.run
       r1.output shouldEqual 3
-      r1.provenance shouldEqual f1
+      r1.call shouldEqual f1
 
       r1.toString shouldEqual "(3 <- AddInts(raw(1),raw(2)))"
 
       val f2 = MultiplyInts(2, r1)
       val r2 = f2.run
       r2.output shouldEqual 6
-      r2.provenance shouldEqual f2
+      r2.call shouldEqual f2
 
       r2.toString shouldEqual "(6 <- MultiplyInts(raw(2),(3 <- AddInts(raw(1),raw(2)))))"
       
-      r2.provenance.inputTuple._1 shouldEqual UnknownProvenance(2)
-      r2.provenance.inputTuple._2 shouldEqual r1
+      r2.call.inputTuple._1 shouldEqual UnknownProvenance(2)
+      r2.call.inputTuple._2 shouldEqual r1
 
-      r2.provenance.inputTuple._1.resolve.output shouldEqual 2
-      r2.provenance.inputTuple._1.resolve.provenance shouldEqual UnknownProvenance(2)
+      r2.call.inputTuple._1.resolve.output shouldEqual 2
+      r2.call.inputTuple._1.resolve.call shouldEqual UnknownProvenance(2)
 
-      r2.provenance.inputTuple._2.resolve.output shouldEqual 3
-      r2.provenance.inputTuple._2.resolve.provenance shouldEqual f1
+      r2.call.inputTuple._2.resolve.output shouldEqual 3
+      r2.call.inputTuple._2.resolve.call shouldEqual f1
 
-      r2.provenance.inputTuple._2.resolve.provenance shouldEqual f1
+      r2.call.inputTuple._2.resolve.call shouldEqual f1
 
       val f3 = AddInts(r1, r2)
       val r3 = f3.run
       r3.output shouldEqual 9
-      r3.provenance.inputTuple._1 shouldEqual r1
-      r3.provenance.inputTuple._2 shouldEqual r2
+      r3.call.inputTuple._1 shouldEqual r1
+      r3.call.inputTuple._2 shouldEqual r2
 
       r3.toString shouldEqual "(9 <- AddInts((3 <- AddInts(raw(1),raw(2))),(6 <- MultiplyInts(raw(2),(3 <- AddInts(raw(1),raw(2)))))))"
     }
@@ -93,9 +93,9 @@ class FunctionWithProvenanceSpec extends FunSpec with Matchers {
 
       val r3 = f3.run
       r3.output shouldEqual 15
-      r3.provenance shouldEqual f3
-      r3.provenance.inputTuple._1 shouldEqual f1
-      r3.provenance.inputTuple._2 shouldEqual f2
+      r3.call shouldEqual f3
+      r3.call.inputTuple._1 shouldEqual f1
+      r3.call.inputTuple._2 shouldEqual f2
 
       r3.toString shouldEqual "(15 <- AddInts(AddInts(raw(1),raw(2)),MultiplyInts(raw(3),raw(4))))"
     }

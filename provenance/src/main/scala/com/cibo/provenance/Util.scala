@@ -1,11 +1,6 @@
 package com.cibo.provenance
 
-import java.io._
-
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.commons.codec.digest.DigestUtils
-
-import scala.reflect.ClassTag
 
 /**
   * Created by ssmith on 10/8/17.
@@ -18,13 +13,17 @@ import scala.reflect.ClassTag
   */
 
 object Util extends LazyLogging {
-
-  import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._
+  import io.circe._, io.circe.parser._, io.circe.syntax._
+  import java.io._
+  import org.apache.commons.codec.digest.DigestUtils
+  import scala.reflect.ClassTag
 
   def serialize[T](obj: T)(implicit e: io.circe.Encoder[T], d: io.circe.Decoder[T]): Array[Byte] =
     getBytesAndDigest(obj)._1
 
   def getBytesAndDigest[T](obj: T)(implicit e: io.circe.Encoder[T], d: io.circe.Decoder[T]): (Array[Byte], Digest) = {
+    // This does extra work to ensure serialization is consistent.
+    // We can later optimize performance by only doing it conditionally.
     val bytes1 = serialize1(obj)
     val digest1 = digestBytes(bytes1)
     val obj2 = deserialize[T](bytes1)
@@ -137,73 +136,7 @@ object Util extends LazyLogging {
 
   def digestBytes(bytes: Array[Byte]): Digest =
     Digest(DigestUtils.sha1Hex(bytes))
-
-  // Digest check functions
-
-  /*
-  sealed trait Problem[T]
-  case class InconsistentDigestProblem[T](obj: T, attr: String) extends Problem[T]
-  case class UnserializableProblem[T](obj: T, attr: String) extends Problem[T]
-
-  def checkSerialization[T : Encoder : Decoder](obj: T, prefix: String = ""): List[Problem[_]] = {
-    val childProblems: List[Util.Problem[_]] =
-      obj match {
-        case p: Product =>
-          val parts = p.productIterator.toList
-          val problems = parts.zipWithIndex.flatMap {
-            case (part: Any, i: Int) =>
-              checkSerialization(part, prefix + "." + i.toString)
-          }
-          problems.toList
-        case _ =>
-          Nil
-      }
-
-    try {
-      if (hasSerializationSymmetry(obj, prefix)) {
-        childProblems
-      } else {
-        InconsistentDigestProblem[T](obj, prefix) +: childProblems
-      }
-    } catch {
-      case e: java.io.NotSerializableException =>
-        UnserializableProblem[T](obj, prefix) +: childProblems
-    }
-  }
-
-  def hasSerializationSymmetry[T : Encoder : Decoder](obj: T, prefix: String): Boolean = {
-    val bytes1 = Util.serialize(obj)
-    val digest1 = Util.digestBytes(bytes1)
-    //val os = obj.toString
-    //val os2 = if (os.size > 100) os.substring(0, 100) else os
-    //println(prefix + " : " + digest1 + " for " + os2)
-    val obj2 = Util.deserialize[T](bytes1)
-    val bytes2 = Util.serialize(obj2)
-    val digest2 = Util.digestBytes(bytes2)
-    digest2 == digest1
-  }
-  */
-
-  def getObj[O](bytes: Array[Byte], foo: Int): O = {
-    try {
-      Util.deserializeRaw(bytes)
-    } catch {
-      case e: Exception =>
-        Util.deserializeRaw(bytes)
-    }
-  }
-
-  def rawDecoder[T]: Decoder[T] = {
-    val d: Decoder[T] = Decoder.forProduct2("bytes", "foo")(getObj[T])
-    d
-  }
-
-  def rawEncoder[T]: Encoder[T] = {
-    Encoder.forProduct2("bytes", "foo") {
-      obj =>
-        val bytes = Util.serializeRaw(obj)
-        Tuple2(bytes, bytes.length)
-    }
-  }
-
 }
+
+
+

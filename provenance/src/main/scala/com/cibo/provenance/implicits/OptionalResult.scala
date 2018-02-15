@@ -24,12 +24,12 @@ class OptionalResult[A](result: FunctionCallResultWithProvenance[Option[A]])
     da: Decoder[A]
   ) {
 
-  def get(implicit rt: ResultTracker) = result.provenance.get.resolve
+  def get(implicit rt: ResultTracker) = result.call.get.resolve
 
-  def isEmpty(implicit rt: ResultTracker) = result.provenance.isEmpty.resolve
+  def isEmpty(implicit rt: ResultTracker) = result.call.isEmpty.resolve
 
-  def nonEmpty(implicit rt: ResultTracker) = result.provenance.nonEmpty.resolve
+  def nonEmpty(implicit rt: ResultTracker) = result.call.nonEmpty.resolve
 
   def map[B : ClassTag : Encoder : Decoder](f: ValueWithProvenance[Function1WithProvenance[B, A]])(implicit rt: ResultTracker) =
-    result.provenance.map(f).resolve
+    result.call.map(f).resolve
 }

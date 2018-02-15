@@ -8,12 +8,11 @@ package com.cibo.provenance
   *
   */
 
-class Function0CallResultWithProvenance[O](fromCall: Function0CallWithProvenance[O], output: VirtualValue[O])(implicit bi: BuildInfo) extends  FunctionCallResultWithProvenance(fromCall, output, bi) with Serializable {
-  def provenance: Function0CallWithProvenance[O] = fromCall
-}
+class Function0CallResultWithProvenance[O](override val call: Function0CallWithProvenance[O], override val outputAsVirtualValue: VirtualValue[O])(implicit bi: BuildInfo)
+  extends FunctionCallResultWithProvenance(call, outputAsVirtualValue, bi) with Serializable
 
-[1..21#class Function1CallResultWithProvenance[O, [#I1#]](f: Function1CallWithProvenance[O, [#I1#]], output: VirtualValue[O])(implicit bi: BuildInfo) extends  FunctionCallResultWithProvenance(f, output, bi) {
-  def provenance: Function1CallWithProvenance[O, [#I1#]] = f
-}#
+[1..21#class Function1CallResultWithProvenance[O, [#I1#]](override val call: Function1CallWithProvenance[O, [#I1#]], override val outputAsVirtualValue: VirtualValue[O])(implicit bi: BuildInfo)
+  extends FunctionCallResultWithProvenance(call, outputAsVirtualValue, bi) with Serializable
+#
 ]
 

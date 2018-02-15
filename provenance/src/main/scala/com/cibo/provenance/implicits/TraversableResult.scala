@@ -21,23 +21,20 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
     cta: ClassTag[A],
     ctsa: ClassTag[S[A]],
     ctsi: ClassTag[S[Int]],
-    ctr: ClassTag[Range],
     ea: Encoder[A],
     esa: Encoder[S[A]],
     esi: Encoder[S[Int]],
-    er: Encoder[Range],
     da: Decoder[A],
     dsa: Decoder[S[A]],
-    dsi: Decoder[S[Int]],
-    dr: Decoder[Range]
+    dsi: Decoder[S[Int]]
   ) {
-    import FunctionCallWithProvenance.TraversableCallExt
+    implicit lazy val ctr: ClassTag[Range] = ClassTag(classOf[Range])
 
     def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[S, A]#Call =
       ApplyWithProvenance[S, A].apply(result, n)
 
-    def indices: IndicesRangeWithProvenance[S, A]#Call =
-      IndicesRangeWithProvenance[S, A].apply(result)
+    def indices: IndicesTraversableWithProvenance[S, A]#Call =
+      IndicesTraversableWithProvenance[S, A].apply(result)
 
     def map[B](f: ValueWithProvenance[Function1WithProvenance[B, A]])
       (implicit
@@ -50,9 +47,22 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
       ): MapWithProvenance[B, A, S]#Call =
         new MapWithProvenance[B, A, S].apply(result, f)
 
+    def map[B](f: Function1WithProvenance[B, A])
+      (implicit
+        ctsb: ClassTag[S[B]],
+        ctb: ClassTag[B],
+        esb: Encoder[S[B]],
+        eb: Encoder[B],
+        dsb: Decoder[S[B]],
+        db: Decoder[B]
+      ): MapWithProvenance[B, A, S]#Call =
+      new MapWithProvenance[B, A, S].apply(result, UnknownProvenance(f.asInstanceOf[Function1WithProvenance[B, A]]))
+
+
     def scatter(implicit rt: ResultTracker): S[FunctionCallResultWithProvenance[A]] = {
-      val call1: FunctionCallWithProvenance[S[A]] = result.provenance
-      val call2: TraversableCall[S, A] = TraversableCallExt[S, A](call1)(hok, cta, ctsa, ctsi, ctr, ea, esa, esi, er, da, dsa, dsi, dr) // not automatic here
+      val call1: FunctionCallWithProvenance[S[A]] = result.call
+      val call2: TraversableCall[S, A] =
+        FunctionCallWithProvenance.TraversableCallExt[S, A](call1)(hok, cta, ctsa, ctsi, ea, esa, esi, da, dsa, dsi)
       val oneCallPerMember: S[FunctionCallWithProvenance[A]] = call2.scatter
       def getResult(call: FunctionCallWithProvenance[A]): FunctionCallResultWithProvenance[A] = call.resolve
       hok.map(getResult)(oneCallPerMember)

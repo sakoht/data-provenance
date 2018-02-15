@@ -6,8 +6,6 @@ package com.cibo.provenance
   * Apps using this library generate a BuildInfo object at compile time that extends this trait.
   */
 
-import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._
-
 trait BuildInfo extends Serializable {
   def name: String
   def version: String
@@ -25,9 +23,10 @@ trait BuildInfo extends Serializable {
   def abbreviate: BuildInfoBrief = BuildInfoBrief(commitId, buildId)
 }
 
-
-
-object BuildInfo extends RawEncoder[BuildInfo]
+object BuildInfo {
+  implicit val decoder = new BinaryDecoder[BuildInfo]
+  implicit val encoder = new BinaryEncoder[BuildInfo]
+}
 
 trait GitBuildInfo extends BuildInfo with Serializable {
   def gitBranch: String

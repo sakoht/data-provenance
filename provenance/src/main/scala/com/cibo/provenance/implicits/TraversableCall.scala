@@ -9,7 +9,7 @@ package com.cibo.provenance.implicits
   */
 
 import com.cibo.provenance.monadics.{ApplyWithProvenance, IndicesRangeWithProvenance, IndicesTraversableWithProvenance, MapWithProvenance}
-import com.cibo.provenance.{Function1WithProvenance, FunctionCallWithProvenance, ResultTracker, ValueWithProvenance}
+import com.cibo.provenance._
 import io.circe._
 
 import scala.language.higherKinds
@@ -21,21 +21,22 @@ class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
   cta: ClassTag[A],
   ctsa: ClassTag[S[A]],
   ctsi: ClassTag[S[Int]],
-  ctr: ClassTag[Range],
   ea: Encoder[A],
   esa: Encoder[S[A]],
   esi: Encoder[S[Int]],
-  er: Encoder[Range],
   da: Decoder[A],
   dsa: Decoder[S[A]],
-  dsi: Decoder[S[Int]],
-  dr: Decoder[Range]
+  dsi: Decoder[S[Int]]
 ) {
+  implicit lazy val ctr: ClassTag[Range] = ClassTag(classOf[Range])
+
   def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[S, A]#Call =
     ApplyWithProvenance[S, A].apply(call, n)
 
-  def indices: IndicesRangeWithProvenance[S, A]#Call =
-    IndicesRangeWithProvenance[S, A].apply(call)
+  def indices: IndicesTraversableWithProvenance[S, A]#Call =
+    IndicesTraversableWithProvenance[S, A].apply(call)
+
+  //UnknownProvenance(MyIncrement.asInstanceOf[Function1WithProvenance[Int, Int]])
 
   def map[B](f: ValueWithProvenance[Function1WithProvenance[B, A]])
     (implicit
@@ -47,6 +48,17 @@ class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
       db: Decoder[B]
     ): MapWithProvenance[B, A, S]#Call =
       new MapWithProvenance[B, A, S].apply(call, f)
+
+  def map[B](f: Function1WithProvenance[B, A])
+    (implicit
+      ctsb: ClassTag[S[B]],
+      ctb: ClassTag[B],
+      esb: Encoder[S[B]],
+      eb: Encoder[B],
+      dsb: Decoder[S[B]],
+      db: Decoder[B]
+    ): MapWithProvenance[B, A, S]#Call =
+    new MapWithProvenance[B, A, S].apply(call, UnknownProvenance(f.asInstanceOf[Function1WithProvenance[B, A]]))
 
   def scatter(implicit rt: ResultTracker): S[FunctionCallWithProvenance[A]] = {
     val indicesResult: IndicesTraversableWithProvenance[S, A]#Result = IndicesTraversableWithProvenance[S, A].apply(call).resolve

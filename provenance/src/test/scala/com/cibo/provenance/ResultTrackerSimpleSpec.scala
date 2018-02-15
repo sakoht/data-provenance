@@ -74,7 +74,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
 
       // Use the signature itself to re-load, ignoring the saved ID.
       val r2b = rt.loadResultForCallOption(s1).get
-      r2b.provenance shouldEqual r2.provenance
+      r2b.call shouldEqual r2.call
       r2b.output shouldEqual r2.output
 
       TestUtils.diffOutputSubdir(testSubdir)
@@ -156,7 +156,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       val rc2 = Add.runCount
 
       r2.output shouldBe r1.output                      // same output value
-      r2.provenance.unresolve shouldBe c2               // correct provenance
+      r2.call.unresolve shouldBe c2               // correct provenance
       rc2 shouldBe 1                                    // only ONE of the four calls has to occur
 
       Add.runCount = 0
@@ -168,7 +168,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       val rc3 = Add.runCount
 
       r3.output shouldBe r1.output + 1 // same value
-      r3.provenance.unresolve shouldBe s3
+      r3.call.unresolve shouldBe s3
       rc3 shouldBe 2                                    // only TWO of the four operations actually run: Add(3+5) and the final +7
 
       TestUtils.diffOutputSubdir(testSubdir)
@@ -216,7 +216,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       val rc6 = Add.runCount
       rc6 shouldBe 0
       r3b.output shouldEqual r3.output
-      r3b.provenance.unresolve shouldEqual s3b
+      r3b.call.unresolve shouldEqual s3b
 
       TestUtils.diffOutputSubdir(testSubdir)
     }
