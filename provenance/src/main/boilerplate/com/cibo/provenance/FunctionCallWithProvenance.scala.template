@@ -47,10 +47,12 @@ abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: 
   def deflateInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
     nocopy(duplicate(v.inflate), this)
 
+  /*
   def run(implicit rt: ResultTracker): Function0CallResultWithProvenance[O] = {
     val o: O = implVersion(getVersionValue)
     new Function0CallResultWithProvenance(this, VirtualValue(o))(rt.currentAppBuildInfo)
   }
+  */
 
   def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
 
@@ -94,10 +96,7 @@ abstract class Function1CallWithProvenance[O : ClassTag : Encoder : Decoder, [#I
   def deflateInputs(implicit rt: ResultTracker): Function1CallWithProvenance[O, [#I1#]] =
     nocopy(duplicate([#i1.deflate#], v.inflate), this)
 
-  def run(implicit rt: ResultTracker): Function1CallResultWithProvenance[O, [#I1#]] = {
-    val output: O = implVersion([#i1.resolve.output#], getVersionValue)
-    new Function1CallResultWithProvenance(this, VirtualValue(output))(rt.currentAppBuildInfo)
-  }
+  def run(implicit rt: ResultTracker): Function1CallResultWithProvenance[O, [#I1#]]
 
   def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): Function1CallResultWithProvenance[O, [#I1#]]
 

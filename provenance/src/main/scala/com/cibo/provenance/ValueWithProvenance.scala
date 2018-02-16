@@ -420,6 +420,8 @@ case class UnknownProvenance[O : ClassTag : Encoder : Decoder](value: O)
 
   override def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = cachedResult
 
+  override def run(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = cachedResult
+
   override def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] = this
 
   override def toString: String = f"raw($value)"
@@ -437,7 +439,7 @@ case class UnknownProvenanceValue[O : ClassTag](
   override def deflate(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] =
     FunctionCallResultWithProvenanceDeflated(this)
 
-  override def toString: String = f"rawv($outputAsVirtualValue)"
+  override def toString: String = f"raw($outputAsVirtualValue)"
 }
 
 /*

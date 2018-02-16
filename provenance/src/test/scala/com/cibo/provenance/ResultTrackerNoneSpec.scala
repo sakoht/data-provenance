@@ -31,7 +31,6 @@ class ResultTrackerNoneSpec extends FunSpec with Matchers {
 
       val c3 = AddTwoInts(c1, c2)
       val r3 = c3.run
-      r3.call shouldBe c3
       val cnt3 = AddTwoInts.runCount
       cnt3 shouldBe 5 // re-runs s1 and s2, then runs s3
 

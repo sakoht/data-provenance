@@ -74,7 +74,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
 
       // Use the signature itself to re-load, ignoring the saved ID.
       val r2b = rt.loadResultForCallOption(s1).get
-      r2b.call shouldEqual r2.call
+      r2b.call.unresolve shouldEqual r2.call.unresolve
       r2b.output shouldEqual r2.output
 
       TestUtils.diffOutputSubdir(testSubdir)

@@ -93,6 +93,28 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
       throwInvalidVersionException(v)
     impl()
   }
+  /**
+    * This method is "pulled-up" from Call.run() into the wrapping function so it can be overridden
+    * by provenance library infrastructural functions.
+    *
+    * In general, the impl() has access to only the raw values, not the ValueWithProvenance[T] wrappers.
+    * This allows collections, options, and mapping functions to do more complicated things when run() occurs.
+    *
+    * @param call:  The call to run
+    * @param rt:    The implicit ResultTracker in context at execution time.
+    * @return       A Result applicable to the call, with the output and current BuildInfo metadata.:q!
+    */
+  protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
+    implicit val ct: ClassTag[O] = call.getOutputClassTag
+    // This replaces an inputs that are not resolved with the equivalent result.
+    // (Optimized to be a no-op if the call already has reolved inputs.)
+    // Consider throwing an error if all inputs are not resolved first?  Perhaps we do too much.
+    val cx = call.resolveInputs
+    // The "resolve" invocations below will be no-ops because of the above.
+    val output: O = implVersion([#cx.i1.resolve.output#], cx.getVersionValue)
+    // Return a result referencing the fully resolved call.
+    Result(cx, VirtualValue(output))(rt.currentAppBuildInfo)
+  }
 
   /**
     * The Call inner class is a Function0CallWithProvenance
@@ -134,10 +156,8 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
       override def deflateInputs(implicit rt: ResultTracker): Call =
         nocopy(duplicate(v.inflate), this)
 
-      override def run(implicit rt: ResultTracker): Result = {
-        val output: O = implVersion(getVersionValue)
-        Result(this, VirtualValue(output))(rt.currentAppBuildInfo)
-      }
+      override def run(implicit rt: ResultTracker): Result =
+        runCall(this)(rt)
   }
 
   /**
@@ -257,8 +277,14 @@ trait Function1WithProvenance[O, [#I1#]] extends FunctionWithProvenance[O] with 
     */
   protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
     implicit val ct: ClassTag[O] = call.getOutputClassTag
-    val output: O = implVersion([#call.i1.resolve.output#], call.getVersionValue)
-    Result(call, VirtualValue(output))(rt.currentAppBuildInfo)
+    // This replaces an inputs that are not resolved with the equivalent result.
+    // (Optimized to be a no-op if the call already has reolved inputs.)
+    // Consider throwing an error if all inputs are not resolved first?  Perhaps we do too much.
+    val cx = call.resolveInputs
+    // The "resolve" invocations below will be no-ops because of the above.
+    val output: O = implVersion([#cx.i1.resolve.output#], cx.getVersionValue)
+    // Return a result referencing the fully resolved call.
+    Result(cx, VirtualValue(output))(rt.currentAppBuildInfo)
   }
 
   /**
