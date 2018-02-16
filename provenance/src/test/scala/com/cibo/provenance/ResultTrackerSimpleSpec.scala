@@ -290,7 +290,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
         r2.getOutputBuildInfoBrief shouldEqual build1     // from the last build
         r2.output shouldEqual 2                           // and has the correct output.
 
-        val r3 = call.newResult(3)(build1)                // Make a fake result.
+        val r3 = call.resolveInputs.newResult(3)(build1)  // Make a fake result.
         r3.getOutputBuildInfoBrief shouldEqual build1     // On the same build.
         r3.output shouldEqual 3                           // That has an inconsistent value for 1+1
 
@@ -322,15 +322,15 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       {
         implicit val rt2: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))(build2)
 
-        val r4 = call.newResult(4)(build2)            // Make a fake result.
-        r4.getOutputBuildInfoBrief shouldEqual build2 // On a new commit and build.
-        r4.output shouldEqual 4                       // That has an inconsistent value for 1+1
+        val r4 = call.resolveInputs.newResult(4)(build2)    // Make a fake result.
+        r4.getOutputBuildInfoBrief shouldEqual build2       // On a new commit and build.
+        r4.output shouldEqual 4                             // That has an inconsistent value for 1+1
 
         intercept[InconsistentVersionException] {
           // For now we complain.
           // Eventually we flag the newer commit as inconsistent, and resolve will load the original value.
           // If the original value was wrong, the version can/should be bumped.
-          rt2.saveResult(r4)                            // And save it.
+          rt2.saveResult(r4)                                // And save it.
           call.resolve
         }
       }
