@@ -7,8 +7,8 @@ import io.circe._
 /**
   * Created by ssmith on 9/12/17.
   *
-  * Note: The base class FunctionCallWithProvenance[O] is defined in VirtualValue.scala,
-  * since VirtualValue[T] is a sealed trait!
+  * Note: The base class FunctionCallWithProvenance[O] is defined in VirtualValue.scala.
+  * Since VirtualValue[T] is a sealed trait, all subclasses must be in that file.
   *
   * This template file implements the 22 sub-classes Function{0..21} of call.
   */
@@ -19,15 +19,12 @@ import io.circe._
   * It is an intermediate class above `Function1WithProvenance.Call`, which is
   * in turn used by application-defined subclases of `Function1WithProvenance`.
   * These intermediates are only directly referenced by internal classes.
-  * Applications should reference MyFunction.Call for full precision.
+  * Applications should reference `MyFunction.Call` for full precision.
   *
   * @tparam O           The type of the output.
   *
   * @param v:           The version of the Function0WithProvenance[O] being called.
   * @param implVersion: A lambda that contains the actual execution logic (cross-version).
-  * @param ev$1         ClassTag[O]: The class tag for the output type.
-  * @param ev$2         Encoder[O]: The circe encoder for the output type.
-  * @param ev$3         Decoder[O]: The circe decoder for the output type.
   */
 abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: ValueWithProvenance[Version])(implVersion: (Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
 
@@ -52,7 +49,7 @@ abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: 
 
   def run(implicit rt: ResultTracker): Function0CallResultWithProvenance[O] = {
     val o: O = implVersion(getVersionValue)
-    new Function0CallResultWithProvenance(this, VirtualValue(o))(rt.getCurrentBuildInfo)
+    new Function0CallResultWithProvenance(this, VirtualValue(o))(rt.currentAppBuildInfo)
   }
 
   def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
@@ -69,15 +66,12 @@ abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: 
   * These intermediates are only directly referenced by internal classes.
   * Applications should reference MyFunction.Call for full precision.
   *
-  * @tparam O           The type of the output.
-  * [#@tparam I1:   The type of input 1.
-  * #]
+  * @tparam O:          The type of the output.
+  * [#@tparam I1:         The type of input 1.#
+  * ]
   *
   * @param v:           The version of the Function1WithProvenance[O] being called.
   * @param implVersion: A lambda that contains the actual execution logic, cross-version.
-  * @param ev$1:        ClassTag[O]: The class tag for the output type.
-  * @param ev$2:        Encoder[O]: The circe encoder for the output type.
-  * @param ev$3:        Decoder[O]: The circe decoder for the output type.
   */
 abstract class Function1CallWithProvenance[O : ClassTag : Encoder : Decoder, [#I1#]]([#i1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version])(implVersion: ([#I1#], Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
 
@@ -102,7 +96,7 @@ abstract class Function1CallWithProvenance[O : ClassTag : Encoder : Decoder, [#I
 
   def run(implicit rt: ResultTracker): Function1CallResultWithProvenance[O, [#I1#]] = {
     val output: O = implVersion([#i1.resolve.output#], getVersionValue)
-    new Function1CallResultWithProvenance(this, VirtualValue(output))(rt.getCurrentBuildInfo)
+    new Function1CallResultWithProvenance(this, VirtualValue(output))(rt.currentAppBuildInfo)
   }
 
   def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): Function1CallResultWithProvenance[O, [#I1#]]

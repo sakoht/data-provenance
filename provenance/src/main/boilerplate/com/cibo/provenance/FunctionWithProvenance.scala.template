@@ -42,18 +42,66 @@ import io.circe.{Encoder, Decoder}
 trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializable {
   self =>
 
+  /**
+    * Each Function0WithProvenance should declare a currentVersion, and update this value
+    * whenever the impl() logic will return different values for the same inputs.
+    *
+    * @return Version: A value like Version("0.1")
+    */
   val currentVersion: Version
 
+  /**
+    * This is the actual logic for the Function0WithProvenance.  It should be deterministic
+    * for the given currentVersion value.
+    *
+    * It is typically not called directly except in tests.  The .resolve() method uses
+    * it to create new results only when necessary.
+    *
+    * @return O: A value of the appropriate output type.
+    */
   def impl(): O
 
+  /**
+    * The apply() method on a function returns a `.Call` of the current Function0WithProvenance.
+    * The Call capture parameters and the function version (defaulting to currentVersion).
+    *
+    * Creating a `.Call` does not execute the implementation (impl()), and is ResultTracker (DB) agnostic.
+    * The call can be run later, or it can be used to do queries for previous results, sent as a message
+    * to a remote system, or otherwise interrogated and composed.
+    *
+    * @param v    The version of the function to use.  Defaults to currentVersion.
+    * @param ct   An implicit class tag for the output type O.
+    * @param ec   An implicit circe encoder for the output type O.
+    * @param dc   An implicit circe decoder for the output type O.
+    * @return     A `.Call` specific to this function (i.e. `MyFunction.Call`)
+    */
   def apply(v: ValueWithProvenance[Version] = currentVersion)(implicit ct: ClassTag[O], ec: Encoder[O], dc: Decoder[O]): Call = Call(v)(ct, ec, dc)
 
+  /**
+    * This method is just like impl, but also recieves the Version of the call as a parameter.
+    * By default it throws an exception for any version that is not the currentVersion.  To support alternate handling
+    * of other versions, override this method, and have it selectively handle those.
+    *
+    * See examples in the test suite if you need to support multiple versions of logic at once.  Recommended practice
+    * is support legacy logic with methods with names like impl5_6_7 to support legacy version 5.6.7.
+    *
+    * @param v:   The version to run.
+    * @return O   An output value.
+    */
   protected def implVersion(v: Version): O = {
     if (v != currentVersion)
       throwInvalidVersionException(v)
     impl()
   }
 
+  /**
+    * The Call inner class is a Function0CallWithProvenance
+    * that is specific to this particular Function0WithProvenance.
+    *
+    * There are no inputs for a Function0WithProvenance, so unlike its kin it just takes a Version.
+    *
+    * @param v:     The Version of the function.
+    */
   case class Call(v: ValueWithProvenance[Version] = currentVersion)(implicit ct: ClassTag[O], ec: Encoder[O], dc: Decoder[O])
     extends Function0CallWithProvenance[O](v)(implVersion) {
 
@@ -88,57 +136,141 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
 
       override def run(implicit rt: ResultTracker): Result = {
         val output: O = implVersion(getVersionValue)
-        Result(this, VirtualValue(output))(rt.getCurrentBuildInfo)
+        Result(this, VirtualValue(output))(rt.currentAppBuildInfo)
       }
   }
 
+  /**
+    * The Result inner class is a Function0CallResultWithProvenance
+    * that is specific to this particular Function0WithProvenance.
+    *
+    * @param call:                  The Call from which this Result was generated, capturing parameters and version.
+    * @param outputAsVirtualValue   The output for the given inputs at the specified version.
+    * @param bi:                    The implicit BuildInfo for the app that produced the output.
+    */
   case class Result(override val call: Call, override val outputAsVirtualValue: VirtualValue[O])(implicit bi: BuildInfo)
     extends Function0CallResultWithProvenance(call, outputAsVirtualValue)(bi)
 
-  implicit private def convertResult(r: Function0CallResultWithProvenance[O]): Result =
-    Result(r.call, r.outputAsVirtualValue)(r.getOutputBuildInfoBrief)
+  /**
+    * Implicitly re-package a Function0CallWithProvenance into one specific to this Function0WithProvenance.
+    * This ensures that type signatures never get less specific than necessary.
+    *
+    * @param call   Some Function0CallWithProvenance.
+    * @return       A ThisFunction.Call.
+    */
+  implicit private def convertCall(call: Function0CallWithProvenance[O]): Call =
+    Call(call.getVersion)(call.getOutputClassTag, call.getEncoder, call.getDecoder)
 
-  implicit private def convertProvenance(f: Function0CallWithProvenance[O]): Call =
-    Call(f.getVersion)(f.getOutputClassTag, f.getEncoder, f.getDecoder)
+  /**
+    * Implicitly re-package generic Function0CallResultWithProvenance into one specific to this Function0WithProvenance.
+    * This ensures that type signatures never get less specific than necessary.
+    *
+    * @param result Some Function0CallResultWithProvenance.
+    * @return       A ThisFunction.Result
+    */
+  implicit private def convertResult(result: Function0CallResultWithProvenance[O]): Result =
+    Result(result.call, result.outputAsVirtualValue)(result.getOutputBuildInfoBrief)
+
 }
 
 
 [1..21#
 /**
-  * A Function0 with per-function versioning, and intermediate `.Call` and `.Result` tracking.
+  * A Function1 with per-function versioning, and intermediate `.Call` and `.Result` tracking.
   *
-  * @tparam O:    The output type.
-  * [#@tparam I1:   The type of input 1.
-  * #]
+  * @tparam O:      The output type.
+  * [#@tparam I1:     The type of input 1.#
+  * ]
   */
 trait Function1WithProvenance[O, [#I1#]] extends FunctionWithProvenance[O] with Serializable {
   self =>
 
+  /**
+    * Each Function1WithProvenance should declare a currentVersion, and update this value
+    * whenever the impl() logic will return different values for the same inputs.
+    *
+    * @return Version: A value like Version("0.1")
+    */
   val currentVersion: Version
 
+  /**
+    * This is the actual logic for the Function1WithProvenance.  It should be deterministic
+    * for the given currentVersion value.
+    *
+    * It is typically not called directly except in tests.  The .resolve() method uses
+    * it to create new results only when necessary.
+    *
+    * [#@param i1#
+    * ]
+    * @return O: A value of the appropriate output type.
+    */
   def impl([#i1: I1#]): O
 
+  /**
+    * The apply() method on a function returns a `.Call` of the current Function1WithProvenance.
+    * The Call capture parameters and the function version (defaulting to currentVersion).
+    *
+    * Creating a `.Call` does not execute the implementation (impl()), and is ResultTracker (DB) agnostic.
+    * The call can be run later, or it can be used to do queries for previous results, sent as a message
+    * to a remote system, or otherwise interrogated and composed.
+    *
+    * [#@param i1   Input 1 of type I1#
+    * ]
+    * @param v    The version of the function to use.  Defaults to currentVersion.
+    * @param ct   An implicit class tag for the output type O.
+    * @param ec   An implicit circe encoder for the output type O.
+    * @param dc   An implicit circe decoder for the output type O.
+    * @return     A `.Call` specific to this function (i.e. `MyFunction.Call`)
+    */
   def apply([#i1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version] = currentVersion)(implicit ct: ClassTag[O], ec: Encoder[O], dc: Decoder[O]): Call =
     Call([#i1#], v)
 
+  /**
+    * This method is just like impl, but also recieves the Version of the call as a parameter.
+    * By default it throws an exception for any version that is not the currentVersion.  To support alternate handling
+    * of other versions, override this method, and have it selectively handle those.
+    *
+    * See examples in the test suite if you need to support multiple versions of logic at once.  Recommended practice
+    * is support legacy logic with methods with names like impl5_6_7 to support legacy version 5.6.7.
+    *
+    * [#param i1    Input 1 of type I1#
+    * ]
+    * @param v:   The version to run.
+    * @return O   An output value.
+    */
   protected def implVersion([#i1: I1#], v: Version): O = {
     if (v != currentVersion)
       throwInvalidVersionException(v)
     impl([#i1#])
   }
 
-  // This method is "pulled-up" from Call into the function so it can be overridden
-  // by provenance infrastructural functions.  In general, the impl() has access to only the raw values,
-  // not the ValueWithProvenance[T] wrappers.
-
+  /**
+    * This method is "pulled-up" from Call.run() into the wrapping function so it can be overridden
+    * by provenance library infrastructural functions.
+    *
+    * In general, the impl() has access to only the raw values, not the ValueWithProvenance[T] wrappers.
+    * This allows collections, options, and mapping functions to do more complicated things when run() occurs.
+    *
+    * @param call:  The call to run
+    * @param rt:    The implicit ResultTracker in context at execution time.
+    * @return       A Result applicable to the call, with the output and current BuildInfo metadata.:q!
+    */
   protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
     implicit val ct: ClassTag[O] = call.getOutputClassTag
-    val output: O = implVersion([#call.v1.resolve.output#], call.getVersionValue)
-    Result(call, VirtualValue(output))(rt.getCurrentBuildInfo)
+    val output: O = implVersion([#call.i1.resolve.output#], call.getVersionValue)
+    Result(call, VirtualValue(output))(rt.currentAppBuildInfo)
   }
 
-  case class Call([#v1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version])(implicit ct: ClassTag[O], ec: Encoder[O], dc: Decoder[O])
-    extends Function1CallWithProvenance[O, [#I1#]]([#v1#], v)(implVersion) with Serializable {
+  /**
+    * The Call inner class is a Function1CallWithProvenance
+    * that is specific to this particular Function1WithProvenance.
+    *
+    * [#@param i1:    Input 1 of type I1#
+    * ]
+    * @param v:     The Version of the function.
+    */
+  case class Call([#i1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version])(implicit ct: ClassTag[O], ec: Encoder[O], dc: Decoder[O])
+    extends Function1CallWithProvenance[O, [#I1#]]([#i1#], v)(implVersion) with Serializable {
 
       val function = self
 
@@ -159,35 +291,58 @@ trait Function1WithProvenance[O, [#I1#]] extends FunctionWithProvenance[O] with 
       def newResult(output: VirtualValue[O])(implicit bi: BuildInfo): Result =
         Result(this, output)(bi)
 
-      def duplicate([#v1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version]): Call =
-        copy([#v1#], v)
+      def duplicate([#i1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version]): Call =
+        copy([#i1#], v)
 
       //
   
-      override def inputTuple: Tuple1[[#ValueWithProvenance[I1]#]] = Tuple1([#v1#])
+      override def inputTuple: Tuple1[[#ValueWithProvenance[I1]#]] = Tuple1([#i1#])
 
       override def resolveInputs(implicit rt: ResultTracker): Call =
-        nocopy(duplicate([#v1.resolve#], v.resolve), this)
+        nocopy(duplicate([#i1.resolve#], v.resolve), this)
 
       override def unresolveInputs(implicit rt: ResultTracker): Call =
-        nocopy(duplicate([#v1.unresolve#], v.unresolve), this)
+        nocopy(duplicate([#i1.unresolve#], v.unresolve), this)
 
       override def inflateInputs(implicit rt: ResultTracker): Call =
-        nocopy(duplicate([#v1.inflate#], v.inflate), this)
+        nocopy(duplicate([#i1.inflate#], v.inflate), this)
 
       override def deflateInputs(implicit rt: ResultTracker): Call =
-        nocopy(duplicate([#v1.deflate#], v.inflate), this)
+        nocopy(duplicate([#i1.deflate#], v.inflate), this)
   }
 
+  /**
+    * The Result inner class is a Function1CallResultWithProvenance
+    * that is specific to this particular Function1WithProvenance.
+    *
+    * @param call:                  The Call from which this Result was generated, capturing parameters and version.
+    * @param outputAsVirtualValue   The output for the given inputs at the specified version.
+    * @param bi:                    The implicit BuildInfo for the app that produced the output.
+    */
   case class Result(override val call: Call, override val outputAsVirtualValue: VirtualValue[O])(implicit bi: BuildInfo)
     extends Function1CallResultWithProvenance(call, outputAsVirtualValue)(bi)
 
+  /**
+    * Implicitly re-package a Function1CallWithProvenance into one specific to this Function1WithProvenance.
+    * This ensures that type signatures never get less specific than necessary.
+    *
+    * @param call   Some Function1CallWithProvenance.
+    * @return       A ThisFunction.Call.
+    */
+  implicit private def convertCall(call: Function1CallWithProvenance[O, [#I1#]]): Call = {
+    val i = call.inputTuple
+    Call([#i._1#], call.getVersion)(call.getOutputClassTag, call.getEncoder, call.getDecoder)
+  }
+
+  /**
+    * Implicitly re-package generic Function1CallResultWithProvenance into one specific to this Function1WithProvenance.
+    * This ensures that type signatures never get less specific than necessary.
+    *
+    * @param result Some Function1CallResultWithProvenance.
+    * @return       A ThisFunction.Result
+    */
   implicit private def convertResult(r: Function1CallResultWithProvenance[O, [#I1#]]): Result =
     Result(r.call, r.outputAsVirtualValue)(r.getOutputBuildInfoBrief)
 
-  implicit private def convertProvenance(f: Function1CallWithProvenance[O, [#I1#]]): Call = {
-    val i = f.inputTuple
-    Call([#i._1#], f.getVersion)(f.getOutputClassTag, f.getEncoder, f.getDecoder)
-  }
 }#
 ]

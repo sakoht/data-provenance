@@ -61,9 +61,13 @@ trait ResultTracker {
   // abstract interface
 
   /**
-    * @return The BuildInfo for the running application.  This is typically supplied at construction time.
+    * The BuildInfo for the current running application.
+    * This is used to construct new results for anything the tracker resolves.
+    * It is typically supplied at construction time.
+    *
+    * @return
     */
-  def getCurrentBuildInfo: BuildInfo
+  def currentAppBuildInfo: BuildInfo
 
   /**
     * Save one `FunctionCallWithProvenance[O]`, and return the "deflated" version of the call.
@@ -212,6 +216,22 @@ trait ResultTracker {
         throw new NoSuchElementException(f"Failed to find content for $ct with ID $digest!")
     }
 
+  /**
+    * An UnresolvedVersionException is thrown if the system attempts to deflate a call with an uresolved version.
+    * The version is typically static, but if it is not, the call cannot be saved until it is resolved.
+    * @param call:  The offending call
+    * @tparam O     The output type
+    */
+  class UnresolvedVersionException[O](call: FunctionCallWithProvenance[O])
+    extends RuntimeException(f"Cannot deflate calls with an unresolved version: $call") {
+
+    def getCall: FunctionCallWithProvenance[O] = call
+  }
+
+  /**
+    * A known failure mode for the ResultTracker.
+    */
+  class FailedSaveException(msg: String) extends RuntimeException(msg)
 }
 
 

@@ -10,12 +10,9 @@ import scala.reflect.ClassTag
   * This null ResultTracker never saves anything, and always returns a value for a query
   * by running the function in question.
   */
+case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) extends ResultTracker {
 
-case class ResultTrackerNone()(implicit val currentBuildInfo: BuildInfo) extends ResultTracker {
-
-  def getCurrentBuildInfo = currentBuildInfo
-
-  implicit val bi: BuildInfo = currentBuildInfo
+  implicit val bi: BuildInfo = currentAppBuildInfo
 
   def saveResult[O](v: FunctionCallResultWithProvenance[O]): FunctionCallResultWithProvenanceDeflated[O] = {
     // a no-op that just calculates the ID and returns it

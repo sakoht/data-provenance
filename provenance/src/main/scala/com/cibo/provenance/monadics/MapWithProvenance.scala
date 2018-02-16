@@ -38,15 +38,15 @@ class MapWithProvenance[B, A, S[_]](
     // Skip the bulk impl() call and construct the output result from the individual calls.
     val individualResults: S[FunctionCallResultWithProvenance[B]] = runOnEach(call)(rt)
     val unifiedOutputs: S[B] = hok.map((r: FunctionCallResultWithProvenance[B]) => r.output)(individualResults)
-    call.newResult(VirtualValue(unifiedOutputs))(rt.getCurrentBuildInfo)
+    call.newResult(VirtualValue(unifiedOutputs))(rt.currentAppBuildInfo)
   }
 
   private def runOnEach(call: Call)(implicit rt: ResultTracker): S[FunctionCallResultWithProvenance[B]] = {
-    val aResolved: FunctionCallResultWithProvenance[S[A]] = call.v1.resolve
+    val aResolved: FunctionCallResultWithProvenance[S[A]] = call.i1.resolve
     val aTraversable = FunctionCallResultWithProvenance.TraversableResultExt[S, A](aResolved)(hok, cta, ctsa, ctsi, ea, esa, esi, da, dsa, dsi)
     val aGranular: S[FunctionCallResultWithProvenance[A]] = aTraversable.scatter
 
-    val funcResolved: FunctionCallResultWithProvenance[Function1WithProvenance[B, A]] = call.v2.resolve(rt)
+    val funcResolved: FunctionCallResultWithProvenance[Function1WithProvenance[B, A]] = call.i2.resolve(rt)
     val func: Function1WithProvenance[B, A] = funcResolved.output
     def a2b(a: FunctionCallResultWithProvenance[A]): FunctionCallResultWithProvenance[B] = func(a).resolve(rt)
 

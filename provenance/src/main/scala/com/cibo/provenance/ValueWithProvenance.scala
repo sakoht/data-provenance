@@ -536,13 +536,13 @@ case class FunctionCallWithUnknownProvenanceDeflated[O : ClassTag : Encoder : De
 object FunctionCallResultWithProvenanceDeflated {
 
   def apply[O](result: FunctionCallResultWithProvenance[O])(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] = {
-    val provenance = result.call
-    implicit val outputClassTag: ClassTag[O] = provenance.getOutputClassTag
-    implicit val enc = provenance.getEncoder
-    implicit val dec = provenance.getDecoder
+    val call = result.call
+    implicit val outputClassTag: ClassTag[O] = call.getOutputClassTag
+    implicit val enc = call.getEncoder
+    implicit val dec = call.getDecoder
     FunctionCallResultWithProvenanceDeflated[O](
-      deflatedCall = FunctionCallWithProvenanceDeflated(provenance),
-      inputGroupDigest = provenance.getInputGroupDigest,
+      deflatedCall = FunctionCallWithProvenanceDeflated(call),
+      inputGroupDigest = call.getInputGroupDigest,
       outputDigest = result.outputAsVirtualValue.resolveDigest.digestOption.get,
       buildInfo = result.getOutputBuildInfoBrief
     )
