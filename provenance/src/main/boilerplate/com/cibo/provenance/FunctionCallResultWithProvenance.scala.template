@@ -3,14 +3,45 @@ package com.cibo.provenance
 /**
   * Created by ssmith on 9/12/17.
   *
-  * Note: The base class FunctionCallSignatureWithProvenance is defined in VirtualValue.scala,
+  * Note: The base class FunctionCallResultWithProvenance[O] is defined in VirtualValue.scala,
   * since VirtualValue[T] is a sealed trait!
   *
+  * This template file implements the 22 sub-classes Function{0..21} of result.
   */
 
+/**
+  * This is a parameter-type specific subclass of FunctionCallWithProvenance[O].
+  *
+  * It is an intermediate class above `Function1WithProvenance.Result`, which is
+  * in turn used by application-defined subclases of `Function1WithProvenance`.
+  * These intermediates are only directly referenced by internal classes.
+  * Applications should reference MyFunction.Result for full precision.
+  *
+  * @tparam O                   The type of the output.
+  *
+  * @param call                 The complimentary Function0CallWithProvenance that made the result.
+  * @param outputAsVirtualValue The output, wrapped as a VirtualValue[O] which might be serialized.
+  * @param bi:                  Implicit BuildInfo supplied by the application for tracking.
+  */
 class Function0CallResultWithProvenance[O](override val call: Function0CallWithProvenance[O], override val outputAsVirtualValue: VirtualValue[O])(implicit bi: BuildInfo)
   extends FunctionCallResultWithProvenance(call, outputAsVirtualValue, bi) with Serializable
 
+/**
+  * This is a parameter-type specific subclass of FunctionCallWithProvenance[O].
+  *
+  * It is an intermediate class above `Function1WithProvenance.Result`, which is
+  * in turn used by application-defined subclases of `Function1WithProvenance`.
+  * These intermediates are only directly referenced by internal classes.
+  * Applications should reference MyFunction.Result for full precision.
+  *
+  * @tparam O:                    The type of the output.
+  * [#@tparam I1:   The type of input 1.
+  * #]
+  *
+  * @param call:                  The complimentary Function1CallWithProvenance that made the result.
+  * @param outputAsVirtualValue:  The output, wrapped as a VirtualValue[O] which might be serialized.
+  * @param bi:                    Implicit BuildInfo supplied by the application for tracking.
+  */
 [1..21#class Function1CallResultWithProvenance[O, [#I1#]](override val call: Function1CallWithProvenance[O, [#I1#]], override val outputAsVirtualValue: VirtualValue[O])(implicit bi: BuildInfo)
   extends FunctionCallResultWithProvenance(call, outputAsVirtualValue, bi) with Serializable
 #

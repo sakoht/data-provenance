@@ -15,7 +15,7 @@ package com.cibo.provenance
   *
   *    Result                                        sealed trait
   *      FunctionCallResultWithProvenance            abstract class with N abstract subclasses
-  *        UnknownProvenanceValue                    case class
+  *        UnknownProvenanceValue                    case class derived from Function0CallResultWithProvenance
   *      FunctionCallResultWithProvenanceDeflated    case class
   *
   *    ValueWithProvenanceDeflated                   sealed trait applying to both deflated types above
@@ -516,7 +516,7 @@ case class FunctionCallWithKnownProvenanceDeflated[O](
   }
 
   def inflateNoRecurse(implicit rt: ResultTracker): Option[FunctionCallWithProvenance[O]] = {
-    rt.loadCallOption[O](functionName, functionVersion, inflatedCallDigest)
+    rt.loadInflatedCallWithDeflatedInputsOption[O](functionName, functionVersion, inflatedCallDigest)
   }
 }
 

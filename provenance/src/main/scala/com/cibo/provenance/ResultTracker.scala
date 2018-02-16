@@ -1,27 +1,53 @@
 package com.cibo.provenance
 
+
+import io.circe.{Decoder, Encoder}
+import scala.reflect.ClassTag
+
 /**
   * Created by ssmith on 5/16/17.
   *
-  * A ResultTracker manages storage by mapping a FunctionCallWithProvenance to a FunctionCallResultWithProvenance.
+  * A ResultTracker maps a FunctionCallWithProvenance to a FunctionCallResultWithProvenance, either by
+  * executing the function and storing the result, or by finding previous results.
   *
-  * It also can determine the status of functions that are in the process of producing results, or have failed,
-  * and decides if/how to move things into that state (run things).
+  * It can be thought of as akin to a database handle, but with responsibility for decision making around data
+  * generation, and tracking that generation in detail.
+  *
+  * It is usually supplied implicitly to methods on other objects that use the provenance library, giving them
+  * a database-specific context.
+  *
+  * The primary entrypoint is the `.resolve(call)` method, which either gets or creates a result for a given call.
+  * It also contains methods to otherwise interrogate the storage layer.
+  *
+  * A ResultTracker might determine the status of functions that are in the process of producing results, or have failed,
+  * and decides if/how to move things into that state (run things) indirectly, though that is not part of the
+  * base API currently.
   */
-
-import java.io.{ByteArrayInputStream, File, FileInputStream, ObjectInputStream}
-
-import io.circe.{Decoder, Encoder}
-
-import scala.reflect.ClassTag
-
-
 trait ResultTracker {
 
-  // core method
-
-  def resolve[O](f: FunctionCallWithProvenance[O]): FunctionCallResultWithProvenance[O] = {
-    val callWithInputDigests = f.resolveInputs(rt=this)
+  /**
+    * This is the core function of a ResultTracker.  It converts a call which may or may not have
+    * a result into a result.
+    *
+    * First, it checks to see if there is already a result for the exact call
+    * in question, and if so returns that result.  If not it checks to see if there has ever been
+    * another call with the same inputs on the same version of code, and if so composes
+    * a result with the known output, but with a new path through provenance tracking.  If
+    * the inputs are entirely new at this version of the code, it actually runs the implementation
+    * and saves everything.
+    *
+    * Note that, when it finds pre-existing outputs with different provenance, the new provenance
+    * still creates a result that references the commit/build that actually made the data.  This
+    * allows us to retroactively determine when there has been a versioning error in the commit
+    * history and correct for it after the fact.
+    *
+    * @tparam O     The output type of the call.
+    *
+    * @param call:  A `FunctionCallWithProvenance[O]` to resolve (get or create a result)
+    * @return       A `FunctionCallResultWithProvenance[O]` that wraps the call output.
+    */
+  def resolve[O](call: FunctionCallWithProvenance[O]): FunctionCallResultWithProvenance[O] = {
+    val callWithInputDigests = call.resolveInputs(rt=this)
     loadResultForCallOption[O](callWithInputDigests) match {
       case Some(existingResult) =>
         existingResult
@@ -34,46 +60,156 @@ trait ResultTracker {
 
   // abstract interface
 
+  /**
+    * @return The BuildInfo for the running application.  This is typically supplied at construction time.
+    */
   def getCurrentBuildInfo: BuildInfo
 
-  def saveCall[O](v: FunctionCallWithProvenance[O]): FunctionCallWithProvenanceDeflated[O]
+  /**
+    * Save one `FunctionCallWithProvenance[O]`, and return the "deflated" version of the call.
+    * This happens automatically when a result is saved, but might happen earlier if the call is
+    * to be transmitted to another process, or queued by a job distribution system.
+    *
+    * The deflated version uses IDs to reference its inputs (also deflated, recursively), and
+    * as such is a light-weight pointer into the complete history of the call.
+    *
+    * @param call:  The call to save.
+    * @tparam O:    The output type of the call and returned deflated call.
+    * @return       The deflated call created during saving.
+    */
+  def saveCall[O](call: FunctionCallWithProvenance[O]): FunctionCallWithProvenanceDeflated[O]
 
-  def saveResult[O](v: FunctionCallResultWithProvenance[O]): FunctionCallResultWithProvenanceDeflated[O]
+  /**
+    * Save one `FunctionCallResultWithProvenance[O]`.  This is automatically called during resolve(),
+    * but can be called independently when moving results made from one ResultTracker to another.
+    *
+    * @param result:  The result to save.
+    * @tparam O       The output type of the result.
+    * @return         The deflated result.
+    */
+  def saveResult[O](result: FunctionCallResultWithProvenance[O]): FunctionCallResultWithProvenanceDeflated[O]
 
+  /**
+    * Save a regular input/output value to the storage fabric.
+    *
+    * @param obj:   The object to save.  It must have a circe Encoder and Decoder implicitly available.
+    * @tparam T     The type of data to save.
+    * @return       The Digest of the serialized data.  A unique ID usable to re-load later.
+    */
   def saveValue[T : ClassTag : Encoder : Decoder](obj: T): Digest
 
 
-  def hasResultForCall[O](v: FunctionCallWithProvenance[O]): Boolean
+  /**
+    * Check storage for a result for a given call.
+    *
+    * @param call   The call to query for.
+    * @tparam O     The type of the output of the call.
+    * @return       A boolean flag that is true if a result exists.
+    */
+  def hasResultForCall[O](call: FunctionCallWithProvenance[O]): Boolean
 
+  /**
+    * Check storage for a given input/output value by SHA1 Digest.
+    *
+    * @param obj      The object to check for.  It must have a circe encoder/decoder.  It will be digested pre-query.
+    * @return         A boolean flag that is true if the value is stored.
+    */
   def hasValue[T : ClassTag : Encoder : Decoder](obj: T): Boolean
 
+  /**
+    * Check storage for a given input/output value by SHA1 Digest.
+    *
+    * @param digest   The digest ID of the object to check for.
+    * @return         A boolean flag that is true if the value is stored.
+    */
   def hasValue(digest: Digest): Boolean
 
+  /**
+    * Load a result for a given call.
+    *
+    * @param call     The call to query for.
+    * @tparam O       The outut type of the call.
+    * @return         An Option[FunctionCallResultWithProvenance] that has Some if the result exists.
+    */
+  def loadResultForCallOption[O](call: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]]
 
-  def loadResultForCallOption[O](f: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]]
+  /**
+    * Attempt to load a deflated call by its class, version, and the digested ID of the deflated call.
+    *
+    * Note that the deflated call expresses everything in primitives, and can be loaded in a library
+    * that cannot instantiate any of the relevant data.  If the output is itself non instantiatable,
+    * the type parameter can be set to `Any`, and the object will only fail if `.inflate` is called on it.
+    *
+    * @param className  The class of FunctionWithProvenance for which the call is made.
+    * @param version    The version of the function represented in the call.
+    * @param digest     The digested value of the serialized call.
+    * @tparam O         The output type of the call.
+    * @return           A FunctionCallWithProvenance[O] that is deflated, and also has deflated inputs.
+    */
+  def loadDeflatedCallOption[O : ClassTag : Encoder : Decoder](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]]
 
-  def loadCallOption[O : ClassTag : Encoder : Decoder](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]]
+  /**
+    * This is typically called by a deflated call as the first stage of inflation.
+    * It returns an object that knows its output type.
+    *
+    * The approach can be applied recursively to the deflated inputs, depending on how far into the history of the
+    * call the current application can instantiate objects.
+    *
+    * @param className  The class of FunctionWithProvenance for which the call is made.
+    * @param version    The version of the function represented in the call.
+    * @param digest     The digested value of the serialized call.
+    * @tparam O         The output type of the call.
+    * @return           A FunctionCallWithProvenance[O] that is NOT deflated, but still has deflated inputs.
+    */
+  def loadInflatedCallWithDeflatedInputsOption[O : ClassTag : Encoder : Decoder](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]]
 
-  def loadCallDeflatedOption[O : ClassTag : Encoder : Decoder](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]]
+  /**
+    * Retrieve one value from storage if the specified digest key is found.
+    *
+    * @param digest   The digest to query for.
+    * @tparam T       The type of data.
+    * @return         An Option of O that is Some[O] if the digest ID is found in storage.
+    */
+  def loadValueOption[T : ClassTag : Encoder : Decoder](digest: Digest): Option[T]
 
-  def loadValueOption[O : ClassTag : Encoder : Decoder](digest: Digest): Option[O]
+  /**
+    * A type-agnostic version of loadValueSerializedDataOption.  This works with a class string as text.
+    *
+    * @param className    The name of the class to load.
+    * @param digest       The digest ID of the value (query param).
+    * @return             An optional array of serialized bytes.
+    */
+  def loadValueSerializedDataOption(className: String, digest: Digest): Option[Array[Byte]]
 
-  def loadValueSerializedDataOption(className: String, digest: Digest): Option[Array[Byte]]  // included to work with foreign data
+  // Support methods
 
-  // support methods
-
+  /**
+    * This method does part of the loadValue logic, but stops after retrieving the serialized bytes.
+    *
+    * @param digest   The digest ID of the value (query param).
+    * @tparam O       The type of the output data.
+    * @return         An optional array of serialized bytes.
+    */
   def loadValueSerializedDataOption[O : ClassTag : Encoder : Decoder](digest: Digest): Option[Array[Byte]] = {
     val ct = implicitly[ClassTag[O]]
     loadValueSerializedDataOption(ct.runtimeClass.getName, digest)
   }
 
-  def loadValue[T : ClassTag : Encoder : Decoder](id: Digest): T =
-    loadValueOption[T](id) match {
+  /**
+    * Retrieve one value from storage if the specified digest key is found.
+    * Throws an exception if not found.
+    *
+    * @param digest   The digest to query for.
+    * @tparam T       The type of data.
+    * @return         An Option of T that is Some[T] if the digest ID is found in storage.
+    */
+  def loadValue[T : ClassTag : Encoder : Decoder](digest: Digest): T =
+    loadValueOption[T](digest) match {
       case Some(obj) =>
         obj
       case None =>
         val ct = implicitly[ClassTag[T]]
-        throw new NoSuchElementException(f"Failed to find content for $ct with ID $id!")
+        throw new NoSuchElementException(f"Failed to find content for $ct with ID $digest!")
     }
 
 }

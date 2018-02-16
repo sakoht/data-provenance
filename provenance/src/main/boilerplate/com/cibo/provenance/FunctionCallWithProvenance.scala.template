@@ -1,19 +1,34 @@
 package com.cibo.provenance
 
-/**
-  * Created by ssmith on 9/11/17.
-  *
-  * Note: The FunctionCallWithProvenance code lives in VirtualValue.scala (sealed trait).
-  *
-  * This file contains the Function{N}CallSignatureWithProvenance subclass implementations.
-  *
-  */
-
 import scala.language.implicitConversions
 import scala.reflect.ClassTag
 import io.circe._
 
+/**
+  * Created by ssmith on 9/12/17.
+  *
+  * Note: The base class FunctionCallWithProvenance[O] is defined in VirtualValue.scala,
+  * since VirtualValue[T] is a sealed trait!
+  *
+  * This template file implements the 22 sub-classes Function{0..21} of call.
+  */
 
+/**
+  * This is a parameter-type specific subclass of FunctionCallWithProvenance[O].
+  *
+  * It is an intermediate class above `Function1WithProvenance.Call`, which is
+  * in turn used by application-defined subclases of `Function1WithProvenance`.
+  * These intermediates are only directly referenced by internal classes.
+  * Applications should reference MyFunction.Call for full precision.
+  *
+  * @tparam O           The type of the output.
+  *
+  * @param v:           The version of the Function0WithProvenance[O] being called.
+  * @param implVersion: A lambda that contains the actual execution logic (cross-version).
+  * @param ev$1         ClassTag[O]: The class tag for the output type.
+  * @param ev$2         Encoder[O]: The circe encoder for the output type.
+  * @param ev$3         Decoder[O]: The circe decoder for the output type.
+  */
 abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: ValueWithProvenance[Version])(implVersion: (Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
 
   def getInputs: Seq[ValueWithProvenance[_]] = Seq.empty
@@ -45,7 +60,26 @@ abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: 
   def duplicate(vv: ValueWithProvenance[Version]): Function0CallWithProvenance[O]
 }
 
-[1..21#abstract class Function1CallWithProvenance[O : ClassTag : Encoder : Decoder, [#I1#]]([#i1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version])(implVersion: ([#I1#], Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
+[1..21#
+/**
+  * This is a parameter-type specific subclass of FunctionCallWithProvenance[O].
+  *
+  * It is an intermediate class above `Function1WithProvenance.Call`, which is
+  * in turn used by application-defined subclases of `Function1WithProvenance`.
+  * These intermediates are only directly referenced by internal classes.
+  * Applications should reference MyFunction.Call for full precision.
+  *
+  * @tparam O           The type of the output.
+  * [#@tparam I1:   The type of input 1.
+  * #]
+  *
+  * @param v:           The version of the Function1WithProvenance[O] being called.
+  * @param implVersion: A lambda that contains the actual execution logic, cross-version.
+  * @param ev$1:        ClassTag[O]: The class tag for the output type.
+  * @param ev$2:        Encoder[O]: The circe encoder for the output type.
+  * @param ev$3:        Decoder[O]: The circe decoder for the output type.
+  */
+abstract class Function1CallWithProvenance[O : ClassTag : Encoder : Decoder, [#I1#]]([#i1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version])(implVersion: ([#I1#], Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
 
   def getInputs: Seq[ValueWithProvenance[_]] = Seq([#i1#])
 

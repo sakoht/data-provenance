@@ -45,7 +45,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       val i2 = d1.inflate
 
       val i2b = d1.asInstanceOf[FunctionCallWithKnownProvenanceDeflated[Int]]
-      val i2co = rt.loadCallOption[Int](i2b.functionName, i2b.functionVersion, i2b.inflatedCallDigest)
+      val i2co = rt.loadInflatedCallWithDeflatedInputsOption[Int](i2b.functionName, i2b.functionVersion, i2b.inflatedCallDigest)
       val i2c = i2co.get
       val i2ci = i2c.inflateInputs
       i2ci shouldEqual i2

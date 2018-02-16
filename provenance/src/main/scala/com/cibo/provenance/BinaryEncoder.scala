@@ -15,7 +15,6 @@ import io.circe._
   * @tparam T: Some type (serializable)
   *
   */
-
 class BinaryEncoder[T <: Serializable] extends Encoder[T] with Serializable {
   // NOTE: This is its own class, wrapping a regular circe encoder, because the
   // real encoder isn't _itelf_ serializable, and some functions (like map), that

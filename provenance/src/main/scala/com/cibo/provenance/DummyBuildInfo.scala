@@ -9,7 +9,6 @@ import java.time.Instant
   * This is used as a placeholder in test cases for this library, and for library users.
   *
   */
-
 trait DummyBuildInfo extends BuildInfo {
   def name: String = "DUMMY-NAME"
   def version: String = "DUMMY-VERSION"

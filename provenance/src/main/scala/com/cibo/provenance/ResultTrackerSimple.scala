@@ -433,12 +433,12 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentBu
   def hasResultForCall[O](f: FunctionCallWithProvenance[O]): Boolean =
     loadOutputIdsForCallOption(f).nonEmpty
 
-  def loadCallDeflatedOption[O : ClassTag : Encoder : Decoder](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
+  def loadDeflatedCallOption[O : ClassTag : Encoder : Decoder](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
     loadCallDeflatedSerializedDataOption(functionName, version, digest) map {
       bytes => Util.deserialize[FunctionCallWithProvenanceDeflated[O]](bytes)
     }
 
-  def loadCallOption[O : ClassTag : Encoder : Decoder](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] =
+  def loadInflatedCallWithDeflatedInputsOption[O : ClassTag : Encoder : Decoder](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] =
     loadCallSerializedDataOption(functionName, version, digest) map {
       bytes =>
         Util.deserializeRaw[FunctionCallWithProvenance[O]](bytes)

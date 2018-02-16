@@ -5,7 +5,6 @@ package com.cibo.provenance
   *
   * Apps using this library generate a BuildInfo object at compile time that extends this trait.
   */
-
 trait BuildInfo extends Serializable {
   def name: String
   def version: String

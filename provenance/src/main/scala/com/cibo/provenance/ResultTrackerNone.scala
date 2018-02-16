@@ -44,10 +44,10 @@ case class ResultTrackerNone()(implicit val currentBuildInfo: BuildInfo) extends
 
   def hasValue(digest: Digest): Boolean = false // never
 
-  def loadCallDeflatedOption[O : ClassTag : Encoder : Decoder](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
+  def loadDeflatedCallOption[O : ClassTag : Encoder : Decoder](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
     None // never
 
-  def loadCallOption[O : ClassTag : Encoder : Decoder](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] =
+  def loadInflatedCallWithDeflatedInputsOption[O : ClassTag : Encoder : Decoder](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] =
     None // never
 
   def loadValueOption[O : ClassTag : Encoder : Decoder](digest: Digest): Option[O] = None // never
