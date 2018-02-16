@@ -1,6 +1,29 @@
 Data Provenance
 ===============
 
+Build and Deploy
+----------------
+
+This project uses sbt-boilerplate.  If you are running IntelliJ and not having IntelliJ use sbt
+to compile, it will find all of the template-based classes are missing.
+1. Do an initial compile from the shell: `sbt +compile`
+2. Further compiles can be done in IntelliJ _if_ they do not change the templates.
+3. When a template changes, do a fresh compile from the shell, as above.
+
+This project is released as a library.
+- To test locally, use `sbt +publishLocal`.
+- To do a real release, use `sbt release`.
+
+Adding to Applications
+----------------------
+Use: `"com.cibo" %% "provenance" % "0.2"`
+
+Applications that use this library must also use `SbtBuildInfo` to reveal build information to
+the provenance lib.  Two example files are in this repository:
+- `buildinfo.sbt-example-simple`
+- `buildinfo.sbt-example-multimodule`
+
+
 Background
 ----------
 
