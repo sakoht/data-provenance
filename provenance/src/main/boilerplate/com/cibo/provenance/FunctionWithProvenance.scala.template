@@ -111,7 +111,7 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
     // Consider throwing an error if all inputs are not resolved first?  Perhaps we do too much.
     val cx = call.resolveInputs
     // The "resolve" invocations below will be no-ops because of the above.
-    val output: O = implVersion([#cx.i1.resolve.output#], cx.getVersionValue)
+    val output: O = implVersion(cx.getVersionValue)
     // Return a result referencing the fully resolved call.
     Result(cx, VirtualValue(output))(rt.currentAppBuildInfo)
   }
