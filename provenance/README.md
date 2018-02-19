@@ -245,25 +245,26 @@ object myStrLen extends Function1WithProvenance[String, Int] {
   def impl(s: String): Int = s.length
 }
 
-object myApp extends App {
+object myApp1 extends App {
   implicit val bi: BuildInfo = com.cibo.provenance.DummyBuildInfo // use com.mycompany.myapp.BuildInfo
-  implicit val rt: ResultTracker = ResultTrackerSimple("s3://mybucket/myroot")
-  
+  implicit val rt: ResultTracker = ResultTrackerSimple("s3://...")
+
   import io.circe.generic.auto._
-  
+
   val c1: myMkString.Call = myMkString(3, 1.23)
   val r1: myMkString.Result = c1.resolve
-  val s1: String = r1.output              // "3:1.23"
-  
+  val s1: String = r1.output // "3:1.23"
+
   val c2: myStrLen.Call = myStrLen(r1)
   val r2: myStrLen.Result = c2.resolve
-  val s2: Int = r2.output                 // 5
-  
+  val s2: Int = r2.output // 5
+
   val c3: myMkString.Call = myMkString(r2, 7.89)
   val r3: myMkString.Result = c3.resolve
-  val s3: String = r3.output              // "5:7.89"
-  
+  val s3: String = r3.output // "5:7.89"
+
   assert(r3.call.unresolve == myMkString(myStrLen(myMkString(3, 1.23)), 7.89))
+}
 ```
 
 Longer Example
@@ -277,10 +278,10 @@ object addMe extends Function2WithProvenance[Int, Int, Int] {
   def impl(a: Int, b: Int): Int = a + b
 }
 
-object MyApp extends App {
+object myApp2 extends App {
 
-  implicit val bi: BuildInfo = DummyBuildInfo
-  implicit val rt: ResultTracker = ResultTrackerSimple("/tmp/mydata") // or s3://...
+  implicit val bi: BuildInfo = DummyBuildInfo                       // use com.mycompany.myapp.BuildInfo
+  implicit val rt: ResultTracker = ResultTrackerSimple("s3://...")
 
   import io.circe.generic.auto._
 
@@ -363,7 +364,7 @@ object sumList extends Function1WithProvenance[List[Int], Int] {
 }
 ```
 
-API Level 1
+API Part 1
 -----------
 
 ### Class Hierarchy Example:
@@ -538,7 +539,9 @@ Extening history with a single call actually just appends the following to stora
 3. one `FunctionCallWithProvenance`, fully serialized, but with its input results fully deflated (see #1)
 
 A single digest ID can represent the entire history, and when histories intersect they data there is no duplication.
- 
+
+
+
 Data Fabric
 -----------
 The storage system uses serialization and digests to capture the inputs and outputs of each call,
