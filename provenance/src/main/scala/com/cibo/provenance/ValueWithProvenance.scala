@@ -89,8 +89,8 @@ object ValueWithProvenance {
 
   // Convert any value T to an UnknownProvenance[T] wherever a ValueWithProvenance is expected.
   // This is how "normal" data is passed into FunctionWithProvenance transparently.
-  implicit def convertValueWithNoProvenance[T: ClassTag : Encoder : Decoder](v: T): ValueWithProvenance[T] = {
-    UnknownProvenance(v)
+  implicit def convertValueWithNoProvenance[T: ClassTag : Encoder : Decoder, U <: T](value: U): ValueWithProvenance[T] = {
+    UnknownProvenance(value.asInstanceOf[T])
   }
 
   implicit def convertSeqWithProvenance[A](seq: Seq[ValueWithProvenance[A]])

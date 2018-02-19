@@ -38,7 +38,7 @@ class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
 
   //UnknownProvenance(MyIncrement.asInstanceOf[Function1WithProvenance[Int, Int]])
 
-  def map[B](f: ValueWithProvenance[Function1WithProvenance[B, A]])
+  def map[B](f: ValueWithProvenance[Function1WithProvenance[A, B]])
     (implicit
       ctsb: ClassTag[S[B]],
       ctb: ClassTag[B],
@@ -46,10 +46,10 @@ class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
       eb: Encoder[B],
       dsb: Decoder[S[B]],
       db: Decoder[B]
-    ): MapWithProvenance[B, A, S]#Call =
-      new MapWithProvenance[B, A, S].apply(call, f)
+    ): MapWithProvenance[A, S, B]#Call =
+      new MapWithProvenance[A, S, B].apply(call, f)
 
-  def map[B](f: Function1WithProvenance[B, A])
+  def map[B](f: Function1WithProvenance[A, B])
     (implicit
       ctsb: ClassTag[S[B]],
       ctb: ClassTag[B],
@@ -57,8 +57,8 @@ class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
       eb: Encoder[B],
       dsb: Decoder[S[B]],
       db: Decoder[B]
-    ): MapWithProvenance[B, A, S]#Call =
-    new MapWithProvenance[B, A, S].apply(call, UnknownProvenance(f.asInstanceOf[Function1WithProvenance[B, A]]))
+    ): MapWithProvenance[A, S, B]#Call =
+    new MapWithProvenance[A, S, B].apply(call, UnknownProvenance(f.asInstanceOf[Function1WithProvenance[A, B]]))
 
   def scatter(implicit rt: ResultTracker): S[FunctionCallWithProvenance[A]] = {
     val indicesResult: IndicesTraversableWithProvenance[S, A]#Result = IndicesTraversableWithProvenance[S, A].apply(call).resolve

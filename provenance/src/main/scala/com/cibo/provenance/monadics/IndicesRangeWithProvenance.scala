@@ -16,7 +16,7 @@ package com.cibo.provenance.monadics
 import scala.language.higherKinds
 import com.cibo.provenance.{implicits, _}
 
-class IndicesRangeWithProvenance[S[_], O](implicit hok: implicits.Traversable[S]) extends Function1WithProvenance[Range, S[O]]  {
+class IndicesRangeWithProvenance[S[_], O](implicit hok: implicits.Traversable[S]) extends Function1WithProvenance[S[O], Range]  {
   val currentVersion: Version = NoVersion
   def impl(s: S[O]): Range = hok.indicesRange(s)
 }

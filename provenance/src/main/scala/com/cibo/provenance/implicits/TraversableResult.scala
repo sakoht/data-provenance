@@ -36,7 +36,7 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
     def indices: IndicesTraversableWithProvenance[S, A]#Call =
       IndicesTraversableWithProvenance[S, A].apply(result)
 
-    def map[B](f: ValueWithProvenance[Function1WithProvenance[B, A]])
+    def map[B](f: ValueWithProvenance[Function1WithProvenance[A, B]])
       (implicit
         ctsb: ClassTag[S[B]],
         ctb: ClassTag[B],
@@ -44,10 +44,10 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
         eb: Encoder[B],
         dsb: Decoder[S[B]],
         db: Decoder[B]
-      ): MapWithProvenance[B, A, S]#Call =
-        new MapWithProvenance[B, A, S].apply(result, f)
+      ): MapWithProvenance[A, S, B]#Call =
+        new MapWithProvenance[A, S, B].apply(result, f)
 
-    def map[B](f: Function1WithProvenance[B, A])
+    def map[B](f: Function1WithProvenance[A, B])
       (implicit
         ctsb: ClassTag[S[B]],
         ctb: ClassTag[B],
@@ -55,8 +55,8 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
         eb: Encoder[B],
         dsb: Decoder[S[B]],
         db: Decoder[B]
-      ): MapWithProvenance[B, A, S]#Call =
-      new MapWithProvenance[B, A, S].apply(result, UnknownProvenance(f.asInstanceOf[Function1WithProvenance[B, A]]))
+      ): MapWithProvenance[A, S, B]#Call =
+      new MapWithProvenance[A, S, B].apply(result, UnknownProvenance(f.asInstanceOf[Function1WithProvenance[A, B]]))
 
 
     def scatter(implicit rt: ResultTracker): S[FunctionCallResultWithProvenance[A]] = {

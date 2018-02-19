@@ -32,32 +32,32 @@ class OptionalCall[A](call: FunctionCallWithProvenance[Option[A]])
   def get = GetWithProvenance(call)
   def isEmpty = IsEmptyWithProvenance(call)
   def nonEmpty = NonEmptyWithProvenance(call)
-  def map[B : ClassTag : Encoder : Decoder](f: ValueWithProvenance[Function1WithProvenance[B, A]]) =
+  def map[B : ClassTag : Encoder : Decoder](f: ValueWithProvenance[Function1WithProvenance[A, B]]) =
     new MapWithProvenance[B].apply(call, f, UnknownProvenance(currentVersion))
 
-  object GetWithProvenance extends Function1WithProvenance[A, Option[A]] {
+  object GetWithProvenance extends Function1WithProvenance[Option[A], A] {
     val currentVersion: Version = NoVersion
     def impl(o: Option[A]) = o.get
   }
 
-  object IsEmptyWithProvenance extends Function1WithProvenance[Boolean, Option[A]] {
+  object IsEmptyWithProvenance extends Function1WithProvenance[Option[A], Boolean] {
     val currentVersion: Version = NoVersion
     def impl(o: Option[A]) = o.isEmpty
   }
 
-  object NonEmptyWithProvenance extends Function1WithProvenance[Boolean, Option[A]] {
+  object NonEmptyWithProvenance extends Function1WithProvenance[Option[A], Boolean] {
     val currentVersion: Version = NoVersion
     def impl(o: Option[A]) = o.nonEmpty
   }
 
-  class MapWithProvenance[B : ClassTag : Encoder : Decoder] extends Function2WithProvenance[Option[B], Option[A], Function1WithProvenance[B, A]] {
+  class MapWithProvenance[B : ClassTag : Encoder : Decoder] extends Function2WithProvenance[Option[A], Function1WithProvenance[A, B], Option[B]] {
     val currentVersion: Version = NoVersion
     override protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
-      val aOptionResolved: FunctionCallResultWithProvenance[Option[A]] = call.i1.resolve
+      val aOptionResolved: FunctionCallResultWithProvenance[_ <: Option[A]] = call.i1.resolve
       aOptionResolved.output match {
         case Some(a) =>
-          val funcResolved: FunctionCallResultWithProvenance[Function1WithProvenance[B, A]] = call.i2.resolve
-          val func: Function1WithProvenance[B, A] = funcResolved.output
+          val funcResolved: FunctionCallResultWithProvenance[_ <: Function1WithProvenance[A, B]] = call.i2.resolve
+          val func: Function1WithProvenance[A, B] = funcResolved.output
           val aResolved: GetWithProvenance.Result = self.get.resolve
           def a2b(a: FunctionCallResultWithProvenance[A]): FunctionCallResultWithProvenance[B] = func(a).resolve(rt)
           val bResolved: FunctionCallResultWithProvenance[B] = a2b(aResolved)
@@ -70,7 +70,7 @@ class OptionalCall[A](call: FunctionCallWithProvenance[Option[A]])
     }
 
     // Note: runCall fully circumvents calling this impl.  It is provided for API completeness.
-    def impl(s: Option[A], f: Function1WithProvenance[B, A]): Option[B] =
+    def impl(s: Option[A], f: Function1WithProvenance[A, B]): Option[B] =
       s.map(f.impl)
   }
 }

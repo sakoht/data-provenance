@@ -10,7 +10,7 @@ package com.cibo.provenance.monadics
 import scala.language.higherKinds
 import com.cibo.provenance.{implicits, _}
 
-class ApplyWithProvenance[S[_], O](implicit hok: implicits.Traversable[S]) extends Function2WithProvenance[O, S[O], Int]  {
+class ApplyWithProvenance[S[_], O](implicit hok: implicits.Traversable[S]) extends Function2WithProvenance[S[O], Int, O]  {
   val currentVersion: Version = NoVersion
   def impl(s: S[O], n: Int): O =
     hok.apply(n)(s)
@@ -20,7 +20,7 @@ object ApplyWithProvenance {
   def apply[S[_], A](implicit hok: implicits.Traversable[S]) = new ApplyWithProvenance[S, A]
 }
 
-object ApplyToRangeWithProvenance extends Function2WithProvenance[Int, Range, Int] {
+object ApplyToRangeWithProvenance extends Function2WithProvenance[Range, Int, Int] {
   val currentVersion: Version = NoVersion
   def impl(range: Range, idx: Int): Int = range(idx)
 }

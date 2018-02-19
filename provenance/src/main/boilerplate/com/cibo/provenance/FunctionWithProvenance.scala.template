@@ -31,6 +31,7 @@ package com.cibo.provenance
 
 import com.cibo.provenance.exceptions.{UnknownVersionException, UnrunnableVersionException}
 import scala.language.implicitConversions
+import scala.language.existentials
 import scala.reflect.ClassTag
 import io.circe.{Encoder, Decoder}
 
@@ -202,7 +203,7 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
   * [#@tparam I1:     The type of input 1.#
   * ]
   */
-trait Function1WithProvenance[O, [#I1#]] extends FunctionWithProvenance[O] with Serializable {
+trait Function1WithProvenance[[#I1#], O] extends FunctionWithProvenance[O] with Serializable {
   self =>
 
   /**
@@ -242,7 +243,7 @@ trait Function1WithProvenance[O, [#I1#]] extends FunctionWithProvenance[O] with 
     * @param dc   An implicit circe decoder for the output type O.
     * @return     A `.Call` specific to this function (i.e. `MyFunction.Call`)
     */
-  def apply([#i1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version] = currentVersion)(implicit ct: ClassTag[O], ec: Encoder[O], dc: Decoder[O]): Call =
+  def apply([#i1: ValueWithProvenance[_ <: I1]#], v: ValueWithProvenance[Version] = currentVersion)(implicit ct: ClassTag[O], ec: Encoder[O], dc: Decoder[O]): Call =
     Call([#i1#], v)
 
   /**
@@ -295,8 +296,8 @@ trait Function1WithProvenance[O, [#I1#]] extends FunctionWithProvenance[O] with 
     * ]
     * @param v:     The Version of the function.
     */
-  case class Call([#i1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version])(implicit ct: ClassTag[O], ec: Encoder[O], dc: Decoder[O])
-    extends Function1CallWithProvenance[O, [#I1#]]([#i1#], v)(implVersion) with Serializable {
+  case class Call([#i1: ValueWithProvenance[_ <: I1]#], v: ValueWithProvenance[Version])(implicit ct: ClassTag[O], ec: Encoder[O], dc: Decoder[O])
+    extends Function1CallWithProvenance[[#I1#], O]([#i1#], v)(implVersion) with Serializable {
 
       val function = self
 
@@ -317,12 +318,12 @@ trait Function1WithProvenance[O, [#I1#]] extends FunctionWithProvenance[O] with 
       def newResult(output: VirtualValue[O])(implicit bi: BuildInfo): Result =
         Result(this, output)(bi)
 
-      def duplicate([#i1: ValueWithProvenance[I1]#], v: ValueWithProvenance[Version]): Call =
+      def duplicate([#i1: ValueWithProvenance[_ <: I1]#], v: ValueWithProvenance[Version]): Call =
         copy([#i1#], v)
 
       //
   
-      override def inputTuple: Tuple1[[#ValueWithProvenance[I1]#]] = Tuple1([#i1#])
+      override def inputTuple: Tuple1[[#ValueWithProvenance[_ <: I1]#]] = Tuple1([#i1#])
 
       override def resolveInputs(implicit rt: ResultTracker): Call =
         nocopy(duplicate([#i1.resolve#], v.resolve), this)
@@ -355,7 +356,7 @@ trait Function1WithProvenance[O, [#I1#]] extends FunctionWithProvenance[O] with 
     * @param call   Some Function1CallWithProvenance.
     * @return       A ThisFunction.Call.
     */
-  implicit private def convertCall(call: Function1CallWithProvenance[O, [#I1#]]): Call = {
+  implicit private def convertCall(call: Function1CallWithProvenance[[#I1#], O]): Call = {
     val i = call.inputTuple
     Call([#i._1#], call.getVersion)(call.getOutputClassTag, call.getEncoder, call.getDecoder)
   }
@@ -367,7 +368,7 @@ trait Function1WithProvenance[O, [#I1#]] extends FunctionWithProvenance[O] with 
     * @param result Some Function1CallResultWithProvenance.
     * @return       A ThisFunction.Result
     */
-  implicit private def convertResult(r: Function1CallResultWithProvenance[O, [#I1#]]): Result =
+  implicit private def convertResult(r: Function1CallResultWithProvenance[[#I1#], O]): Result =
     Result(r.call, r.outputAsVirtualValue)(r.getOutputBuildInfoBrief)
 
 }#

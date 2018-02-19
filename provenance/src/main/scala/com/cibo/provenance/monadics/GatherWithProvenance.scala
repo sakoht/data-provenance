@@ -13,7 +13,7 @@ import io.circe._
 
 import scala.reflect.ClassTag
 
-class GatherWithProvenance[E, O <: Seq[E], I <: Seq[ValueWithProvenance[E]]] extends Function1WithProvenance[O, I]  {
+class GatherWithProvenance[E, O <: Seq[E], I <: Seq[ValueWithProvenance[E]]] extends Function1WithProvenance[I, O]  {
 
   val currentVersion = NoVersion
 
