@@ -38,6 +38,8 @@ class AbstractOutputSealedSpec extends FunSpec with Matchers {
           case _ => "other"
         }
       ) shouldBe "dog"
+
+      TestUtils.diffOutputSubdir(testSubdir)
     }
   }
 }

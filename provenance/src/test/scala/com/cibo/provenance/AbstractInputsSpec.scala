@@ -29,6 +29,8 @@ class AbstractInputsSpec extends FunSpec with Matchers {
       sayYourName(ruffers).resolve.output shouldBe "Ruffers"
 
       sayYourName(fluffy).resolve.output shouldBe "Fluffy"
+
+      TestUtils.diffOutputSubdir(testSubdir)
     }
   }
 }
