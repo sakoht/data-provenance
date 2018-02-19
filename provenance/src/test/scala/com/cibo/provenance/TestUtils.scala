@@ -1,6 +1,8 @@
 package com.cibo.provenance
 
+import com.cibo.io.s3.SyncablePath
 import com.typesafe.scalalogging.LazyLogging
+import org.apache.commons.io.FileUtils
 import org.scalatest.Matchers
 
 object TestUtils extends LazyLogging with Matchers {
@@ -14,8 +16,20 @@ object TestUtils extends LazyLogging with Matchers {
   val libBuildInfo: BuildInfo = com.cibo.provenance.internal.BuildInfo
 
   // Use the scala version for the library in this test, cross-compiled tests can run in parallel.
-  val testOutputBaseDir: String =
-    f"/tmp/" + sys.env.getOrElse("USER", "anonymous") + f"/data-provenance-test-output-${libBuildInfo.scalaVersion}"
+
+  val localTestOutputBaseDir: String =
+    f"/tmp" +
+      "/" + sys.env.getOrElse("USER", "anonymous") +
+      f"/data-provenance-test-output-${libBuildInfo.scalaVersion}"
+
+  val remoteTestOutputBaseDir: String =
+    f"s3://com-cibo-user" +
+      "/" + sys.env.getOrElse("USER", "anonymous") +
+      "/" + com.cibo.provenance.internal.BuildInfo.buildId.toString +
+      f"/data-provenance-test-output-${libBuildInfo.scalaVersion}"
+
+  // Switch to the remote version to manually test on S3
+  val testOutputBaseDir = remoteTestOutputBaseDir
 
   def diffOutputSubdir(subdir: String) = {
     val version =
@@ -26,8 +40,16 @@ object TestUtils extends LazyLogging with Matchers {
       else
         throw new RuntimeException(f"Unexpected scala version $libBuildInfo.scalaVersion")
 
-    val actualOutputDir = f"$testOutputBaseDir/$subdir"
-    val newManifestBytes = getOutputAsBytes(s"cd $actualOutputDir && wc -c `find . -type file | sort`")
+    val actualOutputDirPath = SyncablePath(f"$testOutputBaseDir/$subdir")
+    if (actualOutputDirPath.isRemote) {
+      val f = actualOutputDirPath.getFile
+      FileUtils.deleteDirectory(f)
+      actualOutputDirPath.syncFromS3()
+    }
+
+    val actualOutputLocalPath = actualOutputDirPath.getLocalPathString
+
+    val newManifestBytes = getOutputAsBytes(s"cd $actualOutputLocalPath && wc -c `find . -type file | sort`")
     val newManifestString = new String(newManifestBytes)
 
     val rootSubdir = "src/test/resources/expected-output"
@@ -44,8 +66,8 @@ object TestUtils extends LazyLogging with Matchers {
 
     try {
 
-      if (!new File(actualOutputDir).exists)
-        throw new RuntimeException(s"Failed to find $actualOutputDir!")
+      if (!new File(actualOutputLocalPath).exists)
+        throw new RuntimeException(s"Failed to find $actualOutputLocalPath!")
 
       val expectedManifestString =
         if (!expectedManifestFile.exists) {

@@ -1,22 +1,25 @@
 Data Provenance
 ===============
 
-This document describes the data-provenance library from the perspecitve of an application that uses it.
+This document describes the data-provenance library from the perspective of an application that uses it.
 
-For development, see README-DEVELOPMENT.md.
+For development of the library itself, see README-DEVELOPMENT.md.
 
 
 Adding to Applications
 ----------------------
-Applications should add the following to their `libraryDependencies`: `"com.cibo" %% "provenance" % "0.2"`
+An applications should add the following to its `libraryDependencies`: 
+    
+    `"com.cibo" %% "provenance" % "0.2"`
 
-Applications that use this library must also use `SbtBuildInfo` to reveal build information to
-the provenance lib.  At compile time, it creates a static object YOURPACKAGE.BuildInfo, that knows
-the exact current git commit, and generates a unique BuildID from a timestamp.
+Applications that use this library must also use `SbtBuildInfo` to reveal provide commit/build information to
+the provenance lib for new data generated.
 
-Two example files are in this repository:
+Two example files are in this repository with instructions on how to add them to your project's build process:
 - `buildinfo.sbt-example-simple`
 - `buildinfo.sbt-example-multimodule`
+
+To get started, you can use the `DummyBuildInfo` provided by the provenance library for use in test cases.
 
 
 Background
@@ -29,7 +32,7 @@ def foo(a: Int, b: Double): String = a.toString + "," + b.toString
 
 The above takes an `Int` and a `Double`, and returns a `String` by just concatenating the others with a comma.
 
-A longer form of the same thing:
+A longer form of the same thing in Scala uses a `Function2` object:
 ```scala
 object foo extends Function2[Int, Double, String] {
     def apply(a: Int, b: Double): String = a.toString + "," + b.toString
@@ -386,7 +389,7 @@ foo
     <: FunctionWithProvenance[String]
 ```
 
-When `foo(i, d)` is invoked (which is the same as `foo.apply(i, d)`), a `foo.Call` (but no "work' is done!):
+When `foo(i, d)` is invoked, a `foo.Call` is returned:
 ```
 foo.Call
   <: Function2CallWithProvenance[Int, Double, String]
@@ -394,7 +397,7 @@ foo.Call
       <: ValueWithProvenance[String]
 ```
 
-When `.resolve` is invoked on the `foo.Call`, a `foo.Result` is returned after running the impl():
+When `.resolve` is invoked on the `foo.Call`, a `foo.Result` is returned:
 ```
 foo.Result
   <: Function2CallResultWithProvenance[Int, Double, String]
@@ -402,8 +405,8 @@ foo.Result
       <: ValueWithProvenance[String]
 ```
 
-Note that, to resolve, a `ResultTracker` must be provided implicitly.  (The `ResultTrackerNone` can be used to 
-intentionally have no-op tracking.)
+Note that, to resolve, a `ResultTracker` must be provided implicitly to make a `.Result`, but
+a `.Call` is independent of storage/tracking.
 
 
 ### Common Usage:
@@ -452,39 +455,30 @@ type signatures:
 Applications subclass `Function{n}WithProvenance` directly when writing new component objects.  Those
 component objects embed a function-specific `.Call` and `.Result`:
 
-Example:
-```
-object foo extends Function2WithProvenance[Int, Double, String] {
-    val currentVersion = Version("0.1")
-    def impl(i: Int, d: Double): String = ??? 
-}
-```
+In the example above, the `foo` function declaration creates two classes:
+- a `foo.Call` inner class that extends `Function2CallWithProvenance[Int, Double, String]`
+- a `foo.Result` inner class that extends `Function2CallResultWithProvenance[Int, Double, String]`
 
-Creates:
-- a `foo.Call` inner class extends `Function2CallWithProvenance[Int, Double, String]` for `foo`
-- a `foo.Result` inner class extends `Function2CallResultWithProvenance[Int, Double, String]` for `foo`
-- the two are mutually paired, such that the `foo.Call` makes a `foo.Result`, and the `foo.Result` comes from `foo.Call`
+The two are mutually paired.  A `foo.Call` knows it makes a `foo.Result`.  A `foo.Result` comes from a `foo.Call`.
 
-Such that the following work:
+The signatures are fully-qualified:
 ```scala
 val call: foo.Call = foo(123, 9.99)
 val result: foo.Result = call.resolve
 ```
 
-Note that calling resolve requires an implicit `ResultTracker` to be available.  Producing a `.Call` only requires
-that the implicit encoder/decoder for inputs and outputs be present. 
+### The Base Trait ValueWithProvenance & Call Parameters
 
-
-### The Base ValueWithProvenance & Call Parameters
-
-Both "calls" and "results" are subclasses of the sealed trait `ValueWithProvenance[_]`.  This base type is
+Both "calls" and "results" are subclasses of the sealed trait `ValueWithProvenance[O]`.  This base type is
 a used for the _inputs_ of new calls.  As such, a function that logically takes an `Int` input can actually 
 construct a with either a `FunctionCallResultWithProvenance[Int]` or a `FunctionCallWithProvenance[Int]`.
 
-A call with an input type `T` can also take an `T` directly.  When a raw value is used that is not a 
+A call with an input type `T` can also take a `T` directly.  When a raw value is used that is not a 
 `ValueWithProvenance[T]`, there is an implicit converter that creates an `UnknownProvenance[T]`.  This is a special 
 case of `Function0CallWithProvanence[T]` that take zero parameters and returns a constant value used to bootstrap
-data tracking.  `UnknownProvenance[T]` has a companion `UnknownProvenanceValue[T]`, which is a special case of 
+data tracking.  
+
+The `UnknownProvenance[T]` also has a companion `UnknownProvenanceValue[T]`, which is a special case of 
 `Function0CallResultWithProvenance[T]`.
 
 The common methods to go between calls and results are:
@@ -502,7 +496,7 @@ Terminology Note:
 - The iterative resolution process replaces calls in the tree with results.
 
  
-API Level 2
+API Part 2
 -----------
 
 ### VirtualValue[T]
@@ -517,7 +511,9 @@ This has 3 Options, at least one of which must not be None:
 When a result is saved, and its output serialized, the output can effectively be reduced to its database ID,
 shrinking the memory footprint.
 
- 
+By default the result `.outputAsVirtualValue` holds the actual value `T` and the `Digest` after being saved.  When
+re-inflated (described below) the actual data re-vivifies lazily. 
+
 ### Deflation & Inflation
 
 Since a `FunctionCallWithProvenance` can have nested inputs of arbitrary depth, the size of a call tree
@@ -533,13 +529,19 @@ same history in any tracking system that stores it.
 These are part of the `ValueWithProvenance[_]` sealed trait, so any call can contain calls/results that are deflated
 after some depth.
 
+The methods to take a call or result back and forth from its deflated and inflated states are:
+- `.deflate`: returns the *Deflated equivalent of an inflated object, or itself if already deflated
+- `.inflate`: returns the inflated equivalent of a deflated object, or itself if already inflated
+
 Extening history with a single call actually just appends the following to storage:
 1. one `FunctionCallResultWithProvenanceDeflated`, which links to the input IDs, the output ID, commit ID, build ID, and... 
 2. one `FunctionCallWithProvenanceDeflated`, which knows the function, version, output class name, and references...
 3. one `FunctionCallWithProvenance`, fully serialized, but with its input results fully deflated (see #1)
 
-A single digest ID can represent the entire history, and when histories intersect they data there is no duplication.
+Note that the latter two are explicitly serialized as bytes.  The first is assembled from them, and other data stored
+in the data fabric (described below).
 
+A single digest ID can represent the entire history, and when histories intersect they data there is no duplication.
 
 
 Data Fabric
@@ -566,9 +568,9 @@ At a lower-level, it is:
 data/5ba88e7374faa02b379d45f0c37ba3420d8742c6
 data/83e06c74c77009e510e73d8c53d64be2e1600a71
 data/cbf6eb1142cf44792e76a86e0d32fd89f94935a9
-data-provenance/5ba88e7374faa02b379d45f0c37ba3420d8742c6/from/-
-data-provenance/83e06c74c77009e510e73d8c53d64be2e1600a71/from/-
-data-provenance/cbf6eb1142cf44792e76a86e0d32fd89f94935a9/from/com.cibo.provenance.Add/1.0/with-inputs/805b0523984a5b175938cfbdcd04015d6ee41ec4/with-provenance/54b994cc3625bd54213e4dc9017b98c85cabedff/at/DUMMY-COMMIT/1955.11.12T22.04.00Z
+data-provenance/5ba88e7374faa02b379d45f0c37ba3420d8742c6/as/Int/from/-
+data-provenance/83e06c74c77009e510e73d8c53d64be2e1600a71/as/Int/from/-
+data-provenance/cbf6eb1142cf44792e76a86e0d32fd89f94935a9/as/Int/from/com.cibo.provenance.Add/1.0/with-inputs/805b0523984a5b175938cfbdcd04015d6ee41ec4/with-provenance/54b994cc3625bd54213e4dc9017b98c85cabedff/at/DUMMY-COMMIT/1955.11.12T22.04.00Z
 functions/com.cibo.provenance.Add/1.0/input-group-values/805b0523984a5b175938cfbdcd04015d6ee41ec4
 functions/com.cibo.provenance.Add/1.0/inputs-to-output/805b0523984a5b175938cfbdcd04015d6ee41ec4/cbf6eb1142cf44792e76a86e0d32fd89f94935a9/DUMMY-COMMIT/1955.11.12T22.04.00Z
 functions/com.cibo.provenance.Add/1.0/output-to-provenance/cbf6eb1142cf44792e76a86e0d32fd89f94935a9/805b0523984a5b175938cfbdcd04015d6ee41ec4/54b994cc3625bd54213e4dc9017b98c85cabedff
@@ -581,8 +583,8 @@ commits/DUMMY-COMMIT/builds/1955.11.12T22.04.00Z/9b95f61961d21c6e90064e7146b5d06
 
 Each time a FunctionCallResultWithProvenance saves, a set of paths go into the data store.  Each path is, also,
 and independent assertion of truth, and might overlap paths form previous saves.  As such, a "partial save" is not
-problematic.  A process that is killed mid-save does not leave data that requires cleanup, as long as individual,
-per-path saves are atomic.
+problematic.  A process that terminates mid-save does not leave data that requires cleanup, as long as individual,
+per-path, saves are atomic.
 
 The raw filesystem implementation makes writes atomic by writing to a path with an extension, and then doing a "rename"
 to the final path.  Nearly all modern filesystems support atomic rename, including NFS. 
@@ -649,7 +651,7 @@ small:
 functions/com.cibo.provenance.Add/1.0/inputs-to-output/805b0523984a5b175938cfbdcd04015d6ee41ec4/cbf6eb1142cf44792e76a86e0d32fd89f94935a9/DUMMY-COMMIT/1955.11.12T22.04.00Z
 ```
 
-The inputs-to-output path is a zero-size file is the central assertion specific inputs generate a given output.  It is
+The inputs-to-output path is a zero-size file is the central assertion that specific inputs yield a given output.  It is
 the last path saved, and is the path that allows subsequent functions to "shortcut" past an actual run.
 
 Note that the above captures the exact commit and build at which the implementation was called to produce the output.
@@ -660,15 +662,21 @@ See "Races, Conflicts and Collisions" below for details on situations which resu
 in this path structure, what they signify, and how they are handled.
 
 
-##### `provenance-values`:
+##### `provenance-values-typed` & `provenance-values-deflated`:
 ```
-functions/com.cibo.provenance.Add/1.0/provenance-values/690bd39b1116c99020ee054e2b7db238a76f0d19
+functions/com.cibo.provenance.Add/1.0/provenance-values-deflated/0f2bbc4919dd3e9272fb8f5b77058940d0b658eb
+functions/com.cibo.provenance.Add/1.0/provenance-values-typed/690bd39b1116c99020ee054e2b7db238a76f0d19
 ```
-The provenance-values path captures all "full" FunctionCallResultWithProvenance after converting to 
-FunctionCallResultWithProvenanceDeflated.  The deflated version of the call decomposes the full tree into separate
-objects so that long provenance does not result in larger and larger entries in the history chain.  The 
-deflated version also only requires that the output type be instantiatable in the application, so it can bridge
-across libraries.
+The provenance-values-typed path captures all "full" `FunctionCallResultWithProvenance` after deflating all of the
+inputs.
+
+The provenance-values-deflated then captures the `FunctionCallResultWithProvenanceDeflated` made from it.  This 
+keeps the ID of its full-formed predecessor.  
+
+The deflated version is then used when recording this path as an input to other calls.  This lets us decomposes the 
+full tree into separate objects so that long provenance does not result in larger and larger entries in the history 
+chain.  The deflated version also only requires that the output type be instantiatable in the application, so it can 
+bridge across libraries.
 
 This is a small object, as the output value and input values are all stored as SHA1s in the core `data/` tree.
 

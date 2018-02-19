@@ -1,12 +1,12 @@
 package com.cibo.provenance
 
+import com.amazonaws.services.s3.model.PutObjectResult
 import com.typesafe.scalalogging.LazyLogging
 import io.circe._
 import io.circe.generic.auto._
 import com.cibo.io.s3.{S3DB, SyncablePath}
 import com.cibo.provenance.exceptions.InconsistentVersionException
 
-import scala.util.Try
 
 /**
   * Created by ssmith on 5/16/17.
@@ -44,11 +44,9 @@ import scala.util.Try
   * serialization of the inputs, typically.
   *
   */
-class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentAppBuildInfo: BuildInfo) extends ResultTracker with LazyLogging {
+class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBuildInfo: BuildInfo) extends ResultTracker with LazyLogging {
 
   import scala.reflect.ClassTag
-
-  private val s3db = S3DB.fromSyncablePath(baseSyncablePath)
 
   // These flags allow the tracker to operate in a more conservative mode.
   // They are useful in development when things like serialization consistency are still uncertain.
@@ -58,8 +56,6 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentAp
   protected def checkForResultAfterSave(newResult: FunctionCallResultWithProvenance[_]): Boolean = false
 
   // public interface
-
-  val basePath = baseSyncablePath
 
   def saveResult[O](result: FunctionCallResultWithProvenance[O]): FunctionCallResultWithProvenanceDeflated[O] = {
     saveResultImpl(result)
@@ -259,7 +255,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentAp
     // Perform the save, possibly with additional sanity checks.
     if (checkForConflictedOutputBeforeSave(result)) {
       // These additional sanity checks are not run by default.  They can be activated for debugging.
-      val previousSavePaths = s3db.getSuffixesForPrefix(f"$prefix/inputs-to-output/$inputGroupKey").toList
+      val previousSavePaths = getListingRecursive(f"$prefix/inputs-to-output/$inputGroupKey")
       if (previousSavePaths.isEmpty) {
         logger.debug("New data.")
         saveObjectToPath(savePath, "")
@@ -432,7 +428,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentAp
     if (!hasValue(digest)) {
       val path = f"data/${digest.id}"
         logger.info(f"Saving raw $obj to $path")
-      s3db.putObject(path, bytes)
+      saveObjectWait(path, bytes)
     }
     digest
   }
@@ -443,8 +439,8 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentAp
   }
 
   def hasValue(digest: Digest): Boolean = {
-    val path: SyncablePath = baseSyncablePath.extendPath(f"data/${digest.id}")
-    path.exists
+    pathExists(f"data/${digest.id}")
+
   }
 
   def hasResultForCall[O](call: FunctionCallWithProvenance[O]): Boolean =
@@ -519,7 +515,7 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentAp
 
   private def loadSerializedDataForPathOption(path: String) = {
     try {
-      val bytes = s3db.getBytesForPrefix(path)
+      val bytes = loadObjectWait(path)
       Some(bytes)
     } catch {
       case e: Exception =>
@@ -549,10 +545,10 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentAp
 
   def loadBuildInfoOption(commitId: String, buildId: String): Option[BuildInfo] = {
     val basePrefix = f"commits/$commitId/builds/$buildId"
-    val suffixes = s3db.getSuffixesForPrefix(basePrefix).toList
+    val suffixes = getListingRecursive(basePrefix)
     suffixes match {
       case suffix :: Nil =>
-        val bytes = s3db.getBytesForPrefix(f"$basePrefix/$suffix")
+        val bytes = loadObjectWait(f"$basePrefix/$suffix")
         val build = Util.deserialize[BuildInfo](bytes)
         Some(build)
       case Nil =>
@@ -585,22 +581,22 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentAp
   }
 
   private def saveSerializedDataToPath(path: String, serializedData: Array[Byte]): Unit =
-    s3db.putObject(f"$path", serializedData)
+    saveObjectWait(f"$path", serializedData)
 
   private def saveObjectToSubPathByDigest[T : ClassTag : Encoder : Decoder](path: String, obj: T): Digest = {
     val bytes = Util.serialize(obj)
     val digest = Util.digestBytes(bytes)
-    s3db.putObject(f"$path/${digest.id}", bytes)
+    saveObjectWait(f"$path/${digest.id}", bytes)
     digest
   }
 
   private def loadObjectFromPath[T : ClassTag : Encoder : Decoder](path: String): T = {
-    val bytes = s3db.getBytesForPrefix(path)
+    val bytes = loadObjectWait(path)
     Util.deserialize[T](bytes)
   }
 
   private def loadOutputCommitAndBuildIdForInputGroupIdOption[O : ClassTag : Encoder : Decoder](fname: String, fversion: Version, inputGroupId: Digest): Option[(Digest,String, String)] = {
-    s3db.getSuffixesForPrefix(f"functions/$fname/${fversion.id}/inputs-to-output/${inputGroupId.id}").toList match {
+    getListingRecursive(f"functions/$fname/${fversion.id}/inputs-to-output/${inputGroupId.id}") match {
       case Nil =>
         None
       case head :: Nil =>
@@ -683,6 +679,47 @@ class ResultTrackerSimple(baseSyncablePath: SyncablePath)(implicit val currentAp
      * Those functions outputs are also flagged as conflicted.
      * The process repeats recursively.
      */
+  }
+
+  /*
+   * Synchronous I/O Interface.
+   *
+   * An asynchronous interface is in development, but ideally the "chunk size" for units of work like this
+   * are large enough that the asynchronous logic is happening _within_ the functions() instead of _across_ the them.
+   *
+   * Each unit of work should be something of a size that is reasonable to queue, check status, store,
+   * check-for before producing, etc.  Granular chunks will have too much overhead to be used at this layer.
+   *
+   */
+
+  import scala.concurrent.duration._
+  import scala.concurrent.Await
+
+  protected val s3db = S3DB.fromSyncablePath(basePath)
+
+  protected val saveTimeout = 5.minutes
+
+  protected def saveObjectWait(path: String, bytes: Array[Byte]) = {
+    s3db.putObject(path, bytes) match {
+      case Some(f) =>
+        val result: PutObjectResult = Await.result(f, saveTimeout)
+        logger.debug(result.toString)
+      case None =>
+        // No future...
+    }
+  }
+
+  protected def loadObjectWait(path: String): Array[Byte] = {
+    // This uses the synchronous interface.
+    s3db.getBytesForPrefix(path)
+  }
+
+  protected def getListingRecursive(path: String): List[String] = {
+    s3db.getSuffixesForPrefix(path).toList
+  }
+
+  protected def pathExists(path: String): Boolean = {
+    basePath.extendPath(path).exists
   }
 }
 
