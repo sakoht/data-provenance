@@ -1,32 +1,26 @@
 Data Provenance
 ===============
 
-Build and Deploy
-----------------
+This document describes the data-provenance library from the perspecitve of an application that uses it.
 
-This project uses sbt-boilerplate.  If you are running IntelliJ and not having IntelliJ use sbt
-to compile, it will find all of the template-based classes are missing.
-1. Do an initial compile from the shell: `sbt +compile`
-2. Further compiles can be done in IntelliJ _if_ they do not change the templates.
-3. When a template changes, do a fresh compile from the shell, as above.
+For development, see README-DEVELOPMENT.md.
 
-This project is released as a library.
-- To test locally, use `sbt +publishLocal`.
-- To do a real release, use `sbt release`.
 
 Adding to Applications
 ----------------------
-Use: `"com.cibo" %% "provenance" % "0.2"`
+Applications should add the following to their `libraryDependencies`: `"com.cibo" %% "provenance" % "0.2"`
 
 Applications that use this library must also use `SbtBuildInfo` to reveal build information to
-the provenance lib.  Two example files are in this repository:
+the provenance lib.  At compile time, it creates a static object YOURPACKAGE.BuildInfo, that knows
+the exact current git commit, and generates a unique BuildID from a timestamp.
+
+Two example files are in this repository:
 - `buildinfo.sbt-example-simple`
 - `buildinfo.sbt-example-multimodule`
 
 
 Background
 ----------
-
 
 A normal scala function might be declared like this:  
 ```scala
@@ -37,7 +31,7 @@ The above takes an `Int` and a `Double`, and returns a `String` by just concaten
 
 A longer form of the same thing:
 ```scala
-object foo extends Function2[String, Int, Double] {
+object foo extends Function2[Int, Double, String] {
     def apply(a: Int, b: Double): String = a.toString + "," + b.toString
 }
 ```
@@ -48,8 +42,10 @@ val out: String = foo(123, 9.99)
 out == "123,9.99"
 ```
 
-
-A `Function2` takes two inputs, and has three parameterized types: the output type followed by each of the input types.  Scala implements `Function0` - `Function22`.  This pattern is similar for many builtin classes (`Tuple1`-`Tuple22`, etc.).
+The above Scala `Function2` takes two inputs, and has three parameterized types: the output type followed by each of 
+the input types. Scala implements `Function0` - `Function22`.  This pattern of having `SomeModadN[T]` is similar for 
+many builtin classes in the scala core, and in many libraries.This pattern is similar for many builtin classes.
+See classes like `Tuple1`-`Tuple22` for common examples.
 
 
 Adding Provenance
@@ -63,40 +59,55 @@ To add data-provenance we modify the long version of a function declaration:
 ```scala
 import com.cibo.provenance._
 
-object foo extends Function2WithProvenance[String, Int, Double] {
+object foo extends Function2WithProvenance[Int, Double, String] {
     val currentVersion = Version("0.1")
     def impl(a: Int, b: Double): String = a.toString + "," + b.toString
 }
 ```
 
-The implicit contract is:
-- the function produces deterministic results for the same input at any given declared version
+The implicit contract is with the above object is:
+- the `impl(..)` produces deterministic results for the same inputs at any given declared version
 - the the version number will be updated when a software change intentionally change results
 - the system will track enough data that, when the above fails, the system self-corrects
+
 
 Using a FunctionWithProvenance
 ------------------------------
 
-Applying the function doesn't actually run the implementation.  It returns a handle, similar to a Future, except the
-wrapped value might be done in the past, or in another process on another machine, or never executed at all:
+Applying the function doesn't actually _run_ the implementation.  It returns a handle, similar to a `Future`, except the
+wrapped value might have been executed in the past, or in another might be in-process on another machine, or might never
+executed at all:
+
+The type returned by `()` (the `.apply` method in `FunctionNWithProvenance`) is an inner class of type `.Call`:
 ```scala
+import io.circe.generic.auto._
+
 val call1: foo.Call = foo(123, 9.99)
 ```
 
-After that, you could "resolve" the call, which will run the implementation _if_ the answer is not already stored:
+The call might later be executed, or passed to another process, queued, or used as a parameter for a database query.
+
+The standard way to convert a call into a result is to call `.resolve`, which will look for an existing result,
+and if it isn't found, will run the implementation, make one, and save it.
 ```scala
 val result1: foo.Result = call1.resolve     // see also resolveFuture to get back `Future[foo.Result]`
 ```
 
-The result contains both the `output` and the `provenance` of the call.  That "provenance" is actually just a reference back to the call that produced it.  While the call contains the logical "version", the result contains a concrete commmit and build that was actually used to run the `impl()`.
+The result contains both the `output` and the `call` that created it, and also commit/build information for the specific
+software that actually ran the `impl()`:
 ```scala
-result1.output == "123,9.99"   // the actual output of impl()
-result1.provenance == call1    // the call that made it
+result1.output == "123,9.99"                // the actual output of impl()
+result1.call == call1.deflate               // the logical call that made it (in a "deflated" form, see Inflation and Deflation below)
+result1.buildInfo == YOURPACKAGE.BuildInfo  // the specific commitId and buildId of the software
+result1.buildInfo.commitId                  // the git commit
+result1.buildInfo.buildId                   // the unique buildID of the software (a high-precision timestamp).
 ```
 
 Nesting
 -------
-A call can take raw input values, but ideally it takes the result of _other_ call that produced the input, so the provenance chain can be extended.  It can also simply take a call, and the system will convert that into a result by running it or looking up an existing answer.
+A call can take raw input values, but ideally it takes the result of _other_ call that produced the input, 
+so the provenance chain can be extended.  It can also simply take a call, and the system 
+will convert that into a result by running it, or by looking up an existing answer.
 
 An example of nesting using a toy function:
 ```scala
@@ -108,6 +119,8 @@ object addMe extends Function2WithProvenance[Int, Int, Int] {
 
 Then we could:
 ```scala
+import io.circe.generic.auto._
+
 val call1 = addMe(2, 3) 
 val result1 = call1.resolve)
 
@@ -117,25 +130,41 @@ val call3 = addMe(addMe(addMe(2, 2), addMe(10, addMe(call1, result2)), addMe(5, 
 val result3: addMe.Result = call3.resolve
 ```
 
-Note that, above, we used both raw values and also `result1` and `call2` as inputs.  The raw values are implicitly converted into `UnknownProvenance[T]`, a placeholder for values with no history.  All such values fall under a base 
+Note that, above, we used both raw values, and also one result `result1` and `call2` as inputs.  The raw values are
+implicitly  converted into `UnknownProvenance[T]`, a placeholder for values with no history.  All such values fall under 
+a the base type `ValueWithProvenance[T]`.  See the API Overview below for details.
 
 
 Tracking Results
 ----------------
 
-The resolver consults an implicit `ResultTracker`, which is the is an interface to storage, and selectively calling implementations in a coordinated way.  The default implementation is "broker-free", in that a central server or central locking is not required for consistency, idempotency, or concurrency.  It can handles concurrent attempts to do similar work "optimisitically": in a race condition identical work may be done, but no data is corrupted or duplicated.
+The `.resolve` method above, as well as and many other methods on the API, only apply in the context of an
+implicit `ResultTracker`.  A `ResultTracker` is both a database for inputs, outputs, parameters, and the provenance
+path that connects them.  It is also the wrapper for transitioning from call -> result (running things).
 
-```scala
-implicit val rt = ResultTrackerSimple("s3://mybucket/mypath")   // can also use a local filesystem path 
-rt.hasResultForCall(call1) == true                              // perhaps
-val result1b = call1.resolve                                    // just loads the answer made previously
-```
+The default storage implementation is "broker-free", in that a central server or central locking is not required for
+consistency, idempotency, or concurrency.  It can handles concurrent attempts to do similar work "optimistically". 
+In a race condition identical work may be done, but no data is corrupted or duplicated.
 
-There is a no-op `ResultTrackerNone` that records nothing, re-runs everything.  It can be combined with the `DummyBuildInfo` to do ad-hoc experiments with no setup.
 ```scala
 import com.cibo.provenance._
-implicit val bi = DummyBuildInfo            // a dummy stub commit and build
-implicit val rt = ResultTrackerNone()       // no tracking: re-run everything and save nothing
+import io.circe.generic.auto._
+
+implicit val bi: BuildInfo = YOURPACKAGE.BuildInfo                            // made by your app's sbt-buildinfo
+implicit val rt: ResultTracker = ResultTrackerSimple("s3://mybucket/mypath") 
+
+rt.hasResultForCall(call1) == true                                            // since the work was done above
+
+val result1b = call1.resolve                                                  // just loads the answer made previously
+result1b == result1                                                           // results match
+```
+
+There is a no-op `ResultTrackerNone` that records nothing, re-runs everything as needed.  
+It can be combined with the `DummyBuildInfo` to do ad-hoc experiments, and for testing:
+```scala
+import com.cibo.provenance._
+implicit val bi = DummyBuildInfo
+implicit val rt = ResultTrackerNone()
 ```
 
 DRY
@@ -149,38 +178,44 @@ A subsequent call to call2.resolve will look-up the answer rather than calculate
 A more detailed example of "shortcutting" past calculations (or "memoizing"):
 
 ```scala
+import com.cibo.provenance._
+
 object addInts extends Function2WithProvenance[Int, Int, Int] {
     val currentVersion = Version("0.1")
     def impl(a: Int, b: Int) = a + b
 }
 
-implicit db = ResultTrackerSimple("/my/data")
+implicit val bi = com.cibo.provenance.DummyBuildInfo
+implicit val db = ResultTrackerSimple("/my/data")
+
+import io.circe.generic.auto._
 
 val s1 = addInts(10, addInts(6, 6))
-val r1 = s1.resolve()
-// ^^ calls 6+6 and 10+12
+val r1 = s1.resolve
+// ^^ calls 6+6 and then 10+12
 
 val s2 = addInts(10, addInts(5, 7))
-val r2 = s2.resolve()
-// ^^ calls 5+7, but skips calling 10+12
+val r2 = s2.resolve
+// ^^ calls 5+7, but skips calling 10+12 because that has been done 
 
 val s3 = addInts(5, addInts(5, addInts(3, 4))
-val r3 = s3.resolve()
-// ^^ calls 3+4, but skips 5+7 and 10+12 
+val r3 = s3.resolve
+// ^^ calls 3+4, but skips 5+7 and 10+12, because those both have been done
 ```
 
 Versions and BuildInfo
 ----------------------
+
 The version in the function is an "asserted version".  A declaration by the programmer that outputs will be consistent 
 for the same inputs.
 
-The call specifies the version, but with a default argument that sets it to the currentVersion.  You might create a call
+The call specifies the version, with a default argument that sets it to the currentVersion.  One might create a call
 with an older version for purposes of explicitly querying for old data, or inspect the version of 
 a call handed to you when introspecting the provenance.
 
-When software is behaving as intended, the version is sufficient to describe a single iteration of function logic.  There
-will be multiple repository commits, and multiple source code builds, that have the same version number for a component, 
-because other components will also be iterating.
+When software is behaving as intended, the version is sufficient to describe a single iteration of function logic.  
+There will be multiple repository commits, and multiple source code builds, that have the same version number for a 
+component, because other components will also be iterating.
 
 In theory, the versions will be updated appropriately.  In practice, errors will occur.
 
@@ -195,15 +230,47 @@ project that uses the data-provenance library should use the `buildinfo.sbt` fro
 The system can detects the three above failure modes retroactively, as the developer "posts evidence" to a future test suite,
 which casts light on the errors made at previous commits/builds.  (TODO: go into detail)
 
+Shorter Example
+---------------
+```scala
+import com.cibo.provenance._
+
+object myMkString extends Function2WithProvenance[Int, Double, String] {
+  val currentVersion = Version("0.1")
+  def impl(i: Int, d: Double): String = i.toString + ":" + d.toString
+}
+
+object myStrLen extends Function1WithProvenance[String, Int] {
+  val currentVersion = Version("0.1")
+  def impl(s: String): Int = s.length
+}
+
+object myApp extends App {
+  implicit val bi: BuildInfo = com.cibo.provenance.DummyBuildInfo // use com.mycompany.myapp.BuildInfo
+  implicit val rt: ResultTracker = ResultTrackerSimple("s3://mybucket/myroot")
+  
+  import io.circe.generic.auto._
+  
+  val c1: myMkString.Call = myMkString(3, 1.23)
+  val r1: myMkString.Result = c1.resolve
+  val s1: String = r1.output              // "3:1.23"
+  
+  val c2: myStrLen.Call = myStrLen(r1)
+  val r2: myStrLen.Result = c2.resolve
+  val s2: Int = r2.output                 // 5
+  
+  val c3: myMkString.Call = myMkString(r2, 7.89)
+  val r3: myMkString.Result = c3.resolve
+  val s3: String = r3.output              // "5:7.89"
+  
+  assert(r3.call.unresolve == myMkString(myStrLen(myMkString(3, 1.23)), 7.89))
+```
 
 Longer Example
 --------------
-
 ```scala
 
 import com.cibo.provenance._
-import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerSimple}
-
 
 object addMe extends Function2WithProvenance[Int, Int, Int] {
   val currentVersion = Version("0.1")
@@ -212,8 +279,10 @@ object addMe extends Function2WithProvenance[Int, Int, Int] {
 
 object MyApp extends App {
 
- implicit val bi: BuildInfo = DummyBuildInfo
+  implicit val bi: BuildInfo = DummyBuildInfo
   implicit val rt: ResultTracker = ResultTrackerSimple("/tmp/mydata") // or s3://...
+
+  import io.circe.generic.auto._
 
   // Basic use: separate objects to represent the logical call and the result and the actual output.
   val call1 = addMe(2, 3)             // no work is done
@@ -221,7 +290,7 @@ object MyApp extends App {
 
   val result1 = call1.resolve         // generate a result, if it does not already exist
   println(result1.output)             // get the output: 5
-  println(result1.provenance)         // get the provenance: call1
+  println(result1.call)         // get the provenance: call1
   rt.hasResultForCall(call1)          // true (now saved)
 
 
@@ -232,7 +301,7 @@ object MyApp extends App {
   val call2 = addMe(2, addMe(1, 2))
   val result2 = call2.resolve                       // adds 1+2, but is lazy about adding 2+3 since it already did that
   result2.output == result1.output                  // same output
-  result2.provenance != result1.provenance          // different provenance
+  result2.call != result1.call          // different provenance
 
   // Compose arbitrarily:
   val bigPlan = addMe(addMe(6, addMe(result2, call1)), addMe(result1, 10))
@@ -243,7 +312,7 @@ object MyApp extends App {
   val call5: addMe.Call = addMe(call3, call4)       // (? <- addMe(addMe(raw(1), raw(1)), addMe(raw(2), raw(1))))
   val result5 = call5.resolve                       // runs 1+1, then 2+1, but shortcuts past running 2+3 because we r1 was saved above.
   assert(result5.output == result1.output)          // same answer
-  assert(result5.provenance != result1.provenance)  // different provenance
+  assert(result5.call != result1.call)  // different provenance
 
   // Builtin Functions for Map, Apply, etc.
 
@@ -278,7 +347,7 @@ object MyApp extends App {
 }
 
 
-object trioToList extends Function3WithProvenance[List[Int], Int, Int, Int] {
+object trioToList extends Function3WithProvenance[Int, Int, Int, List[Int]] {
   val currentVersion = Version("0.1")
   def impl(a: Int, b: Int, c: Int): List[Int] = List(a, b, c)
 }
@@ -288,13 +357,188 @@ object incrementMe extends Function1WithProvenance[Int, Int] {
   def impl(x: Int): Int = x + 1
 }
 
-object sumList extends Function1WithProvenance[Int, List[Int]] {
+object sumList extends Function1WithProvenance[List[Int], Int] {
   val currentVersion = Version("0.1")
   def impl(lst: List[Int]): Int = lst.sum
 }
-
 ```
 
+API Level 1
+-----------
+
+### Class Hierarchy Example:
+
+Given:
+```scala
+import com.cibo.provenance._
+
+object foo extends Function2WithProvenance[Int, Double, String] {
+    val currentVersion = Version("0.1")
+    def impl(i: Int, d: Double): String = ???  
+}
+```
+
+The function singleton `foo` has the following class hierarchy:
+```
+foo
+  <: Function2WithProvenance[Int, Double, String]
+    <: FunctionWithProvenance[String]
+```
+
+When `foo(i, d)` is invoked (which is the same as `foo.apply(i, d)`), a `foo.Call` (but no "work' is done!):
+```
+foo.Call
+  <: Function2CallWithProvenance[Int, Double, String]
+    <: FunctionCallWithProvenance[String]
+      <: ValueWithProvenance[String]
+```
+
+When `.resolve` is invoked on the `foo.Call`, a `foo.Result` is returned after running the impl():
+```
+foo.Result
+  <: Function2CallResultWithProvenance[Int, Double, String]
+    <: FunctionCallResultWithProvenance[String]
+      <: ValueWithProvenance[String]
+```
+
+Note that, to resolve, a `ResultTracker` must be provided implicitly.  (The `ResultTrackerNone` can be used to 
+intentionally have no-op tracking.)
+
+
+### Common Usage:
+
+There are six classes that applications must interact-with directly:
+- `Function{n}WithProvenance`: the base classes for components in the app that get tracking
+- `.Call` and `.Result`: inner-classes for each function declared.
+- `Version`: a simple wrapper around version numbers/names that are declared in each component
+- `ResultTracker`: the base class for storage
+- `BuildInfo`: the base class for the singleton that holds build information for the app
+
+A minimal application will:
+- define a bunch of `object myFunction extends Function{n}WithProvenance[...]` to do work with tracking
+- give each component a `val currentVersion = Version("0.1")`
+- define a `YOURPACKAGE.BuildInfo` in buildinfo.sbt
+- have a `implicit val rt = ResultTrackerSimple("s3://mybucket/myroot")(YOURPACKAGE.BuildInfo)`
+    above any code that actually resolves calls, checks for results, or otherwise interacts with storage
+
+Note: all inputs and outputs need to have a circe encoder/decoder available when used.
+The easiest solution is to have `import io.circe.generic.auto._` above code that makes calls or resolves them.
+This is not needed if every input and output declares an implicit encoder/decoder in its companion object.
+
+### The Core Function*WithProvenance Classes
+
+The three core classes in the API are:
+- `FunctionWithProvenance[O]`           A singleton object representing a block of logic and a current version ID.
+- `FunctionCallWithProvenance[O]`       A specific set of params for the function, plus a version ID for the function.
+- `FunctionCallResultWithProvenance[O]` A the output value of a call, plus the commit and build IDs responsible.
+
+Note that they are all typed for the output type of the function in question, represented as `O` at this level.
+
+Together, these deconstruct what happens normally with a function call, but which goes untracked in the common case:
+- The "call" captures all information logically required to generate the result (parameters + function version).
+- The "result" references the call, and captures the actual output, and specifics of the git commit and software build.
+
+### Arity-Specific Subclasses
+
+The core three classes each get expanded into 22 subclasses, each with specific arity from 0 to 21, with full
+type signatures:
+- `Function{0..21}WithProvenance[I1, I2, ..., O]`
+- `Function{0..21}CallWithProvenance[I1, I2, ..., O]`
+- `Function{0..21}CallWithProvenance[I1, I2, ..., O]`
+
+### Final Specific Classes
+
+Applications subclass `Function{n}WithProvenance` directly when writing new component objects.  Those
+component objects embed a function-specific `.Call` and `.Result`:
+
+Example:
+```
+object foo extends Function2WithProvenance[Int, Double, String] {
+    val currentVersion = Version("0.1")
+    def impl(i: Int, d: Double): String = ??? 
+}
+```
+
+Creates:
+- a `foo.Call` inner class extends `Function2CallWithProvenance[Int, Double, String]` for `foo`
+- a `foo.Result` inner class extends `Function2CallResultWithProvenance[Int, Double, String]` for `foo`
+- the two are mutually paired, such that the `foo.Call` makes a `foo.Result`, and the `foo.Result` comes from `foo.Call`
+
+Such that the following work:
+```scala
+val call: foo.Call = foo(123, 9.99)
+val result: foo.Result = call.resolve
+```
+
+Note that calling resolve requires an implicit `ResultTracker` to be available.  Producing a `.Call` only requires
+that the implicit encoder/decoder for inputs and outputs be present. 
+
+
+### The Base ValueWithProvenance & Call Parameters
+
+Both "calls" and "results" are subclasses of the sealed trait `ValueWithProvenance[_]`.  This base type is
+a used for the _inputs_ of new calls.  As such, a function that logically takes an `Int` input can actually 
+construct a with either a `FunctionCallResultWithProvenance[Int]` or a `FunctionCallWithProvenance[Int]`.
+
+A call with an input type `T` can also take an `T` directly.  When a raw value is used that is not a 
+`ValueWithProvenance[T]`, there is an implicit converter that creates an `UnknownProvenance[T]`.  This is a special 
+case of `Function0CallWithProvanence[T]` that take zero parameters and returns a constant value used to bootstrap
+data tracking.  `UnknownProvenance[T]` has a companion `UnknownProvenanceValue[T]`, which is a special case of 
+`Function0CallResultWithProvenance[T]`.
+
+The common methods to go between calls and results are:
+- `.resolve`:      Turns a call into a result, possibly by running the logic.  (On a result, just returns itself.)
+- `.unresolve`:    For a result, returns its call.  (On a call, just returns itself.)
+
+Since the inputs to a call are all `ValueWithProvenance[I{n}]`, it is possible for a "call" to represent the complete
+workflow that led/leads to a particular input value, and to represent it at any state of resolution.  
+
+Terminology Note:
+- A `FunctionCallWithProvenance` is said to have provenance _before_ it executes
+  because it knows where its _inputs_ came-from/will-come-from.
+- A `FunctionCallResultWithProvenance` has provenance because it knows knows both originating call,
+  plus the `BuildInfo` that produced the output, and the output value itself.
+- The iterative resolution process replaces calls in the tree with results.
+
+ 
+API Level 2
+-----------
+
+### VirtualValue[T]
+
+A `FunctionCallResultWithProvenance` references its output with a `VirtualValue[O]`.
+
+This has 3 Options, at least one of which must not be None:
+- the actual value of type T
+- the serialized bytes of type T (which can be decoded into a T if the class is present)
+- the digest of the serialized bytes of T (which can be used to retrieve the bytes from a result tracker)
+
+When a result is saved, and its output serialized, the output can effectively be reduced to its database ID,
+shrinking the memory footprint.
+
+ 
+### Deflation & Inflation
+
+Since a `FunctionCallWithProvenance` can have nested inputs of arbitrary depth, the size of a call tree
+can possibly get extremely long, with each new call adding a layer.  Saving each naively would mean that every object
+saves out an ever-growing history object, most of which is copied in ints predecessor.
+
+To handle this, when a result it saved, it is converted into a `FunctionCallResultWithProvenanceDeflated`, as are its 
+inputs, recursively.  These are, in turn, composed of a `FunctionCallWithProvenanceDeflated`, an output value _digest_, 
+and a light version of the BuildInfo that contains only the commit and build ID strings.  These reference each other
+by digest ID rather than by software reference, but since serialization is consistent, the same ID will have the 
+same history in any tracking system that stores it.
+
+These are part of the `ValueWithProvenance[_]` sealed trait, so any call can contain calls/results that are deflated
+after some depth.
+
+Extening history with a single call actually just appends the following to storage:
+1. one `FunctionCallResultWithProvenanceDeflated`, which links to the input IDs, the output ID, commit ID, build ID, and... 
+2. one `FunctionCallWithProvenanceDeflated`, which knows the function, version, output class name, and references...
+3. one `FunctionCallWithProvenance`, fully serialized, but with its input results fully deflated (see #1)
+
+A single digest ID can represent the entire history, and when histories intersect they data there is no duplication.
+ 
 Data Fabric
 -----------
 The storage system uses serialization and digests to capture the inputs and outputs of each call,
@@ -357,9 +601,9 @@ data/cbf6eb1142cf44792e76a86e0d32fd89f94935a9
 
 #### `data-provenance/`
 ```
-data-provenance/cbf6eb1142cf44792e76a86e0d32fd89f94935a9/from/com.cibo.provenance.Add/1.0/with-inputs/805b0523984a5b175938cfbdcd04015d6ee41ec4/with-provenance/54b994cc3625bd54213e4dc9017b98c85cabedff/at/DUMMY-COMMIT/1955.11.12T22.04.00Z
-data-provenance/5ba88e7374faa02b379d45f0c37ba3420d8742c6/from/-
-data-provenance/83e06c74c77009e510e73d8c53d64be2e1600a71/from/-
+data-provenance/cbf6eb1142cf44792e76a86e0d32fd89f94935a9/as/Int/from/com.cibo.provenance.Add/1.0/with-inputs/805b0523984a5b175938cfbdcd04015d6ee41ec4/with-provenance/54b994cc3625bd54213e4dc9017b98c85cabedff/at/DUMMY-COMMIT/1955.11.12T22.04.00Z
+data-provenance/5ba88e7374faa02b379d45f0c37ba3420d8742c6/as/Int/from/-
+data-provenance/83e06c74c77009e510e73d8c53d64be2e1600a71/as/Int/from/-
 ```
 
 This is the master index into the data.  It is a primary link between any output and all of the sources that produce it.
