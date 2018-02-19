@@ -109,8 +109,8 @@ class InflateDeflateSpec extends FunSpec with Matchers {
 
       // MapWithProvenance is nasty b/c the function is itself an input.
       // It uses binary encoding (wrapped in Circe JSON).
-      val inflated1: MapWithProvenance[Int, List, Int]#Call = u.map(incrementMe)
-      val inflated1b: MapWithProvenance[Int, List, Int]#Call = u.map(incrementMe)
+      val inflated1: MapWithProvenance[Int, List, Int]#Call = u.map(incrementInt)
+      val inflated1b: MapWithProvenance[Int, List, Int]#Call = u.map(incrementInt)
       //inflated1 shouldBe inflated1b
 
       val inflated1result = inflated1.resolve
@@ -134,7 +134,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
 
       val inflated1: fmaker.Call = fmaker()
       val inflated1result = inflated1.resolve
-      inflated1result.output shouldBe incrementMe
+      inflated1result.output shouldBe incrementInt
 
       val deflated1 = inflated1.deflate
       val inflated2 = deflated1.inflate
@@ -160,12 +160,12 @@ object mult2 extends Function2WithProvenance[Int, Int, Int] {
   def impl(a: Int, b: Int): Int = a * b
 }
 
-object incrementMe extends Function1WithProvenance[Int, Int] {
+object incrementInt extends Function1WithProvenance[Int, Int] {
   val currentVersion: Version = Version("1.0")
   def impl(a: Int): Int = a + 1
 }
 
 object fmaker extends Function0WithProvenance[Function1WithProvenance[Int, Int]] {
   val currentVersion: Version = Version("1.0")
-  def impl(): Function1WithProvenance[Int, Int] = incrementMe
+  def impl(): Function1WithProvenance[Int, Int] = incrementInt
 }
