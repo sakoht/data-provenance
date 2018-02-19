@@ -37,7 +37,7 @@ trait PetUnsealedTrait { def name: String }
 case class Kitty(name: String) extends PetUnsealedTrait
 case class Doggie(name: String) extends PetUnsealedTrait
 
-object sayYourName extends Function1WithProvenance[String, PetUnsealedTrait] {
+object sayYourName extends Function1WithProvenance[PetUnsealedTrait, String] {
   val currentVersion = Version("0.1")
   def impl(animal: PetUnsealedTrait): String = animal.name
 }

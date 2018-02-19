@@ -16,7 +16,7 @@ class DevelopmentVersionSpec extends FunSpec with Matchers {
 
   describe("Functions with a version with the 'dev' flag.") {
 
-    object myFunc extends Function1WithProvenance[String, Int] {
+    object myFunc extends Function1WithProvenance[Int, String] {
 
       val currentVersion: Version = Version("1.0", dev = true) // <---
 
@@ -38,5 +38,4 @@ class DevelopmentVersionSpec extends FunSpec with Matchers {
       result2.call.getVersionValue.id.endsWith(DevVersion.suffix)
     }
   }
-
 }

@@ -46,7 +46,7 @@ sealed trait PetSealedTrait { def name: String }
 case class Cat(name: String) extends PetSealedTrait
 case class Dog(name: String) extends PetSealedTrait
 
-object pickAPet extends Function1WithProvenance[PetSealedTrait, String] {
+object pickAPet extends Function1WithProvenance[String, PetSealedTrait] {
   val currentVersion = Version("0.1")
   def impl(name: String): PetSealedTrait = {
     if (name.toLowerCase.toCharArray.head.toInt <= 'm'.toInt) {

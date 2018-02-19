@@ -16,7 +16,7 @@ class MultipleVersionsAtATimeSpec extends FunSpec with Matchers {
 
   describe("Functions with provenance support one 'currentVersion' by default") {
 
-    object myFuncWithOneVersion extends Function2WithProvenance[String, Double, Int] {
+    object myFuncWithOneVersion extends Function2WithProvenance[Double, Int, String] {
       val currentVersion: Version = Version("1.0")
       def impl(d: Double, n: Int): String = d.toString + "," + n.toString
     }
@@ -40,7 +40,7 @@ class MultipleVersionsAtATimeSpec extends FunSpec with Matchers {
 
   describe("Functions with provenance should support loading older versions that do not run any longer.") {
 
-    object myFuncWithOldVersions extends Function2WithProvenance[String, Double, Int] {
+    object myFuncWithOldVersions extends Function2WithProvenance[Double, Int, String] {
       val currentVersion: Version = Version("1.0")
       override lazy val loadableVersions: Seq[Version] = Seq("1.0", "0.9", "0.8").map(v => Version(v))
 
@@ -75,7 +75,7 @@ class MultipleVersionsAtATimeSpec extends FunSpec with Matchers {
 
   describe("Functions with provenance should let the developer explicitly support running alternate in the same code base.") {
 
-    object myFuncWithOldVersions extends Function2WithProvenance[String, Double, Int] {
+    object myFuncWithOldVersions extends Function2WithProvenance[Double, Int, String] {
       val currentVersion: Version = Version("1.3")
       override lazy val loadableVersions: Seq[Version] = Seq("1.0", "1.1", "1.2", "1.3").map(n => Version(n))
       override lazy val runnableVersions: Seq[Version] = Seq("1.1", "1.2", "1.3").map(n => Version(n))

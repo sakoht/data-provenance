@@ -19,7 +19,7 @@ object MultiplyInts extends Function2WithProvenance[Int, Int, Int] {
   def impl(a: Int, b: Int): Int = a * b
 }
 
-object myFunc extends Function2WithProvenance[String, Double, Int] {
+object myFunc extends Function2WithProvenance[Double, Int, String] {
   val currentVersion: Version = Version("3.5")
   def impl(d: Double, n: Int): String = (1 to n).map(_ => d.toString).mkString(",")
 }
