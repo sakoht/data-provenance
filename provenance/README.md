@@ -79,13 +79,16 @@ Using a FunctionWithProvenance
 
 Applying the function doesn't actually _run_ the implementation.  It returns a handle, similar to a `Future`, except the
 wrapped value might have been executed in the past, or in another might be in-process on another machine, or might never
-executed at all:
+be executed at all:
 
-The type returned by `()` (the `.apply` method in `FunctionNWithProvenance`) is an inner class of type `.Call`:
+The type returned is an inner class of type `.Call`, specifically build to capture the parameters an a version:
 ```scala
 import io.circe.generic.auto._
 
 val call1: foo.Call = foo(123, 9.99)
+call1.i1 == UnknownProvenance(123)
+call1.i2 == UnknownProvenance(9.99)
+call1.v == UnknownProvenance(Version("0.1"))
 ```
 
 The call might later be executed, or passed to another process, queued, or used as a parameter for a database query.
@@ -108,9 +111,11 @@ result1.buildInfo.buildId                   // the unique buildID of the softwar
 
 Nesting
 -------
-A call can take raw input values, but ideally it takes the result of _other_ call that produced the input, 
-so the provenance chain can be extended.  It can also simply take a call, and the system 
-will convert that into a result by running it, or by looking up an existing answer.
+A call can take raw input values, but ideally each input the result of _another_ call that produced _it_. 
+This means we can track back through the history chain of data.
+
+In addition to taking a result, it can also taka a call that _would_ produce an appropriate result. 
+It will convert that into a usable result by running it, or by looking up an existing answer.
 
 An example of nesting using a toy function:
 ```scala
@@ -133,9 +138,9 @@ val call3 = addMe(addMe(addMe(2, 2), addMe(10, addMe(call1, result2)), addMe(5, 
 val result3: addMe.Result = call3.resolve
 ```
 
-Note that, above, we used both raw values, and also one result `result1` and `call2` as inputs.  The raw values are
-implicitly  converted into `UnknownProvenance[T]`, a placeholder for values with no history.  All such values fall under 
-a the base type `ValueWithProvenance[T]`.  See the API Overview below for details.
+Note that, above, we used both raw values as inputs, and also one input is a result (`result1`) and another is a call
+(`call2`).  The raw values are implicitly  converted into `UnknownProvenance[T]`, a placeholder for values with no 
+history.  All such values fall under a the base type `ValueWithProvenance[T]`.  See the API Overview below for details.
 
 
 Tracking Results
@@ -146,8 +151,9 @@ implicit `ResultTracker`.  A `ResultTracker` is both a database for inputs, outp
 path that connects them.  It is also the wrapper for transitioning from call -> result (running things).
 
 The default storage implementation is "broker-free", in that a central server or central locking is not required for
-consistency, idempotency, or concurrency.  It can handles concurrent attempts to do similar work "optimistically". 
-In a race condition identical work may be done, but no data is corrupted or duplicated.
+consistency, idempotency, or concurrency.  The only requirement is that whole-object writes to a given path are atomic.
+It can handles concurrent attempts to do similar work "optimistically".  In a race condition identical work may be done,
+but no data is corrupted or duplicated.
 
 ```scala
 import com.cibo.provenance._
@@ -157,7 +163,6 @@ implicit val bi: BuildInfo = YOURPACKAGE.BuildInfo                            //
 implicit val rt: ResultTracker = ResultTrackerSimple("s3://mybucket/mypath") 
 
 rt.hasResultForCall(call1) == true                                            // since the work was done above
-
 val result1b = call1.resolve                                                  // just loads the answer made previously
 result1b == result1                                                           // results match
 ```
@@ -170,13 +175,13 @@ implicit val bi = DummyBuildInfo
 implicit val rt = ResultTrackerNone()
 ```
 
-DRY
----
+DRY (Don't Repeat Yourself)
+---------------------------
 
-For a given result tracker, the same inputs are never passed to the same declared version of the same function.
-This means that when we resolve call3 above, a result is produced for call2, since it is an input to call 3. 
+For a given `ResultTracker`, the same input values are never passed to the same version of the same function.
+This means that when we resolve `call3` above, a result is produced for `call2`, since it is an input to `call3`. 
 
-A subsequent call to call2.resolve will look-up the answer rather than calculate it.
+A subsequent invokation of `call2.resolve` will look-up the answer rather than calculate it.
 
 A more detailed example of "shortcutting" past calculations (or "memoizing"):
 
@@ -212,26 +217,28 @@ Versions and BuildInfo
 The version in the function is an "asserted version".  A declaration by the programmer that outputs will be consistent 
 for the same inputs.
 
-The call specifies the version, with a default argument that sets it to the currentVersion.  One might create a call
-with an older version for purposes of explicitly querying for old data, or inspect the version of 
-a call handed to you when introspecting the provenance.
+The call specifies the `version`, with a default argument that sets it to the `currentVersion`.  One might create a call
+with an older version for purposes of explicitly querying for old data.  The receipient of a call might inspect the
+version of a call.
 
 When software is behaving as intended, the version is sufficient to describe a single iteration of function logic.  
-There will be multiple repository commits, and multiple source code builds, that have the same version number for a 
-component, because other components will also be iterating.
+There will be multiple repository commits, and multiple source code builds, typically, that have the same version 
+number for a component, since other components will be iterating in parallel.
 
 In theory, the versions will be updated appropriately.  In practice, errors will occur.
 
-There are three modes:
-- a function that does not really produce the same output for the same inputs repeatably
+There are three modes of failure:
+- a function that does not really produce the same output for the same inputs repeatably at any commit
 - a function that is refactored at some commit, but a change in results is introduced inadvertently
-- a function that behaves differently for the same commit on differnt builds, due to some external factor in the build process
+- a function that behaves differently for the same commit on differnt builds, due to some external factor in the build 
+process
 
-Each actual output produced tracks the exact git commit and build ID used to produce it.  This comes from SbtBuildInfo.  Each
-project that uses the data-provenance library should use the `buildinfo.sbt` from the example repo to make this data available.  The BuildInfo created must be implicitly available to make a ResultTracker.
+Each actual output produced tracks the exact git commit and build ID used to produce it.  This comes from SbtBuildInfo.  
+Each project that uses the data-provenance library should use the `buildinfo.sbt` from the example repo to make this 
+data available.  The BuildInfo created must be implicitly available to make a ResultTracker.
 
-The system can detects the three above failure modes retroactively, as the developer "posts evidence" to a future test suite,
-which casts light on the errors made at previous commits/builds.  (TODO: go into detail)
+The system can detects the three above failure modes retroactively, as the developer "posts evidence" to a future test 
+suite, which casts light on the errors made at previous commits/builds.  (TODO: go into detail)
 
 Shorter Example
 ---------------
