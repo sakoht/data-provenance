@@ -56,7 +56,8 @@ abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: 
 
   def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
 
-  def duplicate(vv: ValueWithProvenance[Version]): Function0CallWithProvenance[O]
+  // NOTE: This is implemented as Product.copy in the case-class subclasses.
+  def duplicate(v: ValueWithProvenance[Version] = v): Function0CallWithProvenance[O]
 }
 
 [1..21#
@@ -100,7 +101,8 @@ abstract class Function1CallWithProvenance[[#I1#], O : ClassTag : Encoder : Deco
 
   def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): Function1CallResultWithProvenance[[#I1#], O]
 
-  def duplicate([#v1: ValueWithProvenance[_ <: I1]#], vv: ValueWithProvenance[Version]): Function1CallWithProvenance[[#I1#], O]
+  // NOTE: This is implemented as Product.copy in the case-class subclasses.
+  def duplicate([#i1: ValueWithProvenance[_ <: I1]#] = i1, v: ValueWithProvenance[Version] = v): Function1CallWithProvenance[[#I1#], O]
 }#
 
 ]

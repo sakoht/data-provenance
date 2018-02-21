@@ -36,8 +36,6 @@ class ReadmeSpec extends FunSpec with Matchers {
 
 // Code from the Shorter Example in the README.  Always edit it here and paste it there.
 
-import com.cibo.provenance._
-
 object myMkString extends Function2WithProvenance[Int, Double, String] {
   val currentVersion = Version("0.1")
   def impl(i: Int, d: Double): String = i.toString + ":" + d.toString
@@ -69,9 +67,8 @@ object myApp1 extends App {
   assert(r3.call.unresolve == myMkString(myStrLen(myMkString(3, 1.23)), 7.89))
 }
 
-// Code from the Longer Example in the README.  Always edit it here, and paste it there.
 
-import com.cibo.provenance._
+// Code from the Longer Example in the README.  Always edit it here, and paste it there.
 
 object addMe extends Function2WithProvenance[Int, Int, Int] {
   val currentVersion = Version("0.1")
@@ -87,12 +84,12 @@ object myApp2 extends App {
 
   // Basic use: separate objects to represent the logical call and the result and the actual output.
   val call1 = addMe(2, 3)             // no work is done
-  rt.hasResultForCall(call1)          // false (unless someone else did this)
+  rt.hasOutputForCall(call1)          // false (unless someone else did this)
 
   val result1 = call1.resolve         // generate a result, if it does not already exist
   println(result1.output)             // get the output: 5
-  println(result1.call)         // get the provenance: call1
-  rt.hasResultForCall(call1)          // true (now saved)
+  println(result1.call)               // get the provenance: call1
+  rt.hasOutputForCall(call1)          // true (now saved)
 
 
   val result1b = call1.resolve        // finds the previous result, doesn't run anything
@@ -100,9 +97,9 @@ object myApp2 extends App {
 
   // Nest:
   val call2 = addMe(2, addMe(1, 2))
-  val result2 = call2.resolve                       // adds 1+2, but is lazy about adding 2+3 since it already did that
-  result2.output == result1.output                  // same output
-  result2.call != result1.call          // different provenance
+  val result2 = call2.resolve         // adds 1+2, but is lazy about adding 2+3 since it already did that
+  result2.output == result1.output    // same output
+  result2.call != result1.call        // different provenance
 
   // Compose arbitrarily:
   val bigPlan = addMe(addMe(6, addMe(result2, call1)), addMe(result1, 10))
@@ -113,7 +110,7 @@ object myApp2 extends App {
   val call5: addMe.Call = addMe(call3, call4)       // (? <- addMe(addMe(raw(1), raw(1)), addMe(raw(2), raw(1))))
   val result5 = call5.resolve                       // runs 1+1, then 2+1, but shortcuts past running 2+3 because we r1 was saved above.
   assert(result5.output == result1.output)          // same answer
-  assert(result5.call != result1.call)  // different provenance
+  assert(result5.call != result1.call)              // different provenance
 
   // Builtin Functions for Map, Apply, etc.
 

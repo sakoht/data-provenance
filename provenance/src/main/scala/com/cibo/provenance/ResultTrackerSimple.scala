@@ -6,7 +6,7 @@ import io.circe._
 import io.circe.generic.auto._
 import com.cibo.io.s3.{S3DB, SyncablePath}
 import com.cibo.provenance.exceptions.InconsistentVersionException
-
+import com.cibo.cache.GCache
 
 /**
   * Created by ssmith on 5/16/17.
@@ -57,8 +57,23 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
 
   // public interface
 
+  val resultCacheSize = 1000L
+  private val resultCache =
+    GCache[FunctionCallResultWithProvenance[_], FunctionCallResultWithProvenanceDeflated[_]]()
+      .maximumSize(resultCacheSize)
+      .logRemoval(logger)
+      .buildWith[FunctionCallResultWithProvenance[_], FunctionCallResultWithProvenanceDeflated[_]]
+
+
   def saveResult[O](result: FunctionCallResultWithProvenance[O]): FunctionCallResultWithProvenanceDeflated[O] = {
-    saveResultImpl(result)
+    val deflated: FunctionCallResultWithProvenanceDeflated[O] = Option(resultCache.getIfPresent(result)) match {
+      case Some(deflated) =>
+        deflated.asInstanceOf[FunctionCallResultWithProvenanceDeflated[O]]
+      case None =>
+        saveResultImpl(result)
+    }
+    resultCache.put(result, deflated)
+    deflated
   }
 
   //scalastyle:off
@@ -164,9 +179,9 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     // This can be referenced from any scala code, including code that cannot instantiate the types.
     // It is the bridge to the inflated version saved above which only needs to recognize the output type.
     // Its digest is the universal identifier for the complete history of this result.
-    val provenanceDeflated: FunctionCallWithProvenanceDeflated[O] = saveCall(callWithDeflatedInputsExcludingVersion)
-    val provenanceDeflatedSerialized = Util.serialize(provenanceDeflated)
-    val provenanceDeflatedKey = Util.digestBytes(provenanceDeflatedSerialized).id
+    val callDeflated: FunctionCallWithProvenanceDeflated[O] = saveCall(callWithDeflatedInputsExcludingVersion)
+    val callDeflatedSerialized = Util.serialize(callDeflated)
+    val callDeflatedKey = Util.digestBytes(callDeflatedSerialized).id
 
     /**
       * In production, this flag is NOT set.  We skip the slow check for a possible conflict, and
@@ -203,16 +218,16 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
       }
 
     // Link the fully deflated provenance to the inputs.
-    saveObjectToPath(f"$prefix/provenance-to-inputs/$provenanceDeflatedKey/$inputGroupKey", "")
+    saveObject(f"$prefix/provenance-to-inputs/$callDeflatedKey/$inputGroupKey", "")
 
     // Link the output to the inputs, and to the exact deflated provenance behind the inputs.
-    saveObjectToPath(f"$prefix/output-to-provenance/$outputKey/$inputGroupKey/$provenanceDeflatedKey", "")
+    saveObject(f"$prefix/output-to-provenance/$outputKey/$inputGroupKey/$callDeflatedKey", "")
 
     // Offer a primary entry point on the value to get to the things that produce it.
     // This key could be shorter, but since it is immutable and zero size, we do it just once here now.
     // Refactor to be more brief as needed.
     val outputClassName = outputClassTag.runtimeClass.getName
-    saveObjectToPath(f"data-provenance/$outputKey/as/$outputClassName/from/$functionName/$versionId/with-inputs/$inputGroupKey/with-provenance/$provenanceDeflatedKey/at/$commitId/$buildId", "")
+    saveObject(f"data-provenance/$outputKey/as/$outputClassName/from/$functionName/$versionId/with-inputs/$inputGroupKey/with-provenance/$callDeflatedKey/at/$commitId/$buildId", "")
 
     // Make each of the up-stream functions behind the inputs link to this one as known progeny.
     // If the up-stream functions later are determined to be defective/inconsistent at some particular builds,
@@ -231,7 +246,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
               f"functions/${i.functionName}/${i.functionVersion.id}/output-uses/" +
               f"${inputResult.outputDigest.id}/from-input-group/${inputGroupDigest.id}/with-prov/${i.inflatedCallDigest.id}/" +
               f"went-to/$functionName/$versionId/input-group/$inputGroupKey/arg/$n"
-            saveObjectToPath(path, "")
+            saveObject(path, "")
         }
     }
 
@@ -239,7 +254,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     // This is a simple wrapper around the deflated call.
     // It should re-constitute to match the original.
     val deflated = FunctionCallResultWithProvenanceDeflated[O](
-      deflatedCall = provenanceDeflated,
+      deflatedCall = callDeflated,
       inputGroupDigest = inputGroupDigest,
       outputDigest = outputDigest,
       buildInfo = buildInfoAbbreviated
@@ -258,7 +273,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
       val previousSavePaths = getListingRecursive(f"$prefix/inputs-to-output/$inputGroupKey")
       if (previousSavePaths.isEmpty) {
         logger.debug("New data.")
-        saveObjectToPath(savePath, "")
+        saveObject(savePath, "")
       } else {
         previousSavePaths.find(previousSavePath => savePath.endsWith(previousSavePath)) match {
           case Some(_) =>
@@ -273,7 +288,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
               logger.error(f"SAVING CONFLICTING OUTPUT.  Previous paths: $previousSavePaths.  " +
                 "New path $savePath."
               )
-              saveObjectToPath(savePath, "")
+              saveObject(savePath, "")
             }
         }
       }
@@ -282,7 +297,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
       // In production, if there is a conflict represented by the save, it will be detected and flagged by
       // the first code that uses the data.  It is actually good that the save completes, because it creates
       // evidence that the current function is behaving consistently at the current version.
-      saveObjectToPath(savePath, "")
+      saveObject(savePath, "")
     }
 
     // Optinally do additional post-save validation.
@@ -324,7 +339,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
         if (!hasValue(digest)) {
           val digest = saveValue(unknown.value)
           val outputClassName = outputClassTag.runtimeClass.getName
-          saveObjectToPath(f"data-provenance/${digest.id}/as/$outputClassName/from/-", "")
+          saveObject(f"data-provenance/${digest.id}/as/$outputClassName/from/-", "")
         }
         // Return a deflated object.
         FunctionCallWithProvenanceDeflated(call)(rt = this)
@@ -363,7 +378,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
         // Re-constituting the tree can happen one layer at a time.
         val inflatedProvenanceWithDeflatedInputsBytes: Array[Byte] = Util.serializeRaw(inflatedCallWithDeflatedInputs)
         val inflatedProvenanceWithDeflatedInputsDigest = Util.digestBytes(inflatedProvenanceWithDeflatedInputsBytes)
-        saveSerializedDataToPath(
+        saveBytes(
           f"functions/$functionName/$versionId/provenance-values-typed/${inflatedProvenanceWithDeflatedInputsDigest.id}",
           inflatedProvenanceWithDeflatedInputsBytes
         )
@@ -378,7 +393,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
         )
         val deflatedCallBytes = Util.serialize(deflatedCall)
         val deflatedCallDigest = Util.digestBytes(deflatedCallBytes)
-        saveSerializedDataToPath(
+        saveBytes(
           f"functions/$functionName/$versionId/provenance-values-deflated/${deflatedCallDigest.id}",
           deflatedCallBytes
         )
@@ -387,48 +402,12 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     }
   }
 
-  def getBytesAndDigest[T : io.circe.Encoder : io.circe.Decoder](obj: T): (Array[Byte], Digest) = {
-    val bytes1 = Util.serialize(obj)
-    val digest1 = Util.digestBytes(bytes1)
-    if (checkForInconsistentSerialization(obj)) {
-      val obj2 = Util.deserialize[T](bytes1)
-      val bytes2 = Util.serialize(obj2)
-      val digest2 = Util.digestBytes(bytes2)
-      if (digest2 != digest1) {
-        val obj3 = Util.deserialize[T](bytes2)
-        val bytes3 = Util.serialize(obj3)
-        val digest3 = Util.digestBytes(bytes3)
-        if (digest3 == digest2)
-          logger.warn(f"The re-constituted version of $obj digests differently $digest1 -> $digest2!  But the reconstituted object saves consistently.")
-        else
-          throw new RuntimeException(f"Object $obj digests as $digest1, re-digests as $digest2 and $digest3!")
-      }
-      (bytes2, digest2)
-    } else {
-      (bytes1, digest1)
-    }
-  }
-
-  def isTainted[T : io.circe.Encoder : io.circe.Decoder](obj: T): Boolean = {
-    val bytes1 = Util.serialize(obj)
-    val digest1 = Util.digestBytes(bytes1)
-    val obj2 = Util.deserialize[T](bytes1)
-    val bytes2 = Util.serialize(obj2)
-    val digest2 = Util.digestBytes(bytes2)
-    if (digest2 != digest1) {
-      logger.warn(f"The re-constituted version of $obj digests differently $digest1 -> $digest2!  But the reconstituted object saves consistently.")
-      true
-    } else {
-      false
-    }
-  }
-
   def saveValue[T : ClassTag : Encoder : Decoder](obj: T): Digest = {
-    val (bytes, digest) = getBytesAndDigest(obj)
+    val (bytes, digest) = Util.getBytesAndDigest(obj, checkForInconsistentSerialization(obj))
     if (!hasValue(digest)) {
       val path = f"data/${digest.id}"
         logger.info(f"Saving raw $obj to $path")
-      saveObjectWait(path, bytes)
+      saveBytes(path, bytes)
     }
     digest
   }
@@ -443,7 +422,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
 
   }
 
-  def hasResultForCall[O](call: FunctionCallWithProvenance[O]): Boolean =
+  def hasOutputForCall[O](call: FunctionCallWithProvenance[O]): Boolean =
     loadOutputIdsForCallOption(call).nonEmpty
 
   def loadDeflatedCallOption[O : ClassTag : Encoder : Decoder](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
@@ -458,10 +437,10 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     }
 
   def loadCallSerializedDataOption(functionName: String, version: Version, digest: Digest): Option[Array[Byte]] =
-    loadSerializedDataForPathOption(f"functions/$functionName/${version.id}/provenance-values-typed/${digest.id}")
+    loadBytesOption(f"functions/$functionName/${version.id}/provenance-values-typed/${digest.id}")
 
   def loadCallDeflatedSerializedDataOption(functionName: String, version: Version, digest: Digest): Option[Array[Byte]] =
-    loadSerializedDataForPathOption(f"functions/$functionName/${version.id}/provenance-values-deflated/${digest.id}")
+    loadBytesOption(f"functions/$functionName/${version.id}/provenance-values-deflated/${digest.id}")
 
 
   private def extractDigest[Z](i: ValueWithProvenance[Z]) = {
@@ -511,18 +490,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
   }
 
   def loadValueSerializedDataOption(className: String, digest: Digest): Option[Array[Byte]] =
-    loadSerializedDataForPathOption(f"data/${digest.id}")
-
-  private def loadSerializedDataForPathOption(path: String) = {
-    try {
-      val bytes = loadObjectWait(path)
-      Some(bytes)
-    } catch {
-      case e: Exception =>
-        logger.debug(f"Failed to find at $path: $e")
-        None
-    }
-  }
+    loadBytesOption(f"data/${digest.id}")
 
   def loadOutputIdsForCallOption[O](call: FunctionCallWithProvenance[O]): Option[(Digest, String, String)] = {
     call.getInputGroupValuesDigest(this)
@@ -548,7 +516,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     val suffixes = getListingRecursive(basePrefix)
     suffixes match {
       case suffix :: Nil =>
-        val bytes = loadObjectWait(f"$basePrefix/$suffix")
+        val bytes = loadBytes(f"$basePrefix/$suffix")
         val build = Util.deserialize[BuildInfo](bytes)
         Some(build)
       case Nil =>
@@ -565,34 +533,8 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     val bi = currentAppBuildInfo
     val bytes = Util.serialize(bi)
     val digest = Util.digestBytes(bytes)
-    saveSerializedDataToPath(s"commits/${bi.commitId}/builds/${bi.buildId}/${digest.id}", bytes)
+    saveBytes(s"commits/${bi.commitId}/builds/${bi.buildId}/${digest.id}", bytes)
     digest
-  }
-
-  private def saveObjectToPath[T : ClassTag: Encoder: Decoder](path: String, obj: T): String = {
-    obj match {
-      case _ : Array[Byte] =>
-        throw new RuntimeException("Attempt to save pre-serialized data?")
-      case _ =>
-        val (bytes, digest) = getBytesAndDigest(obj)
-        saveSerializedDataToPath(path, bytes)
-        digest.id
-    }
-  }
-
-  private def saveSerializedDataToPath(path: String, serializedData: Array[Byte]): Unit =
-    saveObjectWait(f"$path", serializedData)
-
-  private def saveObjectToSubPathByDigest[T : ClassTag : Encoder : Decoder](path: String, obj: T): Digest = {
-    val bytes = Util.serialize(obj)
-    val digest = Util.digestBytes(bytes)
-    saveObjectWait(f"$path/${digest.id}", bytes)
-    digest
-  }
-
-  private def loadObjectFromPath[T : ClassTag : Encoder : Decoder](path: String): T = {
-    val bytes = loadObjectWait(path)
-    Util.deserialize[T](bytes)
   }
 
   private def loadOutputCommitAndBuildIdForInputGroupIdOption[O : ClassTag : Encoder : Decoder](fname: String, fversion: Version, inputGroupId: Digest): Option[(Digest,String, String)] = {
@@ -635,11 +577,11 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
   }
 
   def loadInputIds[O : ClassTag : Encoder : Decoder](fname: String, fversion: Version, inputGroupId: Digest): Seq[Digest] = {
-    loadObjectFromPath[List[Digest]](f"functions/$fname/${fversion.id}/input-group-values/${inputGroupId.id}")
+    loadObject[List[Digest]](f"functions/$fname/${fversion.id}/input-group-values/${inputGroupId.id}")
   }
 
   def loadInputs[O : ClassTag : Encoder : Decoder](fname: String, fversion: Version, inputGroupId: Digest): Seq[Any] = {
-    val digests = loadObjectFromPath[List[Digest]](f"functions/$fname/${fversion.id}/input-group-values/${inputGroupId.id}")
+    val digests = loadObject[List[Digest]](f"functions/$fname/${fversion.id}/input-group-values/${inputGroupId.id}")
     digests.map {
       digest =>
         loadValueSerializedDataOption(digest) match {
@@ -655,8 +597,8 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     // When this happens we recognize that there was, previously, a failure to set the version correctly.
     // This hopefully happens during testing, and the error never gets committed.
     // If it ends up in production data, we can compensate after the fact.
-    saveObjectToPath(f"functions/$fname/${fversion.id}/conflicted", "")
-    saveObjectToPath(f"functions/$fname/${fversion.id}/conflict/$inputGroupId", "")
+    saveObject(f"functions/$fname/${fversion.id}/conflicted", "")
+    saveObject(f"functions/$fname/${fversion.id}/conflict/$inputGroupId", "")
     val inputSeq = loadInputs(fname, fversion, inputGroupId)
     conflictingOutputKeys.foreach {
       s =>
@@ -696,22 +638,65 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
   import scala.concurrent.Await
 
   protected val s3db = S3DB.fromSyncablePath(basePath)
-
   protected val saveTimeout = 5.minutes
 
-  protected def saveObjectWait(path: String, bytes: Array[Byte]) = {
-    s3db.putObject(path, bytes) match {
-      case Some(f) =>
-        val result: PutObjectResult = Await.result(f, saveTimeout)
-        logger.debug(result.toString)
+  /**
+    * There are two caches:
+    * - lightCache (path -> Unit)
+    *     - larger max size
+    *     - holds just paths, no content
+    *     - prevents duplicate saves
+    *
+    * - heavyCache: (path -> bytes)
+    *     - consumes more space per path
+    *     - smaller max size
+    *     - prevents duplicate loads
+    *
+    */
+
+  val lightCacheSize = 50000L
+  private val lightCache =
+    GCache[String, Unit]().maximumSize(lightCacheSize).buildWith[String, Unit]
+
+  val heavyCacheSize = 500L
+  private val heavyCache =
+    GCache[String, Array[Byte]]().maximumSize(heavyCacheSize).buildWith[String, Array[Byte]]
+
+  protected def saveBytes(path: String, bytes: Array[Byte]): Unit = {
+    Option(lightCache.getIfPresent(path)) match {
+      case Some(path) =>
+        // Already saved.  Do nothing.
       case None =>
-        // No future...
+        Option(heavyCache.getIfPresent(path)) match {
+          case Some(bytes) =>
+            // Recently loaded.  Flag in the larger save cache, but otherwise do nothing.
+            lightCache.put(path, Unit)
+          case None =>
+            // Actually save.
+            s3db.putObject(path, bytes) match {
+              case Some(f) =>
+                val result: PutObjectResult = Await.result(f, saveTimeout)
+                logger.debug(result.toString)
+              case None =>
+                // No future...
+            }
+            //
+            lightCache.put(path, Unit)
+            heavyCache.put(path, bytes)
+        }
     }
   }
 
-  protected def loadObjectWait(path: String): Array[Byte] = {
-    // This uses the synchronous interface.
-    s3db.getBytesForPrefix(path)
+  protected def loadBytes(path: String): Array[Byte] = {
+    val bytes = Option(heavyCache.getIfPresent(path)) match {
+      case Some(bytes) =>
+        bytes
+      case None =>
+        s3db.getBytesForPrefix(path)
+    }
+    lightCache.put(path, Unit)   // larger, lighter, prevents re-saves
+    heavyCache.put(path, bytes)  // smaller, heavier, actually provides data
+    bytes
   }
 
   protected def getListingRecursive(path: String): List[String] = {
@@ -719,8 +704,60 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
   }
 
   protected def pathExists(path: String): Boolean = {
-    basePath.extendPath(path).exists
+    Option(lightCache.getIfPresent(path)) match {
+      case Some(_) =>
+        true
+      case None =>
+        Option(heavyCache.getIfPresent(path)) match {
+          case Some(_) => true
+          case None =>
+            if (basePath.extendPath(path).exists) {
+              lightCache.put(path, Unit)
+              true
+            } else {
+              // We don't cache anything for false b/c the path may be added later
+              false
+            }
+        }
+    }
   }
+
+  // Wrappers
+
+  protected def loadBytesOption(path: String) = {
+    try {
+      val bytes = loadBytes(path)
+      Some(bytes)
+    } catch {
+      case e: Exception =>
+        logger.debug(f"Failed to find at $path: $e")
+        None
+    }
+  }
+
+  protected def loadObject[T : ClassTag : Encoder : Decoder](path: String): T = {
+    val bytes = loadBytes(path)
+    Util.deserialize[T](bytes)
+  }
+
+  protected def saveObject[T : ClassTag: Encoder: Decoder](path: String, obj: T): String = {
+    obj match {
+      case _ : Array[Byte] =>
+        throw new RuntimeException("Attempt to save pre-serialized data?")
+      case _ =>
+        val (bytes, digest) = Util.getBytesAndDigest(obj, checkForInconsistentSerialization(obj))
+        saveBytes(path, bytes)
+        digest.id
+    }
+  }
+
+  private def saveObjectToSubPathByDigest[T : ClassTag : Encoder : Decoder](path: String, obj: T): Digest = {
+    val bytes = Util.serialize(obj)
+    val digest = Util.digestBytes(bytes)
+    saveBytes(f"$path/${digest.id}", bytes)
+    digest
+  }
+
 }
 
 

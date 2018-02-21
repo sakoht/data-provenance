@@ -7,6 +7,7 @@ import com.cibo.provenance.monadics.MapWithProvenance
 import org.apache.commons.io.FileUtils
 import org.scalatest.{FunSpec, Matchers}
 
+
 /**
   * Created by ssmith on 10/26/17.
   */
@@ -122,7 +123,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       // Note: something causes these to be equal as strings but not pass the eq check.
       inflated2.toString shouldEqual inflated1.toString
 
-      rt.hasResultForCall(inflated2) shouldBe true
+      rt.hasOutputForCall(inflated2) shouldBe true
     }
 
     it("works with functions that return functions with provenance as output") {

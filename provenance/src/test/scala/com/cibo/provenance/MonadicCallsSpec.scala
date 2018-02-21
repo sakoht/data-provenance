@@ -251,7 +251,10 @@ class MonadicCallsSpec extends FunSpec with Matchers {
 
 object MakeDummyOutputList extends Function0WithProvenance[Seq[Int]] {
   val currentVersion = Version("0.0")
+
+  @transient
   var runCount: Int = 0 // warning: var
+
   def impl = {
     runCount += 1
     Seq(11, 22, 33, 44)
@@ -260,7 +263,10 @@ object MakeDummyOutputList extends Function0WithProvenance[Seq[Int]] {
 
 object MyIncrement extends Function1WithProvenance[Int, Int] {
   val currentVersion = Version("0.0")
+
+  @transient
   var runCount: Int = 0 // warning: var
+
   def impl(x: Int) = {
     runCount += 1
     x + 1

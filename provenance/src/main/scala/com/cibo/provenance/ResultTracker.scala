@@ -110,7 +110,7 @@ trait ResultTracker {
     * @tparam O     The type of the output of the call.
     * @return       A boolean flag that is true if a result exists.
     */
-  def hasResultForCall[O](call: FunctionCallWithProvenance[O]): Boolean
+  def hasOutputForCall[O](call: FunctionCallWithProvenance[O]): Boolean
 
   /**
     * Check storage for a given input/output value by SHA1 Digest.

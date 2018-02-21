@@ -297,7 +297,7 @@ abstract class FunctionCallWithProvenance[O : ClassTag : io.circe.Encoder : io.c
   }
 
   def deflate(implicit rt: ResultTracker): FunctionCallWithProvenanceDeflated[O] =
-    rt.saveCall(this)
+    Util.clean(rt.saveCall(this))
 
   def inflate(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     this
@@ -348,7 +348,7 @@ abstract class FunctionCallResultWithProvenance[O](
     this.call.unresolve
 
   def deflate(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] =
-    rt.saveResult(this)
+    Util.clean(rt.saveResult(this))
 
   def inflate(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
     this
@@ -437,7 +437,7 @@ case class UnknownProvenanceValue[O : ClassTag](
   // The newResult method is never called for an UnknownProvenance[T].
 
   override def deflate(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] =
-    FunctionCallResultWithProvenanceDeflated(this)
+    Util.clean(FunctionCallResultWithProvenanceDeflated(this))
 
   override def toString: String = f"raw($outputAsVirtualValue)"
 }
@@ -507,9 +507,18 @@ case class FunctionCallWithKnownProvenanceDeflated[O](
   functionVersion: Version,
   outputClassName: String,
   inflatedCallDigest: Digest
-)(implicit ct: ClassTag[O], en: Encoder[O], dc: Decoder[O]) extends FunctionCallWithProvenanceDeflated[O] with Serializable {
+)(implicit ct: ClassTag[O], en: Encoder[O], dc: Decoder[O])
+  extends FunctionCallWithProvenanceDeflated[O] with Serializable {
 
   def getOutputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
+
+  def serialize: Array[Byte] = {
+    Util.serialize(this)
+  }
+
+  def digest: Digest = {
+    Util.digestBytes(serialize)
+  }
 
   def inflateOption(implicit rt: ResultTracker): Option[FunctionCallWithProvenance[O]] = {
     inflateNoRecurse.map {
@@ -540,8 +549,9 @@ object FunctionCallResultWithProvenanceDeflated {
   def apply[O](result: FunctionCallResultWithProvenance[O])(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] = {
     val call = result.call
     implicit val outputClassTag: ClassTag[O] = call.getOutputClassTag
-    implicit val enc = call.getEncoder
-    implicit val dec = call.getDecoder
+    implicit val enc: Encoder[O] = call.getEncoder
+    implicit val dec: Decoder[O] = call.getDecoder
+
     FunctionCallResultWithProvenanceDeflated[O](
       deflatedCall = FunctionCallWithProvenanceDeflated(call),
       inputGroupDigest = call.getInputGroupDigest,

@@ -16,20 +16,18 @@ object TestUtils extends LazyLogging with Matchers {
   val libBuildInfo: BuildInfo = com.cibo.provenance.internal.BuildInfo
 
   // Use the scala version for the library in this test, cross-compiled tests can run in parallel.
+  val subdir =
+    sys.env.getOrElse("USER", "anonymous-" + com.cibo.provenance.internal.BuildInfo.buildId.toString) +
+      f"/data-provenance-test-output-${libBuildInfo.scalaVersion}"
 
   val localTestOutputBaseDir: String =
-    f"/tmp" +
-      "/" + sys.env.getOrElse("USER", "anonymous") +
-      f"/data-provenance-test-output-${libBuildInfo.scalaVersion}"
+    f"/tmp/" + subdir
 
   val remoteTestOutputBaseDir: String =
-    f"s3://com-cibo-user" +
-      "/" + sys.env.getOrElse("USER", "anonymous") +
-      "/" + com.cibo.provenance.internal.BuildInfo.buildId.toString +
-      f"/data-provenance-test-output-${libBuildInfo.scalaVersion}"
+    f"s3://com-cibo-user/" + subdir
 
   // Switch to the remote version to manually test on S3
-  val testOutputBaseDir = remoteTestOutputBaseDir
+  val testOutputBaseDir = localTestOutputBaseDir
 
   def diffOutputSubdir(subdir: String) = {
     val version =

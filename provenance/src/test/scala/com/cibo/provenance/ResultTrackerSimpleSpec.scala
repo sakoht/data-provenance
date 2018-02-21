@@ -341,6 +341,7 @@ object Add extends Function2WithProvenance[Int, Int, Int] {
 
   // NOTE: This public var is reset during tests, and is a cheat to peek-inside whether or no impl(),
   // which is encapsulated, actually runs.
+  @transient
   var runCount: Int = 0
 
   def impl(a: Int, b: Int): Int = {
