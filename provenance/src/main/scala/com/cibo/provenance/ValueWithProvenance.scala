@@ -452,8 +452,10 @@ case class UnknownProvenanceValue[O : ClassTag](
  */
 
 
-sealed trait ValueWithProvenanceDeflated[O] extends ValueWithProvenance[O] with Serializable
-
+sealed trait ValueWithProvenanceDeflated[O] extends ValueWithProvenance[O] with Serializable {
+  def toBytes: Array[Byte]
+  def toDigest: Digest = Util.digestBytes(toBytes)
+}
 
 sealed trait FunctionCallWithProvenanceDeflated[O] extends ValueWithProvenanceDeflated[O] with Call[O] with Serializable {
 
@@ -510,15 +512,10 @@ case class FunctionCallWithKnownProvenanceDeflated[O](
 )(implicit ct: ClassTag[O], en: Encoder[O], dc: Decoder[O])
   extends FunctionCallWithProvenanceDeflated[O] with Serializable {
 
-  def getOutputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
+  def toBytes: Array[Byte] = Util.serialize(this)
 
-  def serialize: Array[Byte] = {
-    Util.serialize(this)
-  }
-
-  def digest: Digest = {
-    Util.digestBytes(serialize)
-  }
+  def getOutputClassTag: ClassTag[O] =
+    implicitly[ClassTag[O]]
 
   def inflateOption(implicit rt: ResultTracker): Option[FunctionCallWithProvenance[O]] = {
     inflateNoRecurse.map {
@@ -535,6 +532,8 @@ case class FunctionCallWithUnknownProvenanceDeflated[O : ClassTag : Encoder : De
   outputClassName: String,
   valueDigest: Digest
 ) extends FunctionCallWithProvenanceDeflated[O] {
+
+  def toBytes: Array[Byte] = Util.serialize(this)
 
   def getOutputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
 
@@ -590,6 +589,8 @@ case class FunctionCallResultWithProvenanceDeflated[O : reflect.ClassTag : Encod
   outputDigest: Digest,
   buildInfo: BuildInfo
 ) extends ValueWithProvenanceDeflated[O] with Result[O] with Serializable {
+
+  def toBytes: Array[Byte] = Util.serialize(this)
 
   def getOutputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
 

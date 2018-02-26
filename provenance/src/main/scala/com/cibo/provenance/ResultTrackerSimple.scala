@@ -417,17 +417,19 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     hasValue(digest)
   }
 
-  def hasValue(digest: Digest): Boolean = {
+  def hasValue(digest: Digest): Boolean =
     pathExists(f"data/${digest.id}")
-
-  }
 
   def hasOutputForCall[O](call: FunctionCallWithProvenance[O]): Boolean =
     loadOutputIdsForCallOption(call).nonEmpty
 
   def loadDeflatedCallOption[O : ClassTag : Encoder : Decoder](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
     loadCallDeflatedSerializedDataOption(functionName, version, digest) map {
-      bytes => Util.deserialize[FunctionCallWithProvenanceDeflated[O]](bytes)
+      bytes =>
+        // NOTE: Calls with UnknownProvenance save into a different subclass, but are not saved directly.
+        // They are only used when representing deflated inputs in some subsequent call.
+        // See the notes on the deflation flow in the scaladoc.
+        Util.deserialize[FunctionCallWithKnownProvenanceDeflated[O]](bytes)
     }
 
   def loadInflatedCallWithDeflatedInputsOption[O : ClassTag : Encoder : Decoder](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] =
