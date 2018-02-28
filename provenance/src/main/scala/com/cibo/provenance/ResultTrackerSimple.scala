@@ -8,6 +8,8 @@ import com.cibo.io.s3.{S3DB, SyncablePath}
 import com.cibo.provenance.exceptions.InconsistentVersionException
 import com.cibo.cache.GCache
 
+import scala.util.Try
+
 /**
   * Created by ssmith on 5/16/17.
   *
@@ -19,20 +21,20 @@ import com.cibo.cache.GCache
   *   data/VALUE_DIGEST
   *
   * A master index of provenance data is stored in this form:
-  *   data-provenance/VALUE_DIGEST/as/OUTUT_CLASS_NAME/from/FUNCTION_NAME/VERSION/with-inputs/INPUT_GROUP_DIGEST/with-provenance/PROVENANCE_DIGEST/at/COMMIT_ID/BUILD_ID
+  *   data-provenance/VALUE_DIGEST/as/OUTPUT_CLASS_NAME/from/FUNCTION_NAME/VERSION/with-inputs/INPUT_GROUP_DIGEST/with-provenance/PROVENANCE_DIGEST/at/COMMIT_ID/BUILD_ID
   *
   * Per-function provenance metadata lives under:
   *   functions/FUNCTION_NAME/VERSION/
   *
   * These paths under a function/version hold serialized data:
-  *   - input-group-values/INPUT_GROUP_DIGEST
-  *   - provenance-values-typed/REGULAR_PROVENANCE_DIGEST
-  *   - provenance-values-deflated/DEFLATED_PROVENANCE_DIGEST (contains the ID for the fully-typed object)
+  *   - input-group-values/INPUT_GROUP_DIGEST       A simple List[String] of the Digest IDs for each input value.  
+  *   - calls-inflated/REGULAR_PROVENANCE_DIGEST    A fully-typified Call object w/ deflated inputs.
+  *   - calls-deflated/DEFLATED_PROVENANCE_DIGEST   A deflated Call object pointing to the inflated one.
   *
-  * These these paths under a function/version record associations as they are made (zero-size: info is in the placement):
-  *   - provenance-to-inputs/PROVENANCE_DIGEST_TYPED/INPUT_GROUP_DIGEST
+  * These these paths under a function/version record associations as they are made (zero-size: info is in the path):
+  *   - call-resolved-inputs/PROVENANCE_DIGEST_TYPED/INPUT_GROUP_DIGEST
   *   - inputs-to-output/INPUT_GROUP_DIGEST/OUTPUT_DIGEST/COMMIT_ID/BUILD_ID
-  *   - output-to-provenance/OUTPUT_DIGEST/INPUT_GROUP_DIGEST/DEFLATED_PROVENANCE_DIGEST
+  *   - output-to-provenance/OUTPUT_DIGEST/INPUT_GROUP_DIGEST/DEFLATED_CALL_DIGEST
   *
   * Note that, for the three paths above that link output->input->provenance, an output can come from one or more
   * different inputs, and the same input can come from one-or more distinct provenance paths.  So the outputs-to-provenance
@@ -180,8 +182,8 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     // It is the bridge to the inflated version saved above which only needs to recognize the output type.
     // Its digest is the universal identifier for the complete history of this result.
     val callDeflated: FunctionCallWithProvenanceDeflated[O] = saveCall(callWithDeflatedInputsExcludingVersion)
-    val callDeflatedSerialized = Util.serialize(callDeflated)
-    val callDeflatedKey = Util.digestBytes(callDeflatedSerialized).id
+    val (callDeflatedSerialized, callDeflatedDigest) = Util.getBytesAndDigest(callDeflated)
+    val callDeflatedKey = callDeflatedDigest.id
 
     /**
       * In production, this flag is NOT set.  We skip the slow check for a possible conflict, and
@@ -218,7 +220,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
       }
 
     // Link the fully deflated provenance to the inputs.
-    saveObject(f"$prefix/provenance-to-inputs/$callDeflatedKey/$inputGroupKey", "")
+    saveObject(f"$prefix/call-resolved-inputs/$callDeflatedKey/$inputGroupKey", "")
 
     // Link the output to the inputs, and to the exact deflated provenance behind the inputs.
     saveObject(f"$prefix/output-to-provenance/$outputKey/$inputGroupKey/$callDeflatedKey", "")
@@ -329,20 +331,38 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     implicit val outputEncoder: io.circe.Encoder[O] = call.getEncoder
     implicit val outputDecoder: io.circe.Decoder[O] = call.getDecoder
 
+    // Since the call is in Circe JSON format, isolate enough real scala type information
+    // to fully transform that entirely with its ID.
+    implicit val classTagEncoder: Encoder[ClassTag[O]] = new BinaryEncoder[ClassTag[O]]
+    implicit val encoderEncoder: Encoder[Encoder[O]] = new BinaryEncoder[Encoder[O]]
+    implicit val decoderEncoder: Encoder[Decoder[O]] = new BinaryEncoder[Decoder[O]]
+
+    implicit val classTagDecoder: Decoder[ClassTag[O]] = new BinaryDecoder[ClassTag[O]]
+    implicit val encoderDecoder: Decoder[Encoder[O]] = new BinaryDecoder[Encoder[O]]
+    implicit val decoderDecoder: Decoder[Decoder[O]] = new BinaryDecoder[Decoder[O]]
+
+    val outputClassName = outputClassTag.toString
+    val (classTagBytes, classTagDigest) = Util.getBytesAndDigest(outputClassTag)
+    val (encoderBytes, encoderDigest) = Util.getBytesAndDigest(outputEncoder)
+    val (decoderBytes, decoderDigest) = Util.getBytesAndDigest(outputDecoder)
+
+    saveBytes(f"types/ClassTag/${classTagDigest.id}", classTagBytes)
+    saveBytes(f"types/Encoder/${encoderDigest.id}", encoderBytes)
+    saveBytes(f"types/Decoder/${decoderDigest.id}", decoderBytes)
+
     call match {
 
       case unknown: UnknownProvenance[O] =>
         // Skip saving calls with unknown provenance.
         // Whatever uses them can re-constitute the value from the input values.
         // But ensure the raw input value is saved as data.
-        val digest = Util.digestObject(unknown.value)
-        if (!hasValue(digest)) {
-          val digest = saveValue(unknown.value)
-          val outputClassName = outputClassTag.runtimeClass.getName
-          saveObject(f"data-provenance/${digest.id}/as/$outputClassName/from/-", "")
-        }
+        val valueDigest = saveValue(unknown.value)
+        saveObject(f"data-provenance/${valueDigest.id}/as/$outputClassName/from/-", "")
         // Return a deflated object.
-        FunctionCallWithProvenanceDeflated(call)(rt = this)
+        FunctionCallWithUnknownProvenanceDeflated[O](
+          outputClassName = outputClassName,
+          valueDigest = valueDigest
+        )
 
       case known =>
         // Save and let the saver produce the deflated version it saves.
@@ -376,11 +396,10 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
 
         // Save the provenance object w/ the inputs deflated, but the type known.
         // Re-constituting the tree can happen one layer at a time.
-        val inflatedProvenanceWithDeflatedInputsBytes: Array[Byte] = Util.serializeRaw(inflatedCallWithDeflatedInputs)
-        val inflatedProvenanceWithDeflatedInputsDigest = Util.digestBytes(inflatedProvenanceWithDeflatedInputsBytes)
+        val (inflatedBytes, inflatedDigest) = Util.getBytesAndDigestRaw(inflatedCallWithDeflatedInputs)
         saveBytes(
-          f"functions/$functionName/$versionId/provenance-values-typed/${inflatedProvenanceWithDeflatedInputsDigest.id}",
-          inflatedProvenanceWithDeflatedInputsBytes
+          f"functions/$functionName/$versionId/calls-inflated/${inflatedDigest.id}",
+          inflatedBytes
         )
 
         // Generate and save a fully "deflated" call, referencing the non-deflated one we just saved.
@@ -388,13 +407,15 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
         val deflatedCall = FunctionCallWithKnownProvenanceDeflated[O](
           functionName = known.functionName,
           functionVersion = versionValue,
-          inflatedCallDigest = inflatedProvenanceWithDeflatedInputsDigest,
-          outputClassName = known.getOutputClassTag.runtimeClass.getName
+          inflatedCallDigest = inflatedDigest,
+          outputClassName = known.getOutputClassTag.toString,
+          classTagId = classTagDigest,
+          encoderId = encoderDigest,
+          decoderId = decoderDigest
         )
-        val deflatedCallBytes = Util.serialize(deflatedCall)
-        val deflatedCallDigest = Util.digestBytes(deflatedCallBytes)
+        val (deflatedCallBytes, deflatedCallDigest) = Util.getBytesAndDigest(deflatedCall)
         saveBytes(
-          f"functions/$functionName/$versionId/provenance-values-deflated/${deflatedCallDigest.id}",
+          f"functions/$functionName/$versionId/calls-deflated/${deflatedCallDigest.id}",
           deflatedCallBytes
         )
 
@@ -423,7 +444,16 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
   def hasOutputForCall[O](call: FunctionCallWithProvenance[O]): Boolean =
     loadOutputIdsForCallOption(call).nonEmpty
 
-  def loadDeflatedCallOption[O : ClassTag : Encoder : Decoder](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
+  def loadCallByDigestOption[O : ClassTag : Encoder : Decoder](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] =
+    loadCallSerializedDataOption(functionName, version, digest) map {
+      bytes =>
+        Util.deserializeRaw[FunctionCallWithProvenance[O]](bytes)
+    }
+
+  protected def loadCallSerializedDataOption(functionName: String, version: Version, digest: Digest): Option[Array[Byte]] =
+    loadBytesOption(f"functions/$functionName/${version.id}/calls-inflated/${digest.id}")
+
+  def loadCallByDigestDeflatedOption[O : ClassTag : Encoder : Decoder](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
     loadCallDeflatedSerializedDataOption(functionName, version, digest) map {
       bytes =>
         // NOTE: Calls with UnknownProvenance save into a different subclass, but are not saved directly.
@@ -432,18 +462,35 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
         Util.deserialize[FunctionCallWithKnownProvenanceDeflated[O]](bytes)
     }
 
-  def loadInflatedCallWithDeflatedInputsOption[O : ClassTag : Encoder : Decoder](functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] =
-    loadCallSerializedDataOption(functionName, version, digest) map {
+  protected def loadCallDeflatedSerializedDataOption(functionName: String, version: Version, digest: Digest): Option[Array[Byte]] =
+    loadBytesOption(f"functions/$functionName/${version.id}/calls-deflated/${digest.id}")
+
+  def loadCallByDigestDeflatedUntypedOption(functionName: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[_]] =
+    loadCallDeflatedSerializedDataOption(functionName, version, digest) map {
       bytes =>
-        Util.deserializeRaw[FunctionCallWithProvenance[O]](bytes)
+        // NOTE: Calls with UnknownProvenance save into a different subclass, but are not saved directly.
+        // They are only used when representing deflated inputs in some subsequent call.
+        // See the notes on the deflation flow in the scaladoc.
+        import io.circe.generic.auto._
+        val untypedObj = Util.deserialize[FunctionCallWithKnownProvenanceDeflatedUntyped](bytes)
+        val cn = untypedObj.outputClassName
+        val clazz: Class[_] = Try(Class.forName(cn)).getOrElse(Class.forName("scala." + cn))
+        deserializeAndTypifyCall(bytes, clazz, untypedObj.encoderId, untypedObj.decoderId)
     }
 
-  def loadCallSerializedDataOption(functionName: String, version: Version, digest: Digest): Option[Array[Byte]] =
-    loadBytesOption(f"functions/$functionName/${version.id}/provenance-values-typed/${digest.id}")
+  private def deserializeAndTypifyCall[O : ClassTag](bytes: Array[Byte], clazz: Class[O], encoderId: Digest, decoderId: Digest): FunctionCallWithKnownProvenanceDeflated[O] = {
+    implicit val classTagEncoder: Encoder[ClassTag[O]] = new BinaryEncoder[ClassTag[O]]
+    implicit val encoderEncoder: Encoder[Encoder[O]] = new BinaryEncoder[Encoder[O]]
+    implicit val decoderEncoder: Encoder[Decoder[O]] = new BinaryEncoder[Decoder[O]]
 
-  def loadCallDeflatedSerializedDataOption(functionName: String, version: Version, digest: Digest): Option[Array[Byte]] =
-    loadBytesOption(f"functions/$functionName/${version.id}/provenance-values-deflated/${digest.id}")
+    implicit val classTagDecoder: Decoder[ClassTag[O]] = new BinaryDecoder[ClassTag[O]]
+    implicit val encoderDecoder: Decoder[Encoder[O]] = new BinaryDecoder[Encoder[O]]
+    implicit val decoderDecoder: Decoder[Decoder[O]] = new BinaryDecoder[Decoder[O]]
 
+    implicit val en: Encoder[O] = loadObject[Encoder[O]](f"types/Encoder/${encoderId.id}")
+    implicit val de: Decoder[O] = loadObject[Decoder[O]](f"types/Decoder/${decoderId.id}")
+    Util.deserialize[FunctionCallWithKnownProvenanceDeflated[O]](bytes)
+  }
 
   private def extractDigest[Z](i: ValueWithProvenance[Z]) = {
     val iCall = i.unresolve(this)
@@ -453,13 +500,6 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
   }
 
   def loadResultForCallOption[O](call: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] = {
-    // TODO: Remove debug code
-
-    val inputDigests: Seq[Digest] = call.getInputs.map {
-      i => extractDigest(i)
-    }
-
-    // Real code
     loadOutputIdsForCallOption(call).map {
       case (outputId, commitId, buildId) =>
         implicit val c: ClassTag[O] = call.getOutputClassTag
@@ -495,10 +535,13 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     loadBytesOption(f"data/${digest.id}")
 
   def loadOutputIdsForCallOption[O](call: FunctionCallWithProvenance[O]): Option[(Digest, String, String)] = {
-    call.getInputGroupValuesDigest(this)
+    val digest1 = call.getInputGroupValuesDigest(this)
     val inputGroupValuesDigest = {
       val digests = call.getInputs.map(i => extractDigest(i)).toList
       Digest(Util.digestObject(digests).id)
+    }
+    if (digest1 != inputGroupValuesDigest) {
+      throw new RuntimeException("")
     }
 
     implicit val outputClassTag: ClassTag[O] = call.getOutputClassTag
@@ -754,8 +797,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
   }
 
   private def saveObjectToSubPathByDigest[T : ClassTag : Encoder : Decoder](path: String, obj: T): Digest = {
-    val bytes = Util.serialize(obj)
-    val digest = Util.digestBytes(bytes)
+    val (bytes, digest) = Util.getBytesAndDigest(obj)
     saveBytes(f"$path/${digest.id}", bytes)
     digest
   }

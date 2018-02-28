@@ -1,21 +1,27 @@
      441 ./commits/commit1/builds/build1/35531b3eb037f2cbeafad66323cb09c311bff950
      441 ./commits/commit1/builds/build2/5235bbfe0aa0f0422631092c1287bd07ff236d96
        2 ./data-provenance/1154740730b31b7e50c1f48eda123b583c805356/as/com.cibo.provenance.Version/from/-
-       2 ./data-provenance/356a192b7913b04c54574d18c28d46e6395428ab/as/int/from/-
-       2 ./data-provenance/77de68daecd823babbb58edb1c8e14d7106e83bb/as/int/from/com.cibo.provenance.Add/1.0/with-inputs/b6ba79a598534452b5c9717b838148308caf847d/with-provenance/ebddfc1730d39858fb92d9796928f208d4c74cc7/at/commit1/build1
-       2 ./data-provenance/da4b9237bacccdf19c0760cab7aec4a8359010b0/as/int/from/com.cibo.provenance.Add/1.0/with-inputs/b6ba79a598534452b5c9717b838148308caf847d/with-provenance/ebddfc1730d39858fb92d9796928f208d4c74cc7/at/commit1/build1
+       2 ./data-provenance/356a192b7913b04c54574d18c28d46e6395428ab/as/Int/from/-
+       2 ./data-provenance/77de68daecd823babbb58edb1c8e14d7106e83bb/as/int/from/com.cibo.provenance.Add/1.0/with-inputs/b6ba79a598534452b5c9717b838148308caf847d/with-provenance/e0c0ec00674ce52a63d1378f06735b2d9763df5b/at/commit1/build1
+       2 ./data-provenance/da4b9237bacccdf19c0760cab7aec4a8359010b0/as/int/from/com.cibo.provenance.Add/1.0/with-inputs/b6ba79a598534452b5c9717b838148308caf847d/with-provenance/e0c0ec00674ce52a63d1378f06735b2d9763df5b/at/commit1/build1
       24 ./data/1154740730b31b7e50c1f48eda123b583c805356
        1 ./data/356a192b7913b04c54574d18c28d46e6395428ab
        1 ./data/77de68daecd823babbb58edb1c8e14d7106e83bb
        1 ./data/da4b9237bacccdf19c0760cab7aec4a8359010b0
+       2 ./functions/com.cibo.provenance.Add/1.0/call-resolved-inputs/e0c0ec00674ce52a63d1378f06735b2d9763df5b/b6ba79a598534452b5c9717b838148308caf847d
+     367 ./functions/com.cibo.provenance.Add/1.0/calls-deflated/71a24beb26394b785d36e80414727abdf64b6bfb
+    5820 ./functions/com.cibo.provenance.Add/1.0/calls-inflated/8ef08a89959da134ad57cb575dc9845a2168c95b
        2 ./functions/com.cibo.provenance.Add/1.0/conflict/Digest(b6ba79a598534452b5c9717b838148308caf847d)
        2 ./functions/com.cibo.provenance.Add/1.0/conflicted
      101 ./functions/com.cibo.provenance.Add/1.0/input-group-values/b6ba79a598534452b5c9717b838148308caf847d
        2 ./functions/com.cibo.provenance.Add/1.0/inputs-to-output/b6ba79a598534452b5c9717b838148308caf847d/77de68daecd823babbb58edb1c8e14d7106e83bb/commit1/build1
        2 ./functions/com.cibo.provenance.Add/1.0/inputs-to-output/b6ba79a598534452b5c9717b838148308caf847d/da4b9237bacccdf19c0760cab7aec4a8359010b0/commit1/build1
-       2 ./functions/com.cibo.provenance.Add/1.0/output-to-provenance/77de68daecd823babbb58edb1c8e14d7106e83bb/b6ba79a598534452b5c9717b838148308caf847d/ebddfc1730d39858fb92d9796928f208d4c74cc7
-       2 ./functions/com.cibo.provenance.Add/1.0/output-to-provenance/da4b9237bacccdf19c0760cab7aec4a8359010b0/b6ba79a598534452b5c9717b838148308caf847d/ebddfc1730d39858fb92d9796928f208d4c74cc7
-       2 ./functions/com.cibo.provenance.Add/1.0/provenance-to-inputs/ebddfc1730d39858fb92d9796928f208d4c74cc7/b6ba79a598534452b5c9717b838148308caf847d
-     180 ./functions/com.cibo.provenance.Add/1.0/provenance-values-deflated/a6e19fbb760c9b9941e9674ae8c8f123659fb2e4
-    5939 ./functions/com.cibo.provenance.Add/1.0/provenance-values-typed/753f3866312086ad81949538fb1f2651f5867088
-    7151 total
+       2 ./functions/com.cibo.provenance.Add/1.0/output-to-provenance/77de68daecd823babbb58edb1c8e14d7106e83bb/b6ba79a598534452b5c9717b838148308caf847d/e0c0ec00674ce52a63d1378f06735b2d9763df5b
+       2 ./functions/com.cibo.provenance.Add/1.0/output-to-provenance/da4b9237bacccdf19c0760cab7aec4a8359010b0/b6ba79a598534452b5c9717b838148308caf847d/e0c0ec00674ce52a63d1378f06735b2d9763df5b
+     488 ./types/ClassTag/5486f6e93aaef85d97dc046df30c034f7971b365
+     593 ./types/ClassTag/65828985417ed789c4bf62c298f621e4dad3490f
+    3732 ./types/Decoder/4b76b668ba9809ad11a9369550336cd19ca06239
+     465 ./types/Decoder/b26065f17d9ac2479b083aee2ce66128dc41ac44
+     179 ./types/Encoder/1f3176807712c508fe4399d95424a131e0fd57b6
+    3803 ./types/Encoder/4347ef75b782b20548b883ec946a7de93f19e8ba
+   16479 total

@@ -9,6 +9,8 @@ import scala.reflect.ClassTag
   *
   * This null ResultTracker never saves anything, and always returns a value for a query
   * by running the function in question.
+  *
+  * @param currentAppBuildInfo: The BuildInfo to use for new results. (Use DummyBuildInfo for test data.)
   */
 case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) extends ResultTracker {
 
@@ -21,7 +23,8 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
   def saveCall[O](v: FunctionCallWithProvenance[O]): FunctionCallWithProvenanceDeflated[O] = {
     // a no-op that just calculates the ID and returns it
-    FunctionCallWithProvenanceDeflated(v)(rt=this)
+    //FunctionCallWithProvenanceDeflated(v)(rt=this)
+    ???
   }
 
 
@@ -41,10 +44,25 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
   def hasValue(digest: Digest): Boolean = false // never
 
-  def loadDeflatedCallOption[O : ClassTag : Encoder : Decoder](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]] =
+  def loadCallByDigestOption[O : ClassTag : Encoder : Decoder](
+    className: String,
+    classVersion: Version,
+    digest: Digest
+  ): Option[FunctionCallWithProvenance[O]] =
     None // never
 
-  def loadInflatedCallWithDeflatedInputsOption[O : ClassTag : Encoder : Decoder](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]] =
+  def loadCallByDigestDeflatedOption[O : ClassTag : Encoder : Decoder](
+    className: String,
+    classVersion: Version,
+    digest: Digest
+  ): Option[FunctionCallWithProvenanceDeflated[O]] =
+    None // never
+
+  def loadCallByDigestDeflatedUntypedOption(
+    className: String,
+    classVersion: Version,
+    digest: Digest
+  ): Option[FunctionCallWithProvenanceDeflated[_]] =
     None // never
 
   def loadValueOption[O : ClassTag : Encoder : Decoder](digest: Digest): Option[O] = None // never

@@ -138,34 +138,65 @@ trait ResultTracker {
   def loadResultForCallOption[O](call: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]]
 
   /**
-    * Attempt to load a deflated call by its class, version, and the digested ID of the deflated call.
+    * Load a previously saved Call if its digest is known.  The call's digest is in used in its deflated surrogate,
+    * and in deflated results.
     *
-    * Note that the deflated call expresses everything in primitives, and can be loaded in a library
-    * that cannot instantiate any of the relevant data.  If the output is itself non instantiatable,
-    * the type parameter can be set to `Any`, and the object will only fail if `.inflate` is called on it.
+    * Note that, while the returned call is NOT deflated, its inputs are initially, so full reconstitution
+    * of the history can happen iteratively.
     *
-    * @param className  The class of FunctionWithProvenance for which the call is made.
-    * @param version    The version of the function represented in the call.
-    * @param digest     The digested value of the serialized call.
-    * @tparam O         The output type of the call.
-    * @return           A FunctionCallWithProvenance[O] that is deflated, and also has deflated inputs.
+    * @param functionName       The class of FunctionWithProvenance for which the call is made.
+    * @param functionVersion    The version of the function represented in the call.
+    * @param digest             The digested value of the serialized call.
+    * @tparam O                 The output type of the call.
+    * @return                   A FunctionCallWithProvenance[O] that is NOT deflated, but still has deflated inputs.
     */
-  def loadDeflatedCallOption[O : ClassTag : Encoder : Decoder](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenanceDeflated[O]]
+  def loadCallByDigestOption[O : ClassTag : Encoder : Decoder](
+    functionName: String,
+    functionVersion: Version,
+    digest: Digest
+  ): Option[FunctionCallWithProvenance[O]]
 
   /**
-    * This is typically called by a deflated call as the first stage of inflation.
-    * It returns an object that knows its output type.
+    * Load a previously saved _deflated_ Call if its digest is known.  The deflated call's digest is directly referenced
+    * in the storage system since the possibility of inflation is uncertain.  The inflated call is only accessed
+    * indirectly and conditionally.
     *
-    * The approach can be applied recursively to the deflated inputs, depending on how far into the history of the
-    * call the current application can instantiate objects.
+    * This version of this function expects to know the output type O and have implicit access to ClassTag[O],
+    * Encoder[O] and Decoder[O].  Switch to the output-type-agnostic version where if this is uncertain.
     *
-    * @param className  The class of FunctionWithProvenance for which the call is made.
-    * @param version    The version of the function represented in the call.
-    * @param digest     The digested value of the serialized call.
-    * @tparam O         The output type of the call.
-    * @return           A FunctionCallWithProvenance[O] that is NOT deflated, but still has deflated inputs.
+    * @param functionName       The class of FunctionWithProvenance for which the call is made.
+    * @param functionVersion    The version of the function represented in the call.
+    * @param digest             The digested value of the serialized call.
+    * @return                   A FunctionCallWithProvenance[O] that is deflated, and also has deflated inputs.
+    *
+    * @tparam O                 The output type of the call.  
     */
-  def loadInflatedCallWithDeflatedInputsOption[O : ClassTag : Encoder : Decoder](className: String, version: Version, digest: Digest): Option[FunctionCallWithProvenance[O]]
+  def loadCallByDigestDeflatedOption[O : ClassTag : Encoder : Decoder](
+    functionName: String,
+    functionVersion: Version,
+    digest: Digest
+  ): Option[FunctionCallWithProvenanceDeflated[O]]
+
+  /**
+    * Load a previously saved _deflated_ Call if its digest is known.  The deflated call's digest is directly referenced
+    * in the storage system since the possibility of inflation is uncertain.  The inflated call is only accessed
+    * indirectly and conditionally.
+    *
+    * This type-agnostic version of the loader loads the encoder/decoder information and determines the class tag
+    * only via reflection.  It is not used within the API, but can be used by services to bridge between code
+    * that is type-agnostic and code that is type-aware.
+    *
+    * @param functionName       The class of FunctionWithProvenance for which the call is made.
+    * @param functionVersion    The version of the function represented in the call.
+    * @param digest             The digested value of the serialized call.
+    * @return                   A FunctionCallWithProvenance[O] that is deflated (which also has deflated inputs).
+    *
+    */
+  def loadCallByDigestDeflatedUntypedOption(
+    functionName: String,
+    functionVersion: Version,
+    digest: Digest
+  ): Option[FunctionCallWithProvenanceDeflated[_]]
 
   /**
     * Retrieve one value from storage if the specified digest key is found.
@@ -217,16 +248,13 @@ trait ResultTracker {
     }
 
   /**
-    * An UnresolvedVersionException is thrown if the system attempts to deflate a call with an uresolved version.
+    * An UnresolvedVersionException is thrown if the system attempts to deflate a call with an unresolved version.
     * The version is typically static, but if it is not, the call cannot be saved until it is resolved.
     * @param call:  The offending call
     * @tparam O     The output type
     */
-  class UnresolvedVersionException[O](call: FunctionCallWithProvenance[O])
-    extends RuntimeException(f"Cannot deflate calls with an unresolved version: $call") {
-
-    def getCall: FunctionCallWithProvenance[O] = call
-  }
+  case class UnresolvedVersionException[O](call: FunctionCallWithProvenance[O])
+    extends RuntimeException(f"Cannot deflate calls with an unresolved version: $call")
 
   /**
     * A known failure mode for the ResultTracker.

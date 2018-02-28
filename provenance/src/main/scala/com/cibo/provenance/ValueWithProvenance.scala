@@ -390,6 +390,7 @@ case class UnknownProvenance[O : ClassTag : Encoder : Decoder](value: O)
   def duplicate(vv: ValueWithProvenance[Version]): Function0CallWithProvenance[O] =
     UnknownProvenance(value)
 
+  /*
   @transient
   private lazy val cachedDigest = Util.digestObject(value)
 
@@ -417,6 +418,7 @@ case class UnknownProvenance[O : ClassTag : Encoder : Decoder](value: O)
 
   override def getInputsDeflated(implicit rt: ResultTracker): Vector[FunctionCallResultWithProvenanceDeflated[_]] =
     cachedCollapsedDigests
+  */
 
   override def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = cachedResult
 
@@ -484,31 +486,62 @@ object FunctionCallWithProvenanceDeflated {
 
   def apply[O](call: FunctionCallWithProvenance[O])(implicit rt: ResultTracker): FunctionCallWithProvenanceDeflated[O] = {
     implicit val outputClassTag: ClassTag[O] = call.getOutputClassTag
-    implicit val e: Encoder[O] = call.getEncoder
-    implicit val d: Decoder[O] = call.getDecoder
-    val outputClassName: String = outputClassTag.runtimeClass.getName
+    implicit val outputEncoder: io.circe.Encoder[O] = call.getEncoder
+    implicit val outputDecoder: io.circe.Decoder[O] = call.getDecoder
+
+    // Since the call is in Circe JSON format, isolate enough real scala type information
+    // to fully transform that entirely with its ID.
+    implicit val classTagEncoder: Encoder[ClassTag[O]] = new BinaryEncoder[ClassTag[O]]
+    implicit val encoderEncoder: Encoder[Encoder[O]] = new BinaryEncoder[Encoder[O]]
+    implicit val decoderEncoder: Encoder[Decoder[O]] = new BinaryEncoder[Decoder[O]]
+
+    implicit val classTagDecoder: Decoder[ClassTag[O]] = new BinaryDecoder[ClassTag[O]]
+    implicit val encoderDecoder: Decoder[Encoder[O]] = new BinaryDecoder[Encoder[O]]
+    implicit val decoderDecoder: Decoder[Decoder[O]] = new BinaryDecoder[Decoder[O]]
+
+    val outputClassName = outputClassTag.toString
+    val (_, classTagDigest) = Util.getBytesAndDigest(outputClassTag)
+    val (_, encoderDigest) = Util.getBytesAndDigest(outputEncoder)
+    val (_, decoderDigest) = Util.getBytesAndDigest(outputDecoder)
+
     call match {
-      case valueWithUnknownProvenance : UnknownProvenance[O] =>
+      case valueWithUnknownProvenance: UnknownProvenance[O] =>
         FunctionCallWithUnknownProvenanceDeflated[O](
           outputClassName = outputClassName,
           Util.digestObject(valueWithUnknownProvenance.value)
         )
       case _ =>
-        FunctionCallWithKnownProvenanceDeflated[O](
+        new FunctionCallWithKnownProvenanceDeflated[O](
           functionName = call.functionName,
           functionVersion = call.getVersionValue,
           inflatedCallDigest = Util.digestObject(call.deflateInputs(rt)),
-          outputClassName = outputClassName
+          outputClassName = outputClassName,
+          classTagId = classTagDigest,
+          encoderId = encoderDigest,
+          decoderId = decoderDigest
         )
     }
   }
 }
 
+case class FunctionCallWithKnownProvenanceDeflatedUntyped(
+  functionName: String,
+  functionVersion: Version,
+  outputClassName: String,
+  inflatedCallDigest: Digest,
+  classTagId: Digest,
+  encoderId: Digest,
+  decoderId: Digest
+)
+
 case class FunctionCallWithKnownProvenanceDeflated[O](
   functionName: String,
   functionVersion: Version,
   outputClassName: String,
-  inflatedCallDigest: Digest
+  inflatedCallDigest: Digest,
+  classTagId: Digest,
+  encoderId: Digest,
+  decoderId: Digest
 )(implicit ct: ClassTag[O], en: Encoder[O], dc: Decoder[O])
   extends FunctionCallWithProvenanceDeflated[O] with Serializable {
 
@@ -524,7 +557,7 @@ case class FunctionCallWithKnownProvenanceDeflated[O](
   }
 
   def inflateNoRecurse(implicit rt: ResultTracker): Option[FunctionCallWithProvenance[O]] = {
-    rt.loadInflatedCallWithDeflatedInputsOption[O](functionName, functionVersion, inflatedCallDigest)
+    rt.loadCallByDigestOption[O](functionName, functionVersion, inflatedCallDigest)
   }
 }
 
@@ -556,29 +589,6 @@ object FunctionCallResultWithProvenanceDeflated {
       inputGroupDigest = call.getInputGroupDigest,
       outputDigest = result.outputAsVirtualValue.resolveDigest.digestOption.get,
       buildInfo = result.getOutputBuildInfoBrief
-    )
-  }
-
-  def apply[O : ClassTag : Encoder : Decoder](
-    functionName: String,
-    functionVersion: Version,
-    functionCallDigest: Digest,
-    inputGroupDigest: Digest,
-    outputDigest: Digest,
-    outputClassName: String,
-    buildInfo: BuildInfo
-  ): FunctionCallResultWithProvenanceDeflated[O] = {
-
-    FunctionCallResultWithProvenanceDeflated(
-      deflatedCall = FunctionCallWithKnownProvenanceDeflated[O](
-        functionName = functionName,
-        functionVersion = functionVersion,
-        outputClassName = outputClassName,
-        inflatedCallDigest = functionCallDigest
-      ),
-      inputGroupDigest = inputGroupDigest,
-      outputDigest = outputDigest,
-      buildInfo = buildInfo
     )
   }
 }
