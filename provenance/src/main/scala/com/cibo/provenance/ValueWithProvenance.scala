@@ -63,7 +63,7 @@ import io.circe.generic.auto._
 
 
 sealed trait ValueWithProvenance[O] extends Serializable {
-  def getOutputClassTag: ClassTag[O]
+  def outputClassTag: ClassTag[O]
   def isResolved: Boolean
   def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O]
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
@@ -80,7 +80,7 @@ sealed trait ValueWithProvenance[O] extends Serializable {
   def resolveAndExtractDigest(implicit rt: ResultTracker): Digest = {
     val call = unresolve(rt)
     val result = resolve(rt)
-    val valueDigested = result.outputAsVirtualValue.resolveDigest(call.getEncoder, call.getDecoder)
+    val valueDigested = result.outputAsVirtualValue.resolveDigest(call.outputEncoder, call.outputDecoder)
     valueDigested.digestOption.get
   }
 }
@@ -218,23 +218,20 @@ trait Result[O] extends ValueWithProvenance[O] with Serializable {
 
 // The regular pair of Call/Result work for normal functions.
 
-abstract class FunctionCallWithProvenance[O : ClassTag : io.circe.Encoder : io.circe.Decoder](var version: ValueWithProvenance[Version]) extends Call[O] with Serializable {
+abstract class FunctionCallWithProvenance[O : ClassTag : io.circe.Encoder : io.circe.Decoder](var vv: ValueWithProvenance[Version]) extends Call[O] with Serializable {
   self =>
 
-  @transient
-  lazy val getOutputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
+  def outputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
 
-  @transient
-  lazy val getEncoder: io.circe.Encoder[O] = implicitly[io.circe.Encoder[O]]
+  def outputEncoder: io.circe.Encoder[O] = implicitly[io.circe.Encoder[O]]
 
-  @transient
-  lazy val getDecoder: io.circe.Decoder[O] = implicitly[io.circe.Decoder[O]]
+  def outputDecoder: io.circe.Decoder[O] = implicitly[io.circe.Decoder[O]]
 
   // Abstract interface.  These are implemented in each Function{n}CallSignatureWithProvenance subclass.
 
   def functionName: String
 
-  def getInputs: Seq[ValueWithProvenance[_]]
+  def inputs: Seq[ValueWithProvenance[_]]
 
   def resolveInputs(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
 
@@ -252,13 +249,13 @@ abstract class FunctionCallWithProvenance[O : ClassTag : io.circe.Encoder : io.c
 
   // Common methods.
 
-  def getVersion: ValueWithProvenance[Version] = version
+  def version: ValueWithProvenance[Version] = vv
 
-  def getVersionValue(implicit rt: ResultTracker): Version = getVersion.resolve.output
+  def versionValue(implicit rt: ResultTracker): Version = version.resolve.output
 
-  def getVersionValueAlreadyResolved: Option[Version] = {
+  def versionValueAlreadyResolved: Option[Version] = {
     // This returns a version but only if it is already resolved.
-    getVersion match {
+    version match {
       case u: UnknownProvenance[Version] => Some(u.value)
       case r: FunctionCallResultWithProvenance[Version] => r.outputAsVirtualValue.valueOption
       case _ => None
@@ -278,13 +275,13 @@ abstract class FunctionCallWithProvenance[O : ClassTag : io.circe.Encoder : io.c
     Util.digestObject(getInputDigests(rt))
 
   protected[provenance] def getInputDigests(implicit rt: ResultTracker): List[String] = {
-    getInputs.toList.map {
+    inputs.toList.map {
       input =>
         val resolvedInput = input.resolve
         type Z = Any
         val inputValue: Z = resolvedInput.output
-        implicit val e: Encoder[Z] = resolvedInput.call.getEncoder.asInstanceOf[Encoder[Z]]
-        implicit val d: Decoder[Z] = resolvedInput.call.getDecoder.asInstanceOf[Decoder[Z]]
+        implicit val e: Encoder[Z] = resolvedInput.call.outputEncoder.asInstanceOf[Encoder[Z]]
+        implicit val d: Decoder[Z] = resolvedInput.call.outputDecoder.asInstanceOf[Decoder[Z]]
         val id = Util.digestObject(inputValue)
         val inputValueDigest = id.id
         inputValueDigest
@@ -292,14 +289,14 @@ abstract class FunctionCallWithProvenance[O : ClassTag : io.circe.Encoder : io.c
   }
 
   def getInputsDeflated(implicit rt: ResultTracker): Vector[FunctionCallResultWithProvenanceDeflated[_]] = {
-    val inputs = getInputs.toVector
-    inputs.indices.map {
-      i => inputs(i).resolve.deflate
+    val inputSeq = inputs.toVector
+    inputSeq.indices.map {
+      i => inputSeq(i).resolve.deflate
     }.toVector
   }
 
   def getInputGroupValuesDigest(implicit rt: ResultTracker): Digest = {
-    val digests = getInputs.map(_.resolveAndExtractDigest(rt)).toList
+    val digests = inputs.map(_.resolveAndExtractDigest(rt)).toList
     Util.digestObject(digests)
   }
 
@@ -322,13 +319,13 @@ abstract class FunctionCallResultWithProvenance[O](
   def outputAsVirtualValue: VirtualValue[O] = pOutputAsVirtualValue
 
   def output(implicit rt: ResultTracker): O =
-    pOutputAsVirtualValue.resolveValue(rt, pCall.getEncoder, pCall.getDecoder).valueOption.get
+    pOutputAsVirtualValue.resolveValue(rt, pCall.outputEncoder, pCall.outputDecoder).valueOption.get
 
-  def getOutputClassTag: ClassTag[O] = pCall.getOutputClassTag
+  def outputClassTag: ClassTag[O] = pCall.outputClassTag
 
-  def getOutputBuildInfo: BuildInfo = pOutputBuildInfo
+  def outputBuildInfo: BuildInfo = pOutputBuildInfo
 
-  def getOutputBuildInfoBrief: BuildInfoBrief = pOutputBuildInfo.abbreviate
+  def outputBuildInfoBrief: BuildInfoBrief = pOutputBuildInfo.abbreviate
 
   override def toString: String =
     pCall match {
@@ -363,7 +360,7 @@ abstract class FunctionCallResultWithProvenance[O](
   def inflateRecurse(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = {
     val call2 = this.call.inflateRecurse(rt)
     if (call2 != call) {
-      call2.newResult(outputAsVirtualValue)(getOutputBuildInfo)
+      call2.newResult(outputAsVirtualValue)(outputBuildInfo)
     } else {
       this
     }
@@ -373,9 +370,9 @@ abstract class FunctionCallResultWithProvenance[O](
 /**
   * UnknownProvenance represents data with no history.
   *
+  * @param value  The value with unknown provenance to be added into tracking.
+  * @tparam O     The type of hte value
   */
-
-
 //scalastyle:off
 case class UnknownProvenance[O : ClassTag : Encoder : Decoder](value: O)
   extends Function0CallWithProvenance[O](null)(null) with Serializable {
@@ -388,7 +385,7 @@ case class UnknownProvenance[O : ClassTag : Encoder : Decoder](value: O)
 
   def implVersion(v: Version): O = value
 
-  override def getVersion: ValueWithProvenance[Version] = NoVersionProvenance
+  override def version: ValueWithProvenance[Version] = NoVersionProvenance
 
   def functionName: String = toString
 
@@ -404,36 +401,6 @@ case class UnknownProvenance[O : ClassTag : Encoder : Decoder](value: O)
 
   def duplicate(vv: ValueWithProvenance[Version]): Function0CallWithProvenance[O] =
     UnknownProvenance(value)
-
-  /*
-  @transient
-  private lazy val cachedDigest = Util.digestObject(value)
-
-  override def getInputGroupValuesDigest(implicit rt: ResultTracker): Digest =
-    cachedDigest
-
-  @transient
-  private lazy val cachedCollapsedDigests: Vector[FunctionCallResultWithProvenanceDeflated[O]] =
-    Vector(cachedResultDeflated)
-
-  @transient
-  private lazy val cachedResultDeflated = {
-    FunctionCallResultWithProvenanceDeflated[O](
-      deflatedCall = FunctionCallWithKnownProvenanceDeflated[O](
-        functionName = functionName,
-        functionVersion = getVersionValue,
-        inflatedCallDigest = Util.digestObject(this),
-        outputClassName = getOutputClassTag.runtimeClass.getName
-      ),
-      inputGroupDigest = getInputGroupDigest,
-      outputDigest = cachedResult.outputAsVirtualValue.resolveDigest.digestOption.get,
-      buildInfo = cachedResult.getOutputBuildInfoBrief
-    )
-  }
-
-  override def getInputsDeflated(implicit rt: ResultTracker): Vector[FunctionCallResultWithProvenanceDeflated[_]] =
-    cachedCollapsedDigests
-  */
 
   override def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = cachedResult
 
@@ -510,9 +477,9 @@ sealed trait FunctionCallWithProvenanceDeflated[O] extends ValueWithProvenanceDe
 object FunctionCallWithProvenanceDeflated {
 
   def apply[O](call: FunctionCallWithProvenance[O])(implicit rt: ResultTracker): FunctionCallWithProvenanceDeflated[O] = {
-    implicit val outputClassTag: ClassTag[O] = call.getOutputClassTag
-    implicit val outputEncoder: io.circe.Encoder[O] = call.getEncoder
-    implicit val outputDecoder: io.circe.Decoder[O] = call.getDecoder
+    implicit val outputClassTag: ClassTag[O] = call.outputClassTag
+    implicit val outputEncoder: io.circe.Encoder[O] = call.outputEncoder
+    implicit val outputDecoder: io.circe.Decoder[O] = call.outputDecoder
 
     // Since the call is in Circe JSON format, isolate enough real scala type information
     // to fully transform that entirely with its ID.
@@ -535,7 +502,7 @@ object FunctionCallWithProvenanceDeflated {
       case _ =>
         new FunctionCallWithKnownProvenanceDeflated[O](
           functionName = call.functionName,
-          functionVersion = call.getVersionValue,
+          functionVersion = call.versionValue,
           inflatedCallDigest = Util.digestObject(call.deflateInputs(rt)),
           outputClassName = outputClassName,
           encoderDigest = encoderDigest,
@@ -570,7 +537,7 @@ case class FunctionCallWithKnownProvenanceDeflated[O](
 
   def toBytes: Array[Byte] = Util.getBytesAndDigest(this)._1
 
-  def getOutputClassTag: ClassTag[O] =
+  def outputClassTag: ClassTag[O] =
     implicitly[ClassTag[O]]
 
   def inflateOption(implicit rt: ResultTracker): Option[FunctionCallWithProvenance[O]] = {
@@ -592,7 +559,7 @@ case class FunctionCallWithUnknownProvenanceDeflated[O : ClassTag : Encoder : De
 
   def toBytes: Array[Byte] = Util.getBytesAndDigest(this)._1
 
-  def getOutputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
+  def outputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
 
   def inflateOption(implicit rt: ResultTracker): Option[FunctionCallWithProvenance[O]] =
     rt.loadValueOption[O](valueDigest).map(v => UnknownProvenance(v))
@@ -604,15 +571,15 @@ object FunctionCallResultWithProvenanceDeflated {
 
   def apply[O](result: FunctionCallResultWithProvenance[O])(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] = {
     val call = result.call
-    implicit val outputClassTag: ClassTag[O] = call.getOutputClassTag
-    implicit val enc: Encoder[O] = call.getEncoder
-    implicit val dec: Decoder[O] = call.getDecoder
+    implicit val outputClassTag: ClassTag[O] = call.outputClassTag
+    implicit val enc: Encoder[O] = call.outputEncoder
+    implicit val dec: Decoder[O] = call.outputDecoder
 
     FunctionCallResultWithProvenanceDeflated[O](
       deflatedCall = FunctionCallWithProvenanceDeflated(call),
       inputGroupDigest = call.getInputGroupDigest,
       outputDigest = result.outputAsVirtualValue.resolveDigest.digestOption.get,
-      buildInfo = result.getOutputBuildInfoBrief
+      buildInfo = result.outputBuildInfoBrief
     )
   }
 }
@@ -626,7 +593,7 @@ case class FunctionCallResultWithProvenanceDeflated[O : reflect.ClassTag : Encod
 
   def toBytes: Array[Byte] = Util.getBytesAndDigest(this)._1
 
-  def getOutputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
+  def outputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
 
   def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
     inflate.resolve(rt)

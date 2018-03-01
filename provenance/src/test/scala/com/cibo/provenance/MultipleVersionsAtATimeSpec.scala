@@ -23,16 +23,16 @@ class MultipleVersionsAtATimeSpec extends FunSpec with Matchers {
 
     it("should use the current version by default, track it, and run correctly.") {
       val s1 = myFuncWithOneVersion(1.23, 3)
-      s1.getVersionValue shouldEqual Version("1.0")
+      s1.versionValue shouldEqual Version("1.0")
 
       val r1 = s1.run
       r1.output shouldEqual "1.23,3"
-      r1.call.getVersionValue shouldEqual Version("1.0")
+      r1.call.versionValue shouldEqual Version("1.0")
     }
 
     it("should construct with other version values, but throw an exception if something besides the currentVersion is run.") {
       val s1 = myFuncWithOneVersion(1.23, 3, Version("9.99"))
-      s1.getVersionValue shouldEqual Version("9.99")
+      s1.versionValue shouldEqual Version("9.99")
 
       intercept[InvalidVersionException[_]] { s1.run }
     }
@@ -51,7 +51,7 @@ class MultipleVersionsAtATimeSpec extends FunSpec with Matchers {
       myFuncWithOldVersions.loadableVersions.foreach {
         version =>
           val s1 = myFuncWithOldVersions(1.23, 3, version)
-          s1.getVersionValue shouldEqual version
+          s1.versionValue shouldEqual version
       }
     }
 

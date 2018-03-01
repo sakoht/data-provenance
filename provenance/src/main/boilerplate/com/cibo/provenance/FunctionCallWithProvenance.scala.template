@@ -28,7 +28,7 @@ import io.circe._
   */
 abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: ValueWithProvenance[Version])(implVersion: (Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
 
-  def getInputs: Seq[ValueWithProvenance[_]] = Seq.empty
+  def inputs: Seq[ValueWithProvenance[_]] = Seq.empty
 
   // NOTE: Function0 has no inputTuple method, since there is no Tuple0.
 
@@ -52,7 +52,7 @@ abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: 
 
   /*
   def run(implicit rt: ResultTracker): Function0CallResultWithProvenance[O] = {
-    val o: O = implVersion(getVersionValue)
+    val o: O = implVersion(versionValue)
     new Function0CallResultWithProvenance(this, VirtualValue(o))(rt.currentAppBuildInfo)
   }
   */
@@ -81,7 +81,7 @@ abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: 
   */
 abstract class Function1CallWithProvenance[[#I1#], O : ClassTag : Encoder : Decoder]([#i1: ValueWithProvenance[_ <: I1]#], v: ValueWithProvenance[Version])(implVersion: ([#I1#], Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
 
-  def getInputs: Seq[ValueWithProvenance[_]] = Seq([#i1#])
+  def inputs: Seq[ValueWithProvenance[_]] = Seq([#i1#])
 
   def inputTuple: Tuple1[[#ValueWithProvenance[_ <: I1]#]] = Tuple1([#i1#])
 

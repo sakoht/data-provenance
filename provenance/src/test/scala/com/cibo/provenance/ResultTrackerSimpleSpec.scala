@@ -231,19 +231,19 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       {
         implicit val rt1 = ResultTrackerSimple(SyncablePath(testDataDir))(build1)
         val r1 = Add(1, 1).resolve
-        r1.getOutputBuildInfoBrief shouldEqual build1
+        r1.outputBuildInfoBrief shouldEqual build1
       }
 
       {
         implicit val rt2 = ResultTrackerSimple(SyncablePath(testDataDir))(build2)
         val r2 = Add(1, 1).resolve
-        r2.getOutputBuildInfoBrief shouldEqual build1 // still build1
+        r2.outputBuildInfoBrief shouldEqual build1 // still build1
       }
 
       {
         implicit val rt3 = ResultTrackerSimple(SyncablePath(testDataDir))(build3)
         val r3 = Add(1, 1).resolve
-        r3.getOutputBuildInfoBrief == build1 // still build1
+        r3.outputBuildInfoBrief == build1 // still build1
       }
 
       FileUtils.deleteDirectory(new File(testDataDir))
@@ -251,7 +251,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       {
         implicit val rt2 = ResultTrackerSimple(SyncablePath(testDataDir))(build2)
         val r2 = Add(1, 1).resolve
-        r2.getOutputBuildInfoBrief == build2 // now build 2!
+        r2.outputBuildInfoBrief == build2 // now build 2!
       }
 
       FileUtils.deleteDirectory(new File(testDataDir))
@@ -259,7 +259,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       {
         implicit val rt3 = ResultTrackerSimple(SyncablePath(testDataDir))(build2)
         val r3 = Add(1, 1).resolve
-        r3.getOutputBuildInfoBrief == build3 // now build 3!
+        r3.outputBuildInfoBrief == build3 // now build 3!
       }
 
       TestUtils.diffOutputSubdir(testSubdir)
@@ -276,18 +276,18 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
         implicit val rt1 = ResultTrackerSimple(SyncablePath(testDataDir))(build1)
         val r1 = call.resolve
         r1.output shouldEqual 2
-        r1.getOutputBuildInfoBrief shouldEqual build1
+        r1.outputBuildInfoBrief shouldEqual build1
       }
 
       {
         implicit val rt2 = ResultTrackerSimple(SyncablePath(testDataDir))(build2)
 
         val r2 = call.resolve                             // The resolver finds a previous result
-        r2.getOutputBuildInfoBrief shouldEqual build1     // from the last build
+        r2.outputBuildInfoBrief shouldEqual build1     // from the last build
         r2.output shouldEqual 2                           // and has the correct output.
 
         val r3 = call.resolveInputs.newResult(3)(build1)  // Make a fake result.
-        r3.getOutputBuildInfoBrief shouldEqual build1     // On the same build.
+        r3.outputBuildInfoBrief shouldEqual build1     // On the same build.
         r3.output shouldEqual 3                           // That has an inconsistent value for 1+1
 
         intercept[InconsistentVersionException] {
@@ -312,14 +312,14 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
         implicit val rt1: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))(build1)
         val r1 = call.resolve
         r1.output shouldEqual 2
-        r1.getOutputBuildInfoBrief shouldEqual build1
+        r1.outputBuildInfoBrief shouldEqual build1
       }
 
       {
         implicit val rt2: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))(build2)
 
         val r4 = call.resolveInputs.newResult(4)(build2)    // Make a fake result.
-        r4.getOutputBuildInfoBrief shouldEqual build2       // On a new commit and build.
+        r4.outputBuildInfoBrief shouldEqual build2       // On a new commit and build.
         r4.output shouldEqual 4                             // That has an inconsistent value for 1+1
 
         intercept[InconsistentVersionException] {

@@ -106,13 +106,13 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
     * @return       A Result applicable to the call, with the output and current BuildInfo metadata.:q!
     */
   protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
-    implicit val ct: ClassTag[O] = call.getOutputClassTag
+    implicit val ct: ClassTag[O] = call.outputClassTag
     // This replaces an inputs that are not resolved with the equivalent result.
     // (Optimized to be a no-op if the call already has reolved inputs.)
     // Consider throwing an error if all inputs are not resolved first?  Perhaps we do too much.
     val cx = call.resolveInputs
     // The "resolve" invocations below will be no-ops because of the above.
-    val output: O = implVersion(cx.getVersionValue)
+    val output: O = implVersion(cx.versionValue)
     // Return a result referencing the fully resolved call.
     Result(cx, VirtualValue(output))(rt.currentAppBuildInfo)
   }
@@ -183,7 +183,7 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
     * @return       A ThisFunction.Call.
     */
   implicit private def convertCall(call: Function0CallWithProvenance[O]): Call =
-    Call(call.getVersion)(call.getOutputClassTag, call.getEncoder, call.getDecoder)
+    Call(call.version)(call.outputClassTag, call.outputEncoder, call.outputDecoder)
 
   /**
     * Implicitly re-package generic Function0CallResultWithProvenance into one specific to this Function0WithProvenance.
@@ -193,7 +193,7 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
     * @return       A ThisFunction.Result
     */
   implicit private def convertResult(result: Function0CallResultWithProvenance[O]): Result =
-    Result(result.call, result.outputAsVirtualValue)(result.getOutputBuildInfoBrief)
+    Result(result.call, result.outputAsVirtualValue)(result.outputBuildInfoBrief)
 
 }
 
@@ -280,13 +280,13 @@ trait Function1WithProvenance[[#I1#], O] extends FunctionWithProvenance[O] with 
     * @return       A Result applicable to the call, with the output and current BuildInfo metadata.:q!
     */
   protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
-    implicit val ct: ClassTag[O] = call.getOutputClassTag
+    implicit val ct: ClassTag[O] = call.outputClassTag
     // This replaces an inputs that are not resolved with the equivalent result.
     // (Optimized to be a no-op if the call already has reolved inputs.)
     // Consider throwing an error if all inputs are not resolved first?  Perhaps we do too much.
     val cx = call.resolveInputs
     // The "resolve" invocations below will be no-ops because of the above.
-    val output: O = implVersion([#cx.i1.resolve.output#], cx.getVersionValue)
+    val output: O = implVersion([#cx.i1.resolve.output#], cx.versionValue)
     // Return a result referencing the fully resolved call.
     Result(cx, VirtualValue(output))(rt.currentAppBuildInfo)
   }
@@ -364,7 +364,7 @@ trait Function1WithProvenance[[#I1#], O] extends FunctionWithProvenance[O] with 
     */
   implicit private def convertCall(call: Function1CallWithProvenance[[#I1#], O]): Call = {
     val i = call.inputTuple
-    Call([#i._1#], call.getVersion)(call.getOutputClassTag, call.getEncoder, call.getDecoder)
+    Call([#i._1#], call.version)(call.outputClassTag, call.outputEncoder, call.outputDecoder)
   }
 
   /**
@@ -375,7 +375,7 @@ trait Function1WithProvenance[[#I1#], O] extends FunctionWithProvenance[O] with 
     * @return       A ThisFunction.Result
     */
   implicit private def convertResult(r: Function1CallResultWithProvenance[[#I1#], O]): Result =
-    Result(r.call, r.outputAsVirtualValue)(r.getOutputBuildInfoBrief)
+    Result(r.call, r.outputAsVirtualValue)(r.outputBuildInfoBrief)
 
 }#
 ]

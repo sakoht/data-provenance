@@ -203,9 +203,9 @@ class InflateDeflateSpec extends FunSpec with Matchers {
     val call = call1
 
     val d1 = Util.digestObjectRaw(call)
-    call.getEncoder
-    call.getDecoder
-    call.getOutputClassTag
+    call.outputEncoder
+    call.outputDecoder
+    call.outputClassTag
     val d2 = Util.digestObjectRaw(call)
 
     val deflated = rt.saveCall(call)

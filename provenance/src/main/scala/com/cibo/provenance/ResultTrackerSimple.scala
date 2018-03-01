@@ -97,7 +97,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     // These three entities are all saved and linked below.
     val call: FunctionCallWithProvenance[O] = result.call
     val output: O = result.output
-    val buildInfoAbbreviated: BuildInfo = result.getOutputBuildInfoBrief
+    val buildInfoAbbreviated: BuildInfo = result.outputBuildInfoBrief
 
     call match {
       case _: UnknownProvenance[O] =>
@@ -112,7 +112,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
 
     // Unpack the call and build information for clarity below.
     val functionName = call.functionName
-    val version = call.getVersionValue
+    val version = call.versionValue
     val versionId = version.id
     val commitId = buildInfoAbbreviated.commitId
     val buildId = buildInfoAbbreviated.buildId
@@ -122,9 +122,9 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     val prefix = f"functions/$functionName/$versionId"
 
     // Get implicits related to the output type O.
-    implicit val outputClassTag: ClassTag[O] = result.getOutputClassTag
-    implicit val outputEncoder: Encoder[O] = result.call.getEncoder
-    implicit val outputDecoder: Decoder[O] = result.call.getDecoder
+    implicit val outputClassTag: ClassTag[O] = result.outputClassTag
+    implicit val outputEncoder: Encoder[O] = result.call.outputEncoder
+    implicit val outputDecoder: Decoder[O] = result.call.outputDecoder
 
     // Save the actual output value.
     // This is saved at data/$digestKey, so there will only be one copy for re-used values.
@@ -144,7 +144,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     // Sometimes has a Call.
     val expectedInputsDeflated: Vector[FunctionCallResultWithProvenanceDeflated[_]] =
       callWithDeflatedInputsExcludingVersion
-        .getInputs
+        .inputs
         .toVector
         .asInstanceOf[Vector[FunctionCallResultWithProvenanceDeflated[_]]]
 
@@ -161,7 +161,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
 
     // The deflation process will save any inputs that are not saved yet _except_ inputs with no provenance.
     // These only save when used as an input to another tracked entity (i.e. now).
-    (call.getVersion +: call.getInputs).foreach {
+    (call.version +: call.inputs).foreach {
       case u: UnknownProvenance[_] =>
         saveCall(u)
       case u: UnknownProvenanceValue[_] =>
@@ -344,9 +344,9 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
 
   private def saveCallImpl[O](call: FunctionCallWithProvenance[O]): FunctionCallWithProvenanceDeflated[O] = {
     implicit val rt: ResultTracker = this
-    implicit val outputClassTag: ClassTag[O] = call.getOutputClassTag
-    implicit val outputEncoder: io.circe.Encoder[O] = call.getEncoder
-    implicit val outputDecoder: io.circe.Decoder[O] = call.getDecoder
+    implicit val outputClassTag: ClassTag[O] = call.outputClassTag
+    implicit val outputEncoder: io.circe.Encoder[O] = call.outputEncoder
+    implicit val outputDecoder: io.circe.Decoder[O] = call.outputDecoder
 
     // Since the call is in Circe JSON format, isolate enough real scala type information
     // to fully transform that entirely with its ID.
@@ -395,7 +395,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
         }
 
         // Extract the version Value.
-        val versionValue: Version = known.getVersionValueAlreadyResolved match {
+        val versionValue: Version = known.versionValueAlreadyResolved match {
           case Some(value) =>
             value
           case None =>
@@ -510,16 +510,16 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
   private def extractDigest[Z](i: ValueWithProvenance[Z]) = {
     val iCall = i.unresolve(this)
     val iResult = i.resolve(this)
-    val iValueDigested = iResult.outputAsVirtualValue.resolveDigest(iCall.getEncoder, iCall.getDecoder)
+    val iValueDigested = iResult.outputAsVirtualValue.resolveDigest(iCall.outputEncoder, iCall.outputDecoder)
     iValueDigested.digestOption.get
   }
 
   def loadResultForCallOption[O](call: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] = {
     loadOutputIdsForCallOption(call).map {
       case (outputId, commitId, buildId) =>
-        implicit val c: ClassTag[O] = call.getOutputClassTag
-        implicit val e: Encoder[O] = call.getEncoder
-        implicit val d: Decoder[O] = call.getDecoder
+        implicit val c: ClassTag[O] = call.outputClassTag
+        implicit val e: Encoder[O] = call.outputEncoder
+        implicit val d: Decoder[O] = call.outputDecoder
 
         val output: O = try {
           loadValue[O](outputId)
@@ -527,7 +527,7 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
           case e: Exception =>
             // TODO: Remove debug code
             println(e.toString)
-            loadValue[O](outputId)(call.getOutputClassTag, call.getEncoder, call.getDecoder)
+            loadValue[O](outputId)(call.outputClassTag, call.outputEncoder, call.outputDecoder)
         }
         val outputId2 = Util.digestObject(output)
         if (outputId2 != outputId) {
@@ -552,17 +552,17 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
   def loadOutputIdsForCallOption[O](call: FunctionCallWithProvenance[O]): Option[(Digest, String, String)] = {
     val digest1 = call.getInputGroupValuesDigest(this)
     val inputGroupValuesDigest = {
-      val digests = call.getInputs.map(i => extractDigest(i)).toList
+      val digests = call.inputs.map(i => extractDigest(i)).toList
       Digest(Util.digestObject(digests).id)
     }
     if (digest1 != inputGroupValuesDigest) {
       throw new RuntimeException("")
     }
 
-    implicit val outputClassTag: ClassTag[O] = call.getOutputClassTag
-    implicit val e: Encoder[O] = call.getEncoder
-    implicit val d: Decoder[O] = call.getDecoder
-    loadOutputCommitAndBuildIdForInputGroupIdOption(call.functionName, call.getVersionValue(this), inputGroupValuesDigest) match {
+    implicit val outputClassTag: ClassTag[O] = call.outputClassTag
+    implicit val e: Encoder[O] = call.outputEncoder
+    implicit val d: Decoder[O] = call.outputDecoder
+    loadOutputCommitAndBuildIdForInputGroupIdOption(call.functionName, call.versionValue(this), inputGroupValuesDigest) match {
       case Some(ids) =>
         Some(ids)
       case None =>
