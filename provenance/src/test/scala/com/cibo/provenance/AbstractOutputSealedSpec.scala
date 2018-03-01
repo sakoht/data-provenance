@@ -1,9 +1,6 @@
 package com.cibo.provenance
 
-import java.io.File
-
 import com.cibo.io.s3.SyncablePath
-import org.apache.commons.io.FileUtils
 import org.scalatest.{FunSpec, Matchers}
 
 
@@ -16,8 +13,8 @@ class AbstractOutputSealedSpec extends FunSpec with Matchers {
     it("should work") {
       val testSubdir = f"abstract-outputs-sealed"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
 
       import io.circe.generic.auto._
 
@@ -28,7 +25,7 @@ class AbstractOutputSealedSpec extends FunSpec with Matchers {
           case _: Cat => "cat"
           case _ => "other"
         }
-        ) shouldBe "cat"
+      ) shouldBe "cat"
 
       val p2 = pickAPet("Yippydog")
       (

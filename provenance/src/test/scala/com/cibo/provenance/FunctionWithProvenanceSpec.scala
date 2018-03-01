@@ -3,7 +3,6 @@ package com.cibo.provenance
 import org.scalatest.{FunSpec, Matchers}
 import org.slf4j.{Logger, LoggerFactory}
 
-
 /**
   * Created by ssmith on 5/11/17.
   */

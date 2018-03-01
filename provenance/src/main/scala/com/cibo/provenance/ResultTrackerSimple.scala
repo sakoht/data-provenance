@@ -1,5 +1,7 @@
 package com.cibo.provenance
 
+import java.io.File
+
 import com.amazonaws.services.s3.model.PutObjectResult
 import com.typesafe.scalalogging.LazyLogging
 import io.circe._
@@ -7,6 +9,7 @@ import io.circe.generic.auto._
 import com.cibo.io.s3.{S3DB, SyncablePath}
 import com.cibo.provenance.exceptions.InconsistentVersionException
 import com.cibo.cache.GCache
+import org.apache.commons.io.FileUtils
 
 import scala.util.Try
 
@@ -45,8 +48,22 @@ import scala.util.Try
   * commit/build.  When a provenance gets multiple inputs, the same is true, but the fault is in the inconsistent
   * serialization of the inputs, typically.
   *
+  * @param basePath           The destination for new results, and default storage space for queries.
+  * @param underlyingTracker  An optional list of other trackers which "underlay" this one, read-only.
   */
-class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBuildInfo: BuildInfo) extends ResultTracker with LazyLogging {
+class ResultTrackerSimple(
+  val basePath: SyncablePath,
+  val writable: Boolean = true,
+  val underlyingTracker: Option[ResultTrackerSimple] = None
+)(implicit val currentAppBuildInfo: BuildInfo) extends ResultTracker with LazyLogging {
+
+  def over(underlying: ResultTrackerSimple): ResultTrackerSimple = {
+    new ResultTrackerSimple(basePath, writable, Some(underlying))
+  }
+
+  def over(underlyingPath: SyncablePath): ResultTrackerSimple = {
+    new ResultTrackerSimple(basePath, writable, Some(ResultTrackerSimple(underlyingPath, writable=false)))
+  }
 
   import scala.reflect.ClassTag
 
@@ -57,15 +74,13 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
   protected def checkForConflictedOutputBeforeSave(newResult: FunctionCallResultWithProvenance[_]): Boolean = false
   protected def checkForResultAfterSave(newResult: FunctionCallResultWithProvenance[_]): Boolean = false
 
-  // public interface
-
+  // The cache for saved results.
   val resultCacheSize = 1000L
   private val resultCache =
     GCache[FunctionCallResultWithProvenance[_], FunctionCallResultWithProvenanceDeflated[_]]()
       .maximumSize(resultCacheSize)
       .logRemoval(logger)
       .buildWith[FunctionCallResultWithProvenance[_], FunctionCallResultWithProvenanceDeflated[_]]
-
 
   def saveResult[O](result: FunctionCallResultWithProvenance[O]): FunctionCallResultWithProvenanceDeflated[O] = {
     val deflated: FunctionCallResultWithProvenanceDeflated[O] =
@@ -79,7 +94,6 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     deflated
   }
 
-  //scalastyle:off
   def saveResultImpl[O](result: FunctionCallResultWithProvenance[O]): FunctionCallResultWithProvenanceDeflated[O] = {
     implicit val rt: ResultTracker = this
 
@@ -155,8 +169,8 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
 
     // Sanity check.
     if (inputsDeflated.toString != expectedInputsDeflated.toString) {
-        //throw new RuntimeException("The call with deflated inputs does not match the original call's getInputsDeflated!")
-        println("The call with deflated inputs does not match the original call's getInputsDeflated!")
+        throw new RuntimeException("The call with deflated inputs does not match the original call getInputsDeflated!")
+        //println("The call with deflated inputs does not match the original call's getInputsDeflated!")
     }
 
     // The deflation process will save any inputs that are not saved yet _except_ inputs with no provenance.
@@ -725,44 +739,64 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     GCache[String, Array[Byte]]().maximumSize(heavyCacheSize).buildWith[String, Array[Byte]]
 
   protected def saveBytes(path: String, bytes: Array[Byte]): Unit = {
-    Option(lightCache.getIfPresent(path)) match {
-      case Some(_) =>
+    if (!writable) {
+      throw new ReadOnlyTrackerException(f"Attempt to save to a read-only ResultTracker $this.")
+    } else {
+      Option(lightCache.getIfPresent(path)) match {
+        case Some(_) =>
         // Already saved.  Do nothing.
-      case None =>
-        Option(heavyCache.getIfPresent(path)) match {
-          case Some(_) =>
-            // Recently loaded.  Flag in the larger save cache, but otherwise do nothing.
-            lightCache.put(path, Unit)
-          case None =>
-            // Actually save.
-            s3db.putObject(path, bytes) match {
-              case Some(f) =>
-                val result: PutObjectResult = Await.result(f, saveTimeout)
-                logger.debug(result.toString)
-              case None =>
+        case None =>
+          Option(heavyCache.getIfPresent(path)) match {
+            case Some(_) =>
+              // Recently loaded.  Flag in the larger save cache, but otherwise do nothing.
+              lightCache.put(path, Unit)
+            case None =>
+              // Actually save.
+              s3db.putObject(path, bytes) match {
+                case Some(f) =>
+                  val result: PutObjectResult = Await.result(f, saveTimeout)
+                  logger.debug(result.toString)
+                case None =>
                 // No future...
-            }
-            //
-            lightCache.put(path, Unit)
-            heavyCache.put(path, bytes)
-        }
+              }
+              lightCache.put(path, Unit)
+              heavyCache.put(path, bytes)
+          }
+      }
     }
   }
 
   protected def loadBytes(path: String): Array[Byte] = {
-    val bytes = Option(heavyCache.getIfPresent(path)) match {
-      case Some(found) =>
-        found
-      case None =>
-        s3db.getBytesForPrefix(path)
+    try {
+      val bytes = Option(heavyCache.getIfPresent(path)) match {
+        case Some(found) =>
+          found
+        case None =>
+          s3db.getBytesForPrefix(path)
+      }
+      lightCache.put(path, Unit)   // larger, lighter, prevents re-saves
+      heavyCache.put(path, bytes)  // smaller, heavier, actually provides data
+      bytes
+    } catch {
+      case e: Exception =>
+        underlyingTracker match {
+          case Some(underlying) =>
+            underlying.loadBytes(path)
+          case None =>
+            throw e
+        }
     }
-    lightCache.put(path, Unit)   // larger, lighter, prevents re-saves
-    heavyCache.put(path, bytes)  // smaller, heavier, actually provides data
-    bytes
   }
 
   protected def getListingRecursive(path: String): List[String] = {
-    s3db.getSuffixesForPrefix(path).toList
+    val listing1 = s3db.getSuffixesForPrefix(path).toList
+    underlyingTracker match {
+      case Some(underlying) =>
+        val listing2 = underlying.getListingRecursive(path)
+        (listing1.toVector ++ listing2.toVector).sorted.toList
+      case None =>
+        listing1
+    }
   }
 
   protected def pathExists(path: String): Boolean = {
@@ -771,14 +805,21 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
         true
       case None =>
         Option(heavyCache.getIfPresent(path)) match {
-          case Some(_) => true
+          case Some(_) =>
+            true
           case None =>
             if (basePath.extendPath(path).exists) {
               lightCache.put(path, Unit)
               true
             } else {
-              // We don't cache anything for false b/c the path may be added later
-              false
+              underlyingTracker match {
+                case Some(under) =>
+                  // We don't cache this because the underlying tracker will decide on that.
+                  under.pathExists(path)
+                case None =>
+                  // We don't cache anything for false b/c the path may be added later
+                  false
+              }
             }
         }
     }
@@ -819,13 +860,21 @@ class ResultTrackerSimple(val basePath: SyncablePath)(implicit val currentAppBui
     digest
   }
 
-}
 
+}
 
 object ResultTrackerSimple {
-  def apply(basePath: SyncablePath)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
-    new ResultTrackerSimple(basePath)(currentAppBuildInfo)
+  def apply(basePath: SyncablePath, writable: Boolean)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
+    new ResultTrackerSimple(basePath, writable)(currentAppBuildInfo)
+
+  def apply(basePath: String, writable: Boolean)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
+    new ResultTrackerSimple(SyncablePath(basePath), writable=writable)(currentAppBuildInfo)
 
   def apply(basePath: String)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
-    apply(SyncablePath(basePath))(currentAppBuildInfo)
+    new ResultTrackerSimple(SyncablePath(basePath))(currentAppBuildInfo)
+
+  def apply(basePath: SyncablePath)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
+    new ResultTrackerSimple(basePath)(currentAppBuildInfo)
 }
+
+class ReadOnlyTrackerException(msg: String) extends RuntimeException

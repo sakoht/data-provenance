@@ -10,9 +10,6 @@ import com.typesafe.scalalogging.LazyLogging
 import org.scalatest.{FunSpec, Matchers}
 
 class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
-  import java.io.File
-  import org.apache.commons.io.FileUtils
-
   import com.cibo.io.s3.SyncablePath
 
   // This is the root for test output.
@@ -30,8 +27,8 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
     it("has primitives save and reload correctly.") {
       val testSubdir = "reload1"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
 
       val obj1: Int = 999
       val id = rt.saveValue(obj1)
@@ -44,8 +41,9 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
     it("has signatures save and reload correctly.") {
       val testSubdir = "reload2"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
+      
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
 
       val obj1: Add.Call = Add(1, 2)
       val id = rt.saveValue(obj1)
@@ -58,8 +56,9 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
     it("lets a result save and be re-loaded by its call signature.") {
       val testSubdir = "reload3"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
+      
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
       
       // Create a result that is not tracked.
       val s1: Add.Call = Add(1, 2)
@@ -79,8 +78,9 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
     it("ensures functions do not re-run") {
       val testSubdir = "rerun1"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
+      
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
       
       Add.runCount = 0
 
@@ -102,8 +102,9 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
     it("ensures functions do not re-run when called with the same inputs") {
       val testSubdir = "rerun2"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
+      
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
 
       Add.runCount = 0
 
@@ -131,8 +132,8 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
     it("should skip calls where the call has been made before with the same input values") {
       val testSubdir = "rerun3"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
 
       Add.runCount = 0
 
@@ -173,8 +174,8 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
     it("ensures functions method calls return expected values (breakdown)") {
       val testSubdir = "breakdown"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
 
       Add.runCount = 0
       val s1 = Add(1, 2)
@@ -226,7 +227,8 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
     it("results should be found from a previous run") {
       val testSubdir = "collision"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      FileUtils.deleteDirectory(new File(testDataDir))
+      val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking  // not used below, just wipe
+      rt.wipe
 
       {
         implicit val rt1 = ResultTrackerSimple(SyncablePath(testDataDir))(build1)
@@ -246,7 +248,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
         r3.outputBuildInfoBrief == build1 // still build1
       }
 
-      FileUtils.deleteDirectory(new File(testDataDir))
+      
 
       {
         implicit val rt2 = ResultTrackerSimple(SyncablePath(testDataDir))(build2)
@@ -254,7 +256,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
         r2.outputBuildInfoBrief == build2 // now build 2!
       }
 
-      FileUtils.deleteDirectory(new File(testDataDir))
+      
 
       {
         implicit val rt3 = ResultTrackerSimple(SyncablePath(testDataDir))(build2)
@@ -268,7 +270,8 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
     it("should detect inconsistent output for the same commit/build") {
       val testSubdir = "same-build-inconsistency"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      FileUtils.deleteDirectory(new File(testDataDir))
+      val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking // not used below, just to wipe
+      rt.wipe
 
       val call = Add(1, 1)
 
@@ -304,7 +307,8 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
     it("should detect inconsistent output for the same declared version across commit/builds") {
       val testSubdir = f"cross-build-inconsistency"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      FileUtils.deleteDirectory(new File(testDataDir))
+      val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
 
       val call = Add(1, 1)
 

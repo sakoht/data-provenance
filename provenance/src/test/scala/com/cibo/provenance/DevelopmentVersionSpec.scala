@@ -4,9 +4,6 @@ import org.scalatest.{FunSpec, Matchers}
 
 class DevelopmentVersionSpec extends FunSpec with Matchers {
 
-  import java.io.File
-
-  import org.apache.commons.io.FileUtils
   import com.cibo.io.s3.SyncablePath
 
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir
@@ -26,7 +23,6 @@ class DevelopmentVersionSpec extends FunSpec with Matchers {
     it("should use produce with the DevVersion suffix") {
       val testSubdir = "dev-version"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      FileUtils.deleteDirectory(new File(testDataDir))
       implicit val rt: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))
 
       val result1 = myFunc(123).resolve

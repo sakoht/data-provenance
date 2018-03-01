@@ -1,11 +1,7 @@
 package com.cibo.provenance
 
-import java.io.File
-
 import com.cibo.io.s3.SyncablePath
-import org.apache.commons.io.FileUtils
 import org.scalatest.{FunSpec, Matchers}
-
 
 class AbstractInputsSpec extends FunSpec with Matchers {
 
@@ -23,8 +19,8 @@ class AbstractInputsSpec extends FunSpec with Matchers {
     it("work with different subclasses of input") {
       val testSubdir = f"abstract-inputs"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt = ResultTrackerSimple(SyncablePath(testDataDir))
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
 
       sayYourName(ruffers).resolve.output shouldBe "Ruffers"
 

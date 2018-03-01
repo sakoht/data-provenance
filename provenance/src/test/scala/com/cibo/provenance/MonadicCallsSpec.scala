@@ -9,9 +9,6 @@ import org.scalatest.{FunSpec, Matchers}
 
 
 class MonadicCallsSpec extends FunSpec with Matchers {
-  import java.io.File
-  import org.apache.commons.io.FileUtils
-
   import com.cibo.io.s3.SyncablePath
   import com.cibo.provenance.monadics._
 
@@ -23,8 +20,9 @@ class MonadicCallsSpec extends FunSpec with Matchers {
     it("handle granularity shifts") {
       val subDir = "monadic-calls"
       val testDataDir = f"$outputBaseDir/$subDir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))
+      
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
 
       val a: MakeDummyOutputList.Call = MakeDummyOutputList() // (11, 22, 33, 44)
       val b = a.map(MyIncrement)    // (12, 23, 34, 45)
@@ -94,8 +92,10 @@ class MonadicCallsSpec extends FunSpec with Matchers {
     it("should never run when selecting an element with apply(), and only run once after resolving some element") {
       val subDir = "mappable-calls-are-dry"
       val testDataDir = f"$outputBaseDir/$subDir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))
+
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
+
       MakeDummyOutputList.runCount = 0
 
       val myCall: FunctionCallWithProvenance[Seq[Int]] = MakeDummyOutputList()
@@ -140,8 +140,9 @@ class MonadicCallsSpec extends FunSpec with Matchers {
     it("maps efficiently") {
       val subDir = "mappable-results-map"
       val testDataDir = f"$outputBaseDir/$subDir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
+
       MakeDummyOutputList.runCount = 0
 
       val myResult1: MakeDummyOutputList.Result = MakeDummyOutputList().resolve
@@ -194,8 +195,8 @@ class MonadicCallsSpec extends FunSpec with Matchers {
     it("handles `scatter` with efficient pass-through to the underling implementation") {
       val subDir = "mappable-results-scatter"
       val testDataDir = f"$outputBaseDir/$subDir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
 
       MakeDummyOutputList.runCount = 0
 

@@ -1,10 +1,7 @@
 package com.cibo.provenance
 
-import java.io.File
-
 import com.cibo.io.s3.SyncablePath
 import com.cibo.provenance.monadics.MapWithProvenance
-import org.apache.commons.io.FileUtils
 import org.scalatest.{FunSpec, Matchers}
 
 
@@ -19,7 +16,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
     it("work on simple calls.") {
 
       val testDataDir = f"$outputBaseDir/deflate-simple"
-      FileUtils.deleteDirectory(new File(testDataDir))
+      
 
       implicit val bi: BuildInfo = DummyBuildInfo
       implicit val rt: ResultTrackerSimple = ResultTrackerSimple(SyncablePath(testDataDir))
@@ -34,7 +31,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
 
     it("allows a call to partially or fully inflate") {
       val testDataDir = f"$outputBaseDir/deflate-reinflate"
-      FileUtils.deleteDirectory(new File(testDataDir))
+      
 
       implicit val bi: BuildInfo = DummyBuildInfo
       implicit val rt: ResultTrackerSimple = ResultTrackerSimple(SyncablePath(testDataDir))
@@ -58,7 +55,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
 
     it("works on nested calls") {
       val testDataDir = f"$outputBaseDir/deflate-nested"
-      FileUtils.deleteDirectory(new File(testDataDir))
+      
 
       implicit val bi: BuildInfo = DummyBuildInfo
       implicit val rt: ResultTrackerSimple = ResultTrackerSimple(SyncablePath(testDataDir))
@@ -88,8 +85,6 @@ class InflateDeflateSpec extends FunSpec with Matchers {
 
     it("work on functions") {
       val testDataDir = f"$outputBaseDir/deflate-functions"
-      FileUtils.deleteDirectory(new File(testDataDir))
-
       implicit val bi: BuildInfo = DummyBuildInfo
       implicit val rt: ResultTrackerSimple = ResultTrackerSimple(SyncablePath(testDataDir))
 
@@ -107,7 +102,6 @@ class InflateDeflateSpec extends FunSpec with Matchers {
 
     it("work on functions as inputs") {
       val testDataDir = f"$outputBaseDir/deflate-functions-taking-functions"
-      FileUtils.deleteDirectory(new File(testDataDir))
 
       implicit val bi: BuildInfo = DummyBuildInfo
       implicit val rt: ResultTrackerSimple = ResultTrackerSimple(SyncablePath(testDataDir))
@@ -134,7 +128,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
 
     it("works with functions as output") {
       val testDataDir = f"$outputBaseDir/deflate-returning-functions"
-      FileUtils.deleteDirectory(new File(testDataDir))
+      
 
       implicit val bi: BuildInfo = DummyBuildInfo
       implicit val rt: ResultTrackerSimple = ResultTrackerSimple(SyncablePath(testDataDir))
@@ -151,7 +145,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
 
     it("works with limited type information") {
       val testDataDir = f"$outputBaseDir/deflate-reinflate-limited-type"
-      FileUtils.deleteDirectory(new File(testDataDir))
+      
       implicit val bi: BuildInfo = DummyBuildInfo
       implicit val rt: ResultTrackerSimple = ResultTrackerSimple(SyncablePath(testDataDir))
 
@@ -171,7 +165,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
 
     it("works with no type information") {
       val testDataDir = f"$outputBaseDir/deflate-reinflate-unknown-type"
-      FileUtils.deleteDirectory(new File(testDataDir))
+      
       implicit val bi: BuildInfo = DummyBuildInfo
       implicit val rt: ResultTrackerSimple = ResultTrackerSimple(SyncablePath(testDataDir))
 
