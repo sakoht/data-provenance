@@ -18,35 +18,13 @@ object Util extends LazyLogging {
   import org.apache.commons.codec.digest.DigestUtils
   import scala.reflect.ClassTag
 
-  def clean[T : ClassTag](obj: T): T =
-    Util.deserializeRaw(Util.serializeRawImpl(obj))
-
-  def serialize[T](obj: T, checkConsistency: Boolean = true)(implicit e: io.circe.Encoder[T], d: io.circe.Decoder[T]): Array[Byte] =
-    getBytesAndDigest(obj, checkConsistency)._1
-
-  def getBytesAndDigest[T](obj: T, checkConsistency: Boolean = true)(implicit e: io.circe.Encoder[T], d: io.circe.Decoder[T]): (Array[Byte], Digest) = {
-    val bytes1 = serialize1(obj, checkConsistency)
+  def getBytesAndDigest[T : Encoder : Decoder](obj: T, checkConsistency: Boolean = true): (Array[Byte], Digest) = {
+    val bytes1 = serializeImpl(obj, checkConsistency)
     val digest1 = digestBytes(bytes1)
-    if (checkConsistency) {
-      val obj2 = deserialize[T](bytes1)
-      val bytes2 = serialize1(obj2)
-      val digest2 = digestBytes(bytes2)
-      if (digest2 != digest1) {
-        val obj3 = Util.deserialize[T](bytes2)
-        val bytes3 = Util.serialize1(obj3)
-        val digest3 = Util.digestBytes(bytes3)
-        if (digest3 == digest2)
-          logger.warn(f"The re-constituted version of $obj digests differently $digest1 -> $digest2!  But the reconstituted object saves consistently.")
-        else
-          throw new RuntimeException(f"Object $obj digests as $digest1, re-digests as $digest2 and $digest3!")
-      }
-      (bytes2, digest2)
-    } else {
-      (bytes1, digest1)
-    }
+    (bytes1, digest1)
   }
 
-  def serialize1[T](obj: T, checkConsistency: Boolean = true)(implicit e: io.circe.Encoder[T], d: io.circe.Decoder[T]): Array[Byte] = {
+  def serializeImpl[T : Encoder : Decoder](obj: T, checkConsistency: Boolean = true): Array[Byte] = {
     val json: String = obj.asJson.noSpaces
 
     if (checkConsistency) {
@@ -67,54 +45,14 @@ object Util extends LazyLogging {
     json.getBytes("UTF-8")
   }
 
-  def serializeRaw[T](obj: T): Array[Byte] =
-    getBytesAndDigestRaw(obj)._1
-
-  def getBytesAndDigestRaw[T](obj: T): (Array[Byte], Digest) = {
-    val bytes1 = serializeRawImpl(obj)
-    val digest1 = digestBytes(bytes1)
-    val obj2 = deserializeRaw[T](bytes1)
-    val bytes2 = serializeRawImpl(obj2)
-    val digest2 = digestBytes(bytes2)
-    if (digest2 != digest1) {
-      val obj3 = Util.deserializeRaw[T](bytes2)
-      val bytes3 = Util.serializeRawImpl(obj3)
-      val digest3 = Util.digestBytes(bytes3)
-      if (digest3 == digest2)
-        logger.warn(f"The re-constituted version of $obj digests differently $digest1 -> $digest2!  But the reconstituted object saves consistently.")
-      else
-        throw new RuntimeException(f"Object $obj digests as $digest1, re-digests as $digest2 and $digest3!")
-    }
-    (bytes2, digest2)
-  }
-
-  def serializeRawImpl[T](obj: T): Array[Byte] = {
-    val baos = new ByteArrayOutputStream
-    val oos = new ObjectOutputStream(baos)
-    oos.writeObject(obj)
-    oos.close()
-    baos.toByteArray
-  }
-  
   def deserialize[T](bytes: Array[Byte])(implicit e: io.circe.Encoder[T], d: io.circe.Decoder[T]): T = {
     val s = new String(bytes, "UTF-8")
     decode[T](s) match {
       case Left(error) =>
-        val x = decode[T](s)
-        println(x)
         throw error
       case Right(obj) =>
         obj
     }
-  }
-
-  def deserializeRaw[T](bytes: Array[Byte]): T = {
-    val bais = new ByteArrayInputStream(bytes)
-    val ois = new ObjectInputStream(bais)
-    val obj1: AnyRef = ois.readObject
-    val obj: T = obj1.asInstanceOf[T]
-    ois.close()
-    obj
   }
 
   def digestObject[T : ClassTag : Encoder : Decoder](value: T): Digest = {
@@ -125,6 +63,47 @@ object Util extends LazyLogging {
       case _ =>
         getBytesAndDigest(value)._2
     }
+  }
+
+
+  def getBytesAndDigestRaw[T](obj: T, checkConsistency: Boolean = true): (Array[Byte], Digest) = {
+    val bytes1 = serializeRawImpl(obj)
+    val digest1 = digestBytes(bytes1)
+    if (checkConsistency) {
+      val obj2 = deserializeRaw[T](bytes1)
+      val bytes2 = serializeRawImpl(obj2)
+      val digest2 = digestBytes(bytes2)
+      if (digest2 != digest1) {
+        val obj3 = Util.deserializeRaw[T](bytes2)
+        val bytes3 = Util.serializeRawImpl(obj3)
+        val digest3 = Util.digestBytes(bytes3)
+        if (digest3 == digest2)
+          logger.warn(f"The re-constituted (bytes) version of $obj digests differently $digest1 -> $digest2!  But the reconstituted object saves consistently.")
+        else
+          throw new RuntimeException(f"Object $obj digests as $digest1, re-digests as $digest2 and $digest3!")
+      }
+      (bytes2, digest2)
+    } else {
+      (bytes1, digest1)
+    }
+  }
+
+  def serializeRawImpl[T](obj: T): Array[Byte] = {
+    val baos = new ByteArrayOutputStream
+    val oos = new ObjectOutputStream(baos)
+    oos.writeObject(obj)
+    oos.close()
+    baos.toByteArray
+  }
+  
+
+  def deserializeRaw[T](bytes: Array[Byte]): T = {
+    val bais = new ByteArrayInputStream(bytes)
+    val ois = new ObjectInputStream(bais)
+    val obj1: AnyRef = ois.readObject
+    val obj: T = obj1.asInstanceOf[T]
+    ois.close()
+    obj
   }
 
   def digestObjectRaw[T : ClassTag](value: T): Digest = {
@@ -139,6 +118,9 @@ object Util extends LazyLogging {
 
   def digestBytes(bytes: Array[Byte]): Digest =
     Digest(DigestUtils.sha1Hex(bytes))
+
+  def clean[T : ClassTag](obj: T): T =
+    Util.deserializeRaw(Util.serializeRawImpl(obj))
 }
 
 

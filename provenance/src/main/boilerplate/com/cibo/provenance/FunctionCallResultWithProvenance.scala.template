@@ -12,7 +12,7 @@ package com.cibo.provenance
 /**
   * This is a parameter-type specific subclass of FunctionCallResultWithProvenance[O].
   *
-  * It is an intermediate class above `Function1WithProvenance.Result`, which is
+  * It is an intermediate class above `Function0WithProvenance.Result`, which is
   * in turn used by application-defined subclases of `Function1WithProvenance`.
   * These intermediates are only directly referenced by internal classes.
   * Applications should reference `MyFunction.Result` for full precision.

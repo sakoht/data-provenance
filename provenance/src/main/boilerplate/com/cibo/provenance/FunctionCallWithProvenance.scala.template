@@ -44,6 +44,9 @@ abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: 
   def inflateInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
     nocopy(duplicate(v.inflate), this)
 
+  def inflateRecurse(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+    nocopy(duplicate(v.inflateRecurse), this)
+
   def deflateInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
     nocopy(duplicate(v.inflate), this)
 
@@ -93,6 +96,9 @@ abstract class Function1CallWithProvenance[[#I1#], O : ClassTag : Encoder : Deco
 
   def inflateInputs(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
     nocopy(duplicate([#i1.inflate#], v.inflate), this)
+
+  def inflateRecurse(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
+    nocopy(duplicate([#i1.inflateRecurse#], v.inflate.inflateRecurse), this)
 
   def deflateInputs(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
     nocopy(duplicate([#i1.deflate#], v.inflate), this)

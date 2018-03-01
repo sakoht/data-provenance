@@ -1,17 +1,20 @@
 package com.cibo.provenance
 
+import io.circe._
+import scala.language.implicitConversions
+import scala.reflect.ClassTag
+
 /**
   * Created by ssmith on 10/6/17.
   *
   * This encapsulates a value such that it can go from a real object to a byte array to a digest and back.
   *
+  * @param valueOption            The actual value of type T (optional).
+  * @param digestOption           The digest of the serialization of the value T (optional)
+  * @param serializedDataOption   The bytes of the serialized value T (optional).
+  * @param ct                     The implicit ClassTag[T]
+  * @tparam T                     The type of the value eventually returnable.
   */
-
-import scala.language.implicitConversions
-import scala.reflect.ClassTag
-
-import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._
-
 case class VirtualValue[T](
   valueOption: Option[T],
   digestOption: Option[Digest],
@@ -53,7 +56,7 @@ case class VirtualValue[T](
       case None =>
         val serialization = valueOption match {
           case Some(value) =>
-            Util.serialize(value)
+            Util.getBytesAndDigest(value)._1
           case None =>
             digestOption match {
               case Some(digest) =>
@@ -78,7 +81,7 @@ case class VirtualValue[T](
         case None =>
           valueOption match {
             case Some(value) =>
-              Util.serialize(value)
+              Util.getBytesAndDigest(value)._1
             case None =>
               throw noDataException
           }
@@ -94,7 +97,7 @@ case class VirtualValue[T](
     } else {
       digestOption match {
         case Some(digest) =>
-          "#" + digest.id.toString.substring(0,5) + " " + super.toString
+          "#" + digest.id.toString.substring(0, 5) + " " + super.toString
         case None =>
           super.toString
       }
@@ -114,7 +117,6 @@ object VirtualValue {
 
   implicit def fromDeflatable[T : ClassTag : Encoder : Decoder](v: VirtualValue[T])(implicit rt: ResultTracker): T =
     unapply(v)
-
 }
 
 

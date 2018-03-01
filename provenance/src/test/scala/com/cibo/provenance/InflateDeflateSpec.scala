@@ -28,11 +28,11 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       val _ = i1.resolve
 
       val d1 = i1.deflate
-      val i2 = d1.inflate
+      val i2 = d1.inflate.inflateInputs
       i2 shouldEqual i1
     }
 
-    it ("allows a call to partially or fully inflate") {
+    it("allows a call to partially or fully inflate") {
       val testDataDir = f"$outputBaseDir/deflate-reinflate"
       FileUtils.deleteDirectory(new File(testDataDir))
 
@@ -52,8 +52,8 @@ class InflateDeflateSpec extends FunSpec with Matchers {
         deflated1known.inflatedCallDigest
       )
       val inflated3 = inflated3opt.get
-      val inflated3inflatedInputs = inflated3.inflateInputs
-      inflated3inflatedInputs shouldEqual inflated2
+      inflated3 shouldEqual inflated2
+      inflated3.inflateInputs shouldEqual inflated2.inflateInputs
     }
 
     it("works on nested calls") {
@@ -63,25 +63,27 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       implicit val bi: BuildInfo = DummyBuildInfo
       implicit val rt: ResultTrackerSimple = ResultTrackerSimple(SyncablePath(testDataDir))
 
-      val s1 = add2(2, 2)
-      val s2 = add2(5, 7)
-      val s3 = mult2(s1, s2)
+      val c1 = add2(2, 2)
+      val c2 = add2(5, 7)
+      val c3 = mult2(c1, c2)
 
-      val s4a: mult2.Call = mult2(s3, 2)
+      val call: mult2.Call = mult2(c3, 2)
 
-      val s4b: mult2.Call = mult2(mult2(add2(2,2), add2(5,7)), 2)
-      s4b shouldEqual s4a
+      val call2: mult2.Call = mult2(mult2(add2(2,2), add2(5,7)), 2)
+      call2 shouldEqual call.inflateRecurse
 
       // Round-trip through deflation/inflation loses some type information.
-      val s4bDeflated: FunctionCallWithProvenanceDeflated[Int] = rt.saveCall(s4b)
-      val s4bInflated: FunctionCallWithProvenance[Int] = s4bDeflated.inflate
+      val deflated: FunctionCallWithProvenanceDeflated[Int] = rt.saveCall(call)
+      val reinflated: FunctionCallWithProvenance[Int] = deflated.inflate
 
       // But the inflated object is of the correct type, where the code is prepared to recognize it.
-      val s4c: mult2.Call = s4bInflated match {
-        case i1withTypeKnown: mult2.Call => i1withTypeKnown
+      val reinflatedWithTypeKnown: mult2.Call = reinflated match {
+        case known: mult2.Call => known
         case _ => throw new RuntimeException("Re-inflated object does not match expectred class.")
       }
-      s4c shouldEqual s4b
+
+      val reinflatedDeeply = reinflatedWithTypeKnown.inflateRecurse
+      reinflatedDeeply shouldEqual call2
     }
 
     it("work on functions") {
@@ -148,7 +150,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
     }
 
     it("works with limited type information") {
-      val testDataDir = f"$outputBaseDir/deflate-reinflate-unknown-type"
+      val testDataDir = f"$outputBaseDir/deflate-reinflate-limited-type"
       FileUtils.deleteDirectory(new File(testDataDir))
       implicit val bi: BuildInfo = DummyBuildInfo
       implicit val rt: ResultTrackerSimple = ResultTrackerSimple(SyncablePath(testDataDir))
@@ -156,6 +158,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       val (functionName, functionVersion, digest) =
         createCallAndSaveCallAndReturnOnlyIds(rt)
 
+      // For this test, the type Int is specified.
       val deflatedCallTyped: FunctionCallWithProvenanceDeflated[Int] =
         rt.loadCallByDigestDeflatedOption[Int](
           functionName,
@@ -164,7 +167,18 @@ class InflateDeflateSpec extends FunSpec with Matchers {
         ).get
 
       checkDeflatedCall(digest, deflatedCallTyped)
+    }
 
+    it("works with no type information") {
+      val testDataDir = f"$outputBaseDir/deflate-reinflate-unknown-type"
+      FileUtils.deleteDirectory(new File(testDataDir))
+      implicit val bi: BuildInfo = DummyBuildInfo
+      implicit val rt: ResultTrackerSimple = ResultTrackerSimple(SyncablePath(testDataDir))
+
+      val (functionName, functionVersion, digest) =
+        createCallAndSaveCallAndReturnOnlyIds(rt)
+
+      // For this test, the type int is NOT specified.
       val deflatedCallUntyped: FunctionCallWithProvenanceDeflated[_] =
         rt.loadCallByDigestDeflatedUntypedOption(
           functionName,
@@ -172,7 +186,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
           digest
         ).get
 
-      checkDeflatedCall(digest, deflatedCallTyped)
+      checkDeflatedCall(digest, deflatedCallUntyped)
     }
   }
 
@@ -181,39 +195,60 @@ class InflateDeflateSpec extends FunSpec with Matchers {
     val c2 = add2(5, 7)
     val c3 = mult2(c1, c2)
 
-    val call: mult2.Call = mult2(c3, 2)
+    val call1: mult2.Call = mult2(c3, 2)
 
     val call2: mult2.Call = mult2(mult2(add2(2, 2), add2(5, 7)), 2)
-    call2 shouldEqual call
+    call2 shouldEqual call1
+
+    val call = call1
+
+    val d1 = Util.digestObjectRaw(call)
+    call.getEncoder
+    call.getDecoder
+    call.getOutputClassTag
+    val d2 = Util.digestObjectRaw(call)
 
     val deflated = rt.saveCall(call)
+    val deflatedDigest = deflated.toDigest
+    
+    // Note: If there are any lazy vals the second and subsequent saves could be different.
+    val deflated2 = rt.saveCall(call)
+    //deflated2 shouldEqual deflated
+    deflated2.toDigest shouldEqual deflatedDigest
 
     // Round-trip through deflation/inflation loses some type information on the surface...
     val reinflated: FunctionCallWithProvenance[Int] = deflated.inflate
-    reinflated shouldEqual call
 
     // ..but the inflated object is of the correct type, where the code is prepared to recognize it.
-    val reinflatedWithKnownType: mult2.Call = reinflated match {
-      case known: mult2.Call => known
-      case _ => throw new RuntimeException("Re-inflated object does not match expected specific sub-class!")
-    }
-    reinflatedWithKnownType shouldEqual call
+    val reinflatedWithKnownType: mult2.Call =
+      reinflated match {
+        case known: mult2.Call =>
+          known
+        case other =>
+          throw new RuntimeException(f"Re-inflated object does not match expected specific sub-class! $other")
+      }
+
+    // Ensure that the reinflated object has the exact same digest still.
+    Util.digestObjectRaw(reinflatedWithKnownType) shouldEqual
+      deflated.asInstanceOf[FunctionCallWithKnownProvenanceDeflated[_]].inflatedCallDigest
+
+    // Re-inflation should be the same regardless of the level of type awareness.
+    val reinflatedDeeply1 = reinflated.inflateRecurse
+    reinflatedDeeply1 shouldEqual call
+    val reinflatedDeeply2 = reinflatedWithKnownType.inflateRecurse
+    reinflatedDeeply2 shouldEqual call
 
     // Deflating again should yield a similar thing.
-    val deflated2: FunctionCallWithProvenanceDeflated[Int] = rt.saveCall(reinflated)
-    //deflated2.toString shouldBe deflated.toString /// TODO: Investigate class tag difference
+    //val deflated3 = rt.saveCall(reinflatedDeeply2)
+    //deflated3 shouldEqual deflated
+    //deflated3.toDigest shouldEqual deflatedDigest
 
-    // The digest of the deflated object is stable
-    //deflated2.toDigest shouldEqual deflated.toDigest
+    // Setting the type should not affect
+    val deflated4 = deflated.asInstanceOf[FunctionCallWithKnownProvenanceDeflated[Int]]
+    deflated4 shouldEqual deflated
+    deflated4.toDigest shouldEqual deflatedDigest
 
-    // And matches a the lowest level (thout this raw serialization is not what we actually save.
-    //Util.digestObjectRaw(deflated2) shouldBe Util.digestObjectRaw(deflated)
-
-    val typified = deflated2.asInstanceOf[FunctionCallWithKnownProvenanceDeflated[Int]]
-    import io.circe.generic.auto._
-    val finalDigest = Util.digestObject(typified)
-
-    (typified.functionName, typified.functionVersion, finalDigest)
+    (deflated4.functionName, deflated4.functionVersion, deflatedDigest)
   }
 
   def checkDeflatedCall(
@@ -221,23 +256,23 @@ class InflateDeflateSpec extends FunSpec with Matchers {
     deflatedCall: FunctionCallWithProvenanceDeflated[_]
   )(implicit
     rt: ResultTrackerSimple
-  ) = {
+  ): Unit = {
     // Inflate into a regular call.
     // The type is unknown at compile time, but the object should be complete.
     val inflatedCall: FunctionCallWithProvenance[_] =
     deflatedCall.inflate
 
     // Verify that the object functions with its full identity.
-    inflatedCall shouldEqual mult2(mult2(add2(2, 2), add2(5, 7)), 2)
+    val inflatedDeeply = inflatedCall.inflateRecurse
+    inflatedDeeply shouldEqual mult2(mult2(add2(2, 2), add2(5, 7)), 2)
 
     // Ensure it matches the correct subtype in match calls.
-    val inflatedCallWithKnownType: mult2.Call =
-      inflatedCall match {
-        case i1withTypeKnown: mult2.Call =>
-          i1withTypeKnown
-        case _ =>
-          throw new RuntimeException("Re-inflated object does not match expected class.")
-      }
+    inflatedCall match {
+      case known: mult2.Call =>
+        known
+      case _ =>
+        throw new RuntimeException("Re-inflated object does not match expected class.")
+    }
 
     // Ensure we can repeat the deflation and get the same ID.
     val deflatedAgain = rt.saveCall(inflatedCall)
@@ -248,6 +283,11 @@ class InflateDeflateSpec extends FunSpec with Matchers {
         known.toDigest shouldBe deflatedCallDigest
     }
   }
+}
+
+object theInt extends Function0WithProvenance[Int] {
+  val currentVersion: Version = Version("1.0")
+  def impl(): Int = 123
 }
 
 object listMaker extends Function0WithProvenance[List[Int]] {

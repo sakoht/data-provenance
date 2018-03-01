@@ -26,7 +26,7 @@ class BinaryEncoder[T <: Serializable] extends Encoder[T] with Serializable {
   private lazy val enc: ObjectEncoder[T] =
     Encoder.forProduct2("bytes", "length") {
       obj =>
-        val bytes: Array[Byte] = Util.serializeRaw(obj)
+        val bytes: Array[Byte] = Util.getBytesAndDigestRaw(obj)._1
         Tuple2(bytes, bytes.length)
     }
 

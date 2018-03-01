@@ -154,6 +154,9 @@ trait Function0WithProvenance[O] extends FunctionWithProvenance[O] with Serializ
       override def inflateInputs(implicit rt: ResultTracker): Call =
         nocopy(duplicate(v.inflate), this)
 
+      override def inflateRecurse(implicit rt: ResultTracker): Call =
+        nocopy(duplicate(v.inflateRecurse), this)
+
       override def deflateInputs(implicit rt: ResultTracker): Call =
         nocopy(duplicate(v.inflate), this)
 
@@ -333,6 +336,9 @@ trait Function1WithProvenance[[#I1#], O] extends FunctionWithProvenance[O] with 
 
       override def inflateInputs(implicit rt: ResultTracker): Call =
         nocopy(duplicate([#i1.inflate#], v.inflate), this)
+
+      override def inflateRecurse(implicit rt: ResultTracker): Call =
+        nocopy(duplicate([#i1.inflateRecurse#], v.inflateRecurse), this)
 
       override def deflateInputs(implicit rt: ResultTracker): Call =
         nocopy(duplicate([#i1.deflate#], v.inflate), this)
