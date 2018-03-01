@@ -243,10 +243,10 @@ class ResultTrackerSimple(
     // Offer a primary entry point on the value to get to the things that produce it.
     // This key could be shorter, but since it is immutable and zero size, we do it just once here now.
     // Refactor to be more brief as needed.
-    val outputClassName = outputClassTag.runtimeClass.getName
+    val outputClassName = outputClassTag.toString
     saveObject(f"data-provenance/$outputKey/as/$outputClassName/from/$functionName/$versionId/with-inputs/$inputGroupKey/with-provenance/$callDeflatedKey/at/$commitId/$buildId", "")
 
-    // Make each of the up-stream functions behind the inputs link to this one as known progeny.
+    // Make each of the up-stream functions behind the  inputs link to this one as known progeny.
     // If the up-stream functions later are determined to be defective/inconsistent at some particular builds,
     // these links will be traversed to potentially invalidate derived data.
     inputsDeflated.indices.map {
