@@ -1,7 +1,5 @@
 package com.cibo.provenance
 
-import java.io.File
-
 import com.amazonaws.services.s3.model.PutObjectResult
 import com.typesafe.scalalogging.LazyLogging
 import io.circe._
@@ -9,7 +7,6 @@ import io.circe.generic.auto._
 import com.cibo.io.s3.{S3DB, SyncablePath}
 import com.cibo.provenance.exceptions.InconsistentVersionException
 import com.cibo.cache.GCache
-import org.apache.commons.io.FileUtils
 
 import scala.util.Try
 
