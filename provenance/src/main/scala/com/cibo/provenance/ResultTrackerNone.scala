@@ -16,17 +16,26 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
   implicit val bi: BuildInfo = currentAppBuildInfo
 
-  def saveResult[O](v: FunctionCallResultWithProvenance[O]): FunctionCallResultWithProvenanceDeflated[O] = {
-    // a no-op that just calculates the ID and returns it
-    FunctionCallResultWithProvenanceDeflated(v)(rt=this)
+  def saveResult(
+    resultInSaveableForm: FunctionCallResultWithKnownProvenanceSerializable,
+    inputResultsAlreadySaved: Vector[FunctionCallResultWithProvenanceSerializable]
+  ): FunctionCallResultWithProvenanceSaved[_] = {
+    FunctionCallResultWithProvenanceSaved(resultInSaveableForm)
   }
 
-  def saveCall[O](v: FunctionCallWithProvenance[O]): FunctionCallWithProvenanceDeflated[O] = {
-    // a no-op that just calculates the ID and returns it
-    //FunctionCallWithProvenanceDeflated(v)(rt=this)
-    ???
+  def saveCall[O](v: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceSaved[O] =
+    FunctionCallWithProvenanceSaved(v)
+
+  def saveOutputValue[T : ClassTag: Encoder : Decoder](obj: T): Digest = {
+    // also a no-op that just calculates the ID and returns it
+    Util.digestObject(obj)
   }
 
+  lazy val saveBuildInfo: Digest = {
+    val bi = currentAppBuildInfo
+    val (bytes, digest) = Util.getBytesAndDigest(bi)
+    digest
+  }
 
   def hasOutputForCall[O](v: FunctionCallWithProvenance[O]): Boolean = true // always
 
@@ -35,40 +44,21 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
     Some(f.run(this))
   }
 
-  def saveValue[T : ClassTag: Encoder : Decoder](obj: T): Digest = {
-    // also a no-op that just calculates the ID and returns it
-    Util.digestObject(obj)
-  }
-
   def hasValue[T : ClassTag : Encoder : Decoder](obj: T): Boolean = false // never
 
   def hasValue(digest: Digest): Boolean = false // never
 
-  def loadCallByDigestOption[O : ClassTag : Encoder : Decoder](
-    className: String,
-    classVersion: Version,
+  def loadCallMetaByDigest(
+    functionName: String,
+    functionVersion: Version,
     digest: Digest
-  ): Option[FunctionCallWithProvenance[O]] =
-    None // never
-
-  def loadCallByDigestDeflatedOption[O : ClassTag : Encoder : Decoder](
-    className: String,
-    classVersion: Version,
-    digest: Digest
-  ): Option[FunctionCallWithProvenanceDeflated[O]] =
-    None // never
-
-  def loadCallByDigestDeflatedUntypedOption(
-    className: String,
-    classVersion: Version,
-    digest: Digest
-  ): Option[FunctionCallWithProvenanceDeflated[_]] =
-    None // never
+  ): Option[FunctionCallWithKnownProvenanceSerializableWithInputs] = None // never
 
   def loadValueOption[O : ClassTag : Encoder : Decoder](digest: Digest): Option[O] = None // never
 
   def loadValueSerializedDataOption(className: String, digest: Digest): Option[Array[Byte]] = None // never
 
+  def loadBuildInfoOption(commitId: String, buildId: String): Option[BuildInfo] = None // never
 }
 
 object ResultTrackerNone {

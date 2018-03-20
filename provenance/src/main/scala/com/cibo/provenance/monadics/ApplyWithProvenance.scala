@@ -9,15 +9,18 @@ package com.cibo.provenance.monadics
 
 import scala.language.higherKinds
 import com.cibo.provenance.{implicits, _}
+import io.circe.{Decoder, Encoder}
 
-class ApplyWithProvenance[S[_], O](implicit hok: implicits.Traversable[S]) extends Function2WithProvenance[S[O], Int, O]  {
+import scala.reflect.ClassTag
+
+class ApplyWithProvenance[S[_], O : ClassTag : Encoder : Decoder](implicit hok: implicits.Traversable[S]) extends Function2WithProvenance[S[O], Int, O]  {
   val currentVersion: Version = NoVersion
   def impl(s: S[O], n: Int): O =
     hok.apply(n)(s)
 }
 
 object ApplyWithProvenance {
-  def apply[S[_], A](implicit hok: implicits.Traversable[S]) = new ApplyWithProvenance[S, A]
+  def apply[S[_], A : ClassTag : Encoder : Decoder](implicit hok: implicits.Traversable[S]) = new ApplyWithProvenance[S, A]
 }
 
 object ApplyToRangeWithProvenance extends Function2WithProvenance[Range, Int, Int] {

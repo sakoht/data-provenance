@@ -13,7 +13,7 @@ import io.circe._
 
 import scala.reflect.ClassTag
 
-class GatherWithProvenance[E, O <: Seq[E], I <: Seq[ValueWithProvenance[E]]] extends Function1WithProvenance[I, O]  {
+class GatherWithProvenance[E, O <: Seq[E] : ClassTag : Encoder : Decoder, I <: Seq[ValueWithProvenance[E]]] extends Function1WithProvenance[I, O]  {
 
   val currentVersion = NoVersion
 
@@ -43,7 +43,8 @@ class GatherWithProvenance[E, O <: Seq[E], I <: Seq[ValueWithProvenance[E]]] ext
 
 object GatherWithProvenance {
   // Return the GatherWithProvenance[T] for a given T, where T is some element type in a sequence.
-  def apply[E] = new GatherWithProvenance[E, Seq[E], Seq[ValueWithProvenance[E]]]
+  def apply[E](implicit e1: Encoder[Seq[E]], d1: Decoder[Seq[E]]) =
+    new GatherWithProvenance[E, Seq[E], Seq[ValueWithProvenance[E]]]
 
   // Actually call the above on a given Seq.
   def gather[E, O <: Seq[E] : ClassTag : Encoder : Decoder](seq: O) = {

@@ -31,14 +31,14 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       rt.wipe
 
       val obj1: Int = 999
-      val id = rt.saveValue(obj1)
+      val id = rt.saveOutputValue(obj1)
       val obj2 = rt.loadValue[Int](id)
       obj2 shouldEqual obj1
 
       TestUtils.diffOutputSubdir(testSubdir)
     }
 
-    it("has signatures save and reload correctly.") {
+    it("has calls save and reload correctly.") {
       val testSubdir = "reload2"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
       
@@ -46,7 +46,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       rt.wipe
 
       val obj1: Add.Call = Add(1, 2)
-      val id = rt.saveValue(obj1)
+      val id = rt.saveOutputValue(obj1)
       val obj2 = rt.loadValue[Add.Call](id)
       obj2 shouldEqual obj1
 
@@ -65,7 +65,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       val r2 = s1.run(ResultTrackerNone())
 
       // Save the result explicitly.
-      val idIgnored = rt.saveResult(r2)
+      val idIgnored = FunctionCallResultWithKnownProvenanceSerializable.save(r2)
 
       // Use the signature itself to re-load, ignoring the saved ID.
       val r2b = rt.loadResultForCallOption(s1).get
@@ -290,13 +290,13 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
         r2.output shouldEqual 2                           // and has the correct output.
 
         val r3 = call.resolveInputs.newResult(3)(build1)  // Make a fake result.
-        r3.outputBuildInfoBrief shouldEqual build1     // On the same build.
+        r3.outputBuildInfoBrief shouldEqual build1        // On the same build.
         r3.output shouldEqual 3                           // That has an inconsistent value for 1+1
 
         intercept[InconsistentVersionException] {
           // Detect the collision on load.
           // We will eventually flag the bad commit and detect further attempts to use it.
-          rt2.saveResult(r3)                                // And save it.
+          FunctionCallResultWithKnownProvenanceSerializable.save(r3)       // And save it.
           call.resolve
         }
       }
@@ -323,14 +323,14 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
         implicit val rt2: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))(build2)
 
         val r4 = call.resolveInputs.newResult(4)(build2)    // Make a fake result.
-        r4.outputBuildInfoBrief shouldEqual build2       // On a new commit and build.
+        r4.outputBuildInfoBrief shouldEqual build2          // On a new commit and build.
         r4.output shouldEqual 4                             // That has an inconsistent value for 1+1
 
         intercept[InconsistentVersionException] {
           // For now we complain.
           // Eventually we flag the newer commit as inconsistent, and resolve will load the original value.
           // If the original value was wrong, the version can/should be bumped.
-          rt2.saveResult(r4)                                // And save it.
+          FunctionCallResultWithKnownProvenanceSerializable.save(r4)         // And save it.
           call.resolve
         }
       }

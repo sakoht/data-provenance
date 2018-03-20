@@ -3,7 +3,6 @@ package com.cibo.provenance
 import com.cibo.io.s3.SyncablePath
 import org.scalatest.{FunSpec, Matchers}
 
-
 class AbstractOutputSealedSpec extends FunSpec with Matchers {
 
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir
@@ -15,8 +14,6 @@ class AbstractOutputSealedSpec extends FunSpec with Matchers {
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
       implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
       rt.wipe
-
-      import io.circe.generic.auto._
 
       val p1 = pickAPet("Kittykitty")
       (
@@ -44,6 +41,12 @@ class AbstractOutputSealedSpec extends FunSpec with Matchers {
 sealed trait PetSealedTrait { def name: String }
 case class Cat(name: String) extends PetSealedTrait
 case class Dog(name: String) extends PetSealedTrait
+
+object PetSealedTrait {
+  import io.circe.generic.semiauto._
+  implicit val encoder = deriveEncoder[PetSealedTrait]
+  implicit val decoder = deriveDecoder[PetSealedTrait]
+}
 
 object pickAPet extends Function1WithProvenance[String, PetSealedTrait] {
   val currentVersion = Version("0.1")

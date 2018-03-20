@@ -2,6 +2,7 @@ package com.cibo.provenance
 
 
 import io.circe.{Decoder, Encoder}
+
 import scala.reflect.ClassTag
 
 /**
@@ -52,8 +53,8 @@ trait ResultTracker {
       case Some(existingResult) =>
         existingResult
       case None =>
-        val newResult = callWithInputDigests.run(this)
-        saveResult(newResult)
+        val newResult: FunctionCallResultWithProvenance[O] = callWithInputDigests.run(this)
+        FunctionCallResultWithKnownProvenanceSerializable.save(newResult)(this)
         newResult
     }
   }
@@ -77,31 +78,41 @@ trait ResultTracker {
     * The deflated version uses IDs to reference its inputs (also deflated, recursively), and
     * as such is a light-weight pointer into the complete history of the call.
     *
-    * @param call:  The call to save.
+    * @param callInSavableForm:  The call to save.
     * @tparam O:    The output type of the call and returned deflated call.
     * @return       The deflated call created during saving.
     */
-  def saveCall[O](call: FunctionCallWithProvenance[O]): FunctionCallWithProvenanceDeflated[O]
-
+  def saveCall[O](callInSavableForm: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceSaved[O]
+  
   /**
-    * Save one `FunctionCallResultWithProvenance[O]`.  This is automatically called during resolve(),
-    * but can be called independently when moving results made from one ResultTracker to another.
+    * Write out one `FunctionCallResultWithProvenanceSaved`.  
+    * 
+    * This is directly called by the constructor of the *Saved object when called with an unsaved result.
+    * 
+    * This is automatically called during resolve(), but can be called independently when 
+    * moving results made from one ResultTracker to another.
     *
-    * @param result:  The result to save.
-    * @tparam O       The output type of the result.
-    * @return         The deflated result.
+    * @param resultInSavableForm:   The result to save after conversion to savable form.
+    * @param inputResults:          The inputs, which must themselves be results at this point.
+    * @return                       The deflated result.
     */
-  def saveResult[O](result: FunctionCallResultWithProvenance[O]): FunctionCallResultWithProvenanceDeflated[O]
+  def saveResult(
+    resultInSavableForm: FunctionCallResultWithKnownProvenanceSerializable,
+    inputResults: Vector[FunctionCallResultWithProvenanceSerializable]
+  ): FunctionCallResultWithProvenanceSaved[_]
 
   /**
     * Save a regular input/output value to the storage fabric.
+    *
+    * This is used by the 
     *
     * @param obj:   The object to save.  It must have a circe Encoder and Decoder implicitly available.
     * @tparam T     The type of data to save.
     * @return       The Digest of the serialized data.  A unique ID usable to re-load later.
     */
-  def saveValue[T : ClassTag : Encoder : Decoder](obj: T): Digest
-
+  def saveOutputValue[T : ClassTag : Encoder : Decoder](obj: T): Digest
+  
+  def saveBuildInfo: Digest
 
   /**
     * Check storage for a result for a given call.
@@ -138,65 +149,21 @@ trait ResultTracker {
   def loadResultForCallOption[O](call: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]]
 
   /**
-    * Load a previously saved Call if its digest is known.  The call's digest is in used in its deflated surrogate,
-    * and in deflated results.
+    * Load the saved representation of a Call if its digest is known.
     *
-    * Note that, while the returned call is NOT deflated, its inputs are initially, so full reconstitution
-    * of the history can happen iteratively.
+    * When this is initially saved, its digest is used in a wrapper call that does not have inputs,
+    * deflated untyped results and in the input descriptions of calls that reference back to it.
     *
     * @param functionName       The class of FunctionWithProvenance for which the call is made.
     * @param functionVersion    The version of the function represented in the call.
     * @param digest             The digested value of the serialized call.
-    * @tparam O                 The output type of the call.
     * @return                   A FunctionCallWithProvenance[O] that is NOT deflated, but still has deflated inputs.
     */
-  def loadCallByDigestOption[O : ClassTag : Encoder : Decoder](
+  def loadCallMetaByDigest(
     functionName: String,
     functionVersion: Version,
     digest: Digest
-  ): Option[FunctionCallWithProvenance[O]]
-
-  /**
-    * Load a previously saved _deflated_ Call if its digest is known.  The deflated call's digest is directly referenced
-    * in the storage system since the possibility of inflation is uncertain.  The inflated call is only accessed
-    * indirectly and conditionally.
-    *
-    * This version of this function expects to know the output type O and have implicit access to ClassTag[O],
-    * Encoder[O] and Decoder[O].  Switch to the output-type-agnostic version where if this is uncertain.
-    *
-    * @param functionName       The class of FunctionWithProvenance for which the call is made.
-    * @param functionVersion    The version of the function represented in the call.
-    * @param digest             The digested value of the serialized call.
-    * @return                   A FunctionCallWithProvenance[O] that is deflated, and also has deflated inputs.
-    *
-    * @tparam O                 The output type of the call.  
-    */
-  def loadCallByDigestDeflatedOption[O : ClassTag : Encoder : Decoder](
-    functionName: String,
-    functionVersion: Version,
-    digest: Digest
-  ): Option[FunctionCallWithProvenanceDeflated[O]]
-
-  /**
-    * Load a previously saved _deflated_ Call if its digest is known.  The deflated call's digest is directly referenced
-    * in the storage system since the possibility of inflation is uncertain.  The inflated call is only accessed
-    * indirectly and conditionally.
-    *
-    * This type-agnostic version of the loader loads the encoder/decoder information and determines the class tag
-    * only via reflection.  It is not used within the API, but can be used by services to bridge between code
-    * that is type-agnostic and code that is type-aware.
-    *
-    * @param functionName       The class of FunctionWithProvenance for which the call is made.
-    * @param functionVersion    The version of the function represented in the call.
-    * @param digest             The digested value of the serialized call.
-    * @return                   A FunctionCallWithProvenance[O] that is deflated (which also has deflated inputs).
-    *
-    */
-  def loadCallByDigestDeflatedUntypedOption(
-    functionName: String,
-    functionVersion: Version,
-    digest: Digest
-  ): Option[FunctionCallWithProvenanceDeflated[_]]
+  ): Option[FunctionCallWithKnownProvenanceSerializableWithInputs]
 
   /**
     * Retrieve one value from storage if the specified digest key is found.
@@ -206,6 +173,8 @@ trait ResultTracker {
     * @return         An Option of O that is Some[O] if the digest ID is found in storage.
     */
   def loadValueOption[T : ClassTag : Encoder : Decoder](digest: Digest): Option[T]
+
+  def loadBuildInfoOption(commitId: String, buildId: String): Option[BuildInfo]
 
   /**
     * A type-agnostic version of loadValueSerializedDataOption.  This works with a class string as text.

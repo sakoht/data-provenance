@@ -89,3 +89,17 @@ object TestUtils extends LazyLogging with Matchers {
   }
 }
 
+
+object FooFunc extends Function2WithProvenance[Int, Int, Int] {
+  val currentVersion = Version("0.1")
+  def impl(a: Int, b: Int): Int = a + b
+}
+
+object FooMain {
+  def main(args: Array[String]): Unit = {
+    val f: FunctionWithProvenance[_] = FunctionWithProvenance.getByName("com.cibo.provenance.FooFunc")
+    println(f)
+  }
+}
+
+
