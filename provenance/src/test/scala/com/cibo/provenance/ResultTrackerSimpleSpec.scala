@@ -117,8 +117,13 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       val rc1 = Add.runCount
       rc1 shouldBe 3
 
-      // Verify we saved the build
-      rt.loadBuildInfoOption(DummyBuildInfo.commitId, DummyBuildInfo.buildId) shouldEqual Some(DummyBuildInfo)
+      // Verify we saved the build, and got the BuildInfo in a fully-fleshed-out subclass.
+      val reloadedDummy: GitBuildInfo =
+        rt.loadBuildInfoOption(DummyBuildInfo.commitId, DummyBuildInfo.buildId).get.asInstanceOf[GitBuildInfo]
+
+      // These are logically equal, though the original was a raw object from SbtBuildInfo,
+      // and the reload is a case class with the same fields.
+      reloadedDummy.toString shouldEqual DummyBuildInfo.toString
 
       Add.runCount = 0
       val s2 = Add(Add(1,2), Add(3,4))

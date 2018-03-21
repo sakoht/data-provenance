@@ -62,7 +62,7 @@ object ValueWithProvenanceSerializable {
       case Success(clazz1) if clazz1 == clazz => name1
       case Failure(_) =>
         val name2 = "scala." + name1
-        Try(Class.forName(name1)) match {
+        Try(Class.forName(name2)) match {
           case Success(clazz2) if clazz2 == clazz => name2
           case Failure(_) =>
             throw new RuntimeException(f"Failed to resolve a class name for $clazz")
@@ -76,7 +76,7 @@ object ValueWithProvenanceSerializable {
       case Success(clazz1) => name1
       case Failure(_) =>
         val name2 = "scala." + name1
-        Try(Class.forName(name1)) match {
+        Try(Class.forName(name2)) match {
           case Success(clazz2) => name2
           case Failure(_) =>
             throw new RuntimeException(f"Failed to resolve a class name for $ct")
@@ -106,7 +106,7 @@ object FunctionCallWithProvenanceSerializable {
   def load(saved: FunctionCallWithProvenanceSerializable)(implicit rt: ResultTracker): FunctionCallWithProvenance[_] = {
     saved match {
       case unknown: FunctionCallWithUnknownProvenanceSerializable =>
-        throw new RuntimeException("Cannot load a FunctionCallWithProvenance for UnknownProvenance!")
+        FunctionCallWithUnknownProvenanceSerializable.load(unknown)
       case noI: FunctionCallWithKnownProvenanceSerializableWithoutInputs =>
         FunctionCallWithKnownProvenanceSerializableWithoutInputs.load(noI)
       case withI: FunctionCallWithKnownProvenanceSerializableWithInputs =>
@@ -128,7 +128,7 @@ object FunctionCallWithUnknownProvenanceSerializable {
     implicit val outputEncoder: io.circe.Encoder[O] = call.outputEncoder
     implicit val outputDecoder: io.circe.Decoder[O] = call.outputDecoder
 
-    val outputClassName = outputClassTag.toString
+    val outputClassName = ValueWithProvenanceSerializable.classToName(outputClassTag)
 
     val rts = rt.asInstanceOf[ResultTrackerSimple]
     val valueDigest: Digest = rts.saveOutputValue(call.value)
@@ -137,6 +137,17 @@ object FunctionCallWithUnknownProvenanceSerializable {
       outputClassName,
       valueDigest
     )
+  }
+
+  def load(saved: FunctionCallWithUnknownProvenanceSerializable)(implicit rt: ResultTracker): UnknownProvenance[_] = {
+    load(saved, Class.forName(saved.outputClassName))
+  }
+
+  private def load[T](saved: FunctionCallWithUnknownProvenanceSerializable, clazz: Class[T])(implicit rt: ResultTracker, ct: ClassTag[T]): UnknownProvenance[_] = {
+    implicit val en: Encoder[T] = ???
+    implicit val de: Decoder[T] = ???
+    val value: T = rt.loadValue[T](saved.valueDigest)
+    UnknownProvenance(value)
   }
 }
 
@@ -201,7 +212,7 @@ object FunctionCallWithKnownProvenanceSerializableWithInputs {
     implicit val outputEncoder: io.circe.Encoder[O] = call.outputEncoder
     implicit val outputDecoder: io.circe.Decoder[O] = call.outputDecoder
 
-    val outputClassName = outputClassTag.toString
+    val outputClassName = ValueWithProvenanceSerializable.classToName(outputClassTag)
 
     val callInSavableForm =
       call.versionValueAlreadyResolved match {
@@ -248,11 +259,10 @@ object FunctionCallWithKnownProvenanceSerializableWithInputs {
   private def load[T](
     saved: FunctionCallWithKnownProvenanceSerializableWithInputs,
     clazz: Class[T]
-  )(implicit rt: ResultTracker): FunctionCallWithProvenance[_] = {
+  )(implicit rt: ResultTracker): FunctionCallWithProvenance[T] = {
     val f = FunctionWithProvenance.getByName(saved.functionName)
-    val call  =
-      FunctionCallWithKnownProvenanceSerializableWithInputs.load(saved).asInstanceOf[FunctionCallWithProvenance[T]]
-    call
+    val call: FunctionCallWithProvenance[_] = f.deserializeCall(saved)
+    call.asInstanceOf[FunctionCallWithProvenance[T]]
   }
 }
 

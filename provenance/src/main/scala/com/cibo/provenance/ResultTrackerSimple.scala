@@ -8,6 +8,7 @@ import com.cibo.io.s3.{S3DB, SyncablePath}
 import com.cibo.provenance.exceptions.InconsistentVersionException
 import com.cibo.cache.GCache
 
+import scala.collection.immutable
 import scala.util.Try
 
 /**
@@ -157,7 +158,15 @@ class ResultTrackerSimple(
         }
     }
 
-    // We save the link from inputs to output as the last step.  It will prevent subsequent calls to similar logic
+    // Save the group of input digests as a single entity.  The hash returned represents the complete set of inputs.
+    val inputIds: List[String] = inputResultsAlreadySaved.toList.map(_.outputDigest.id)
+    saveObject(f"$prefix/input-groups/$inputGroupId", inputIds)
+
+    // Link the input group to the call.
+    val callId: String = resultInSavableForm.call.digestOfEquivalentWithInputs.id
+    saveObject(f"$prefix/call-resolved-inputs/$callId/$inputGroupId", "")
+
+    // We save the link from inputs to output as the last step.  This will prevent subsequent calls to similar logic
     // from calling the internal implementation of the function.
     // This is done at the end to make up for the fact that we are using a lock-free architecture.
     // If the save logic above partially completes, this will not be present, and the next attempt will run again.
@@ -231,17 +240,7 @@ class ResultTrackerSimple(
     val callBytes = callInSavableForm.toBytes
     val callId = callInSavableForm.toDigest.id
 
-    // Save the group of input digests as a single entity.  The hash returned represents the complete set of inputs.
-    val inputIds = callInSavableForm.inputValueDigests.toList.map(_.id)
-    val inputGroupId = callInSavableForm.inputGroupDigest.id
-    saveObject(f"$prefix/input-groups/$inputGroupId", inputIds)
-
-
-
-
     saveBytes(f"functions/$functionName/${version.id}/calls/$callId", callBytes)
-
-    saveObject(f"$prefix/call-resolved-inputs/$callId/$inputGroupId", "")
 
     FunctionCallWithProvenanceSaved(callInSavableForm)
   }
@@ -256,7 +255,7 @@ class ResultTrackerSimple(
     val (bytes, digest) = Util.getBytesAndDigest(obj, checkForInconsistentSerialization(obj))
     if (!hasValue(digest)) {
       val path = f"data/${digest.id}"
-        logger.info(f"Saving raw $obj to $path")
+      logger.info(f"Saving raw $obj to $path")
       saveBytes(path, bytes)
     }
     digest

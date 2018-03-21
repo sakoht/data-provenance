@@ -74,6 +74,8 @@ abstract class FunctionWithProvenance[O : ClassTag : Encoder : Decoder] extends 
       throw UnknownVersionException(v, this)
     }
   }
+
+  def deserializeCall(callSerialized: FunctionCallWithProvenanceSerializable)(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
 }
 
 
@@ -187,9 +189,15 @@ abstract class Function0WithProvenance[O : ClassTag : Encoder : Decoder] extends
     Result(cx, VirtualValue(output))(rt.currentAppBuildInfo)
   }
 
+  def deserializeCall(s: FunctionCallWithProvenanceSerializable)(implicit rt: ResultTracker): Call = {
+    val ss = s.asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
+    val i = ss.inputList.toVector
+    Call(ss.functionVersion)
+  }
+
   object Call {
-    implicit val encoder: Encoder[Call] = ??? //new BinaryEncoder[Call]
-    implicit val decoder: Decoder[Call] = ??? //new BinaryDecoder[Call]
+    implicit def encoder(implicit rt: ResultTracker): Encoder[Call] = new ValueWithProvenanceEncoder[O, Call]
+    implicit def decoder(implicit rt: ResultTracker): Decoder[Call] = new ValueWithProvenanceDecoder[O, Call]
   }
 
   /**
@@ -365,9 +373,15 @@ abstract class Function1WithProvenance[[#I1#], O : ClassTag : Encoder : Decoder]
     Result(cx, VirtualValue(output))(rt.currentAppBuildInfo)
   }
 
+  def deserializeCall(s: FunctionCallWithProvenanceSerializable)(implicit rt: ResultTracker): Call = {
+    val ss = s.asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
+    val i = ss.inputList.toVector
+    Call([#i(0).load.asInstanceOf[ValueWithProvenance[I1]]#], ss.functionVersion)
+  }
+
   object Call {
-    implicit val encoder: Encoder[Call] = ??? //new BinaryEncoder[Call]
-    implicit val decoder: Decoder[Call] = ??? //new BinaryDecoder[Call]
+    implicit def encoder(implicit rt: ResultTracker): Encoder[Call] = new ValueWithProvenanceEncoder[O, Call]
+    implicit def decoder(implicit rt: ResultTracker): Decoder[Call] = new ValueWithProvenanceDecoder[O, Call]
   }
 
   /**
