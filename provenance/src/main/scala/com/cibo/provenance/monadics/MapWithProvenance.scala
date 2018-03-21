@@ -29,7 +29,12 @@ class MapWithProvenance[A, S[_], B](
   da: Decoder[A],
   dsb: Decoder[S[B]],
   dsa: Decoder[S[A]],
-  dsi: Decoder[S[Int]]
+  dsi: Decoder[S[Int]],
+  ob: Codec[B],
+  ca: Codec[A],
+  csb: Codec[S[B]],
+  csa: Codec[S[A]],
+  csi: Codec[S[Int]]
 ) extends Function2WithProvenance[S[A], Function1WithProvenance[A, B], S[B]] {
 
   val currentVersion: Version = NoVersion
@@ -43,7 +48,12 @@ class MapWithProvenance[A, S[_], B](
 
   private def runOnEach(call: Call)(implicit rt: ResultTracker): S[FunctionCallResultWithProvenance[B]] = {
     val aResolved: FunctionCallResultWithProvenance[S[A]] = call.i1.resolve.asInstanceOf[FunctionCallResultWithProvenance[S[A]]]
-    val aTraversable = FunctionCallResultWithProvenance.TraversableResultExt[S, A](aResolved)(hok, cta, ctsa, ctsi, ea, esa, esi, da, dsa, dsi)
+    val aTraversable =
+      FunctionCallResultWithProvenance.TraversableResultExt[S, A](
+        aResolved
+      )(
+        hok, cta, ctsa, ctsi, ea, esa, esi, da, dsa, dsi, ca, csa, csi
+      )
     val aGranular: S[FunctionCallResultWithProvenance[A]] = aTraversable.scatter
 
     val funcResolved: FunctionCallResultWithProvenance[_ <: Function1WithProvenance[A, B]] = call.i2.resolve(rt)
@@ -77,6 +87,11 @@ object MapWithProvenance {
     da: Decoder[A],
     dsb: Decoder[S[B]],
     dsa: Decoder[S[A]],
-    dsi: Decoder[S[Int]]
-  ) = new MapWithProvenance[A, S, B]()(hok, ctb, cta, ctsb, ctsa, ctsi, eb, ea, esb, esa, esi, db, da, dsb, dsa, dsi)
+    dsi: Decoder[S[Int]],
+    ob: Codec[B],
+    oa: Codec[A],
+    osb: Codec[S[B]],
+    osa: Codec[S[A]],
+    osi: Codec[S[Int]]
+  ) = new MapWithProvenance[A, S, B]()(hok, ctb, cta, ctsb, ctsa, ctsi, eb, ea, esb, esa, esi, db, da, dsb, dsa, dsi, ob, oa, osb, osa, osi)
 }

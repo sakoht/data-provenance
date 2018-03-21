@@ -26,7 +26,10 @@ class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
   esi: Encoder[S[Int]],
   da: Decoder[A],
   dsa: Decoder[S[A]],
-  dsi: Decoder[S[Int]]
+  dsi: Decoder[S[Int]],
+  oca: Codec[A],
+  ocsa: Codec[S[A]],
+  ocsi: Codec[S[Int]]
 ) {
   implicit lazy val ctr: ClassTag[Range] = ClassTag(classOf[Range])
 
@@ -45,7 +48,9 @@ class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
       esb: Encoder[S[B]],
       eb: Encoder[B],
       dsb: Decoder[S[B]],
-      db: Decoder[B]
+      db: Decoder[B],
+      cb: Codec[B],
+      csb: Codec[S[B]]
     ): MapWithProvenance[A, S, B]#Call =
       new MapWithProvenance[A, S, B].apply(call, f)
 
@@ -56,7 +61,9 @@ class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
       esb: Encoder[S[B]],
       eb: Encoder[B],
       dsb: Decoder[S[B]],
-      db: Decoder[B]
+      db: Decoder[B],
+      cb: Codec[B],
+      csb: Codec[S[B]]
     ): MapWithProvenance[A, S, B]#Call =
     new MapWithProvenance[A, S, B].apply(call, UnknownProvenance(f.asInstanceOf[Function1WithProvenance[A, B]]))
 

@@ -26,7 +26,10 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
     esi: Encoder[S[Int]],
     da: Decoder[A],
     dsa: Decoder[S[A]],
-    dsi: Decoder[S[Int]]
+    dsi: Decoder[S[Int]],
+    ca: Codec[A],
+    csa: Codec[S[A]],
+    csi: Codec[S[Int]]
   ) {
     implicit lazy val ctr: ClassTag[Range] = ClassTag(classOf[Range])
 
@@ -43,7 +46,9 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
         esb: Encoder[S[B]],
         eb: Encoder[B],
         dsb: Decoder[S[B]],
-        db: Decoder[B]
+        db: Decoder[B],
+        cb: Codec[B],
+        csb: Codec[S[B]]
       ): MapWithProvenance[A, S, B]#Call =
         new MapWithProvenance[A, S, B].apply(result, f)
 
@@ -54,7 +59,9 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
         esb: Encoder[S[B]],
         eb: Encoder[B],
         dsb: Decoder[S[B]],
-        db: Decoder[B]
+        db: Decoder[B],
+        cb: Codec[B],
+        csb: Codec[S[B]]
       ): MapWithProvenance[A, S, B]#Call =
       new MapWithProvenance[A, S, B].apply(result, UnknownProvenance(f.asInstanceOf[Function1WithProvenance[A, B]]))
 
@@ -62,7 +69,11 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
     def scatter(implicit rt: ResultTracker): S[FunctionCallResultWithProvenance[A]] = {
       val call1: FunctionCallWithProvenance[S[A]] = result.call
       val call2: TraversableCall[S, A] =
-        FunctionCallWithProvenance.TraversableCallExt[S, A](call1)(hok, cta, ctsa, ctsi, ea, esa, esi, da, dsa, dsi)
+        FunctionCallWithProvenance.TraversableCallExt[S, A](
+          call1
+        )(
+          hok, cta, ctsa, ctsi, ea, esa, esi, da, dsa, dsi, ca, csa, csi
+        )
       val oneCallPerMember: S[FunctionCallWithProvenance[A]] = call2.scatter
       def getResult(call: FunctionCallWithProvenance[A]): FunctionCallResultWithProvenance[A] = call.resolve
       hok.map(getResult)(oneCallPerMember)

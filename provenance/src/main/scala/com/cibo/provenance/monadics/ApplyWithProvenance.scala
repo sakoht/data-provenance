@@ -13,14 +13,14 @@ import io.circe.{Decoder, Encoder}
 
 import scala.reflect.ClassTag
 
-class ApplyWithProvenance[S[_], O : ClassTag : Encoder : Decoder](implicit hok: implicits.Traversable[S]) extends Function2WithProvenance[S[O], Int, O]  {
+class ApplyWithProvenance[S[_], O : ClassTag : Encoder : Decoder : Codec](implicit hok: implicits.Traversable[S]) extends Function2WithProvenance[S[O], Int, O]  {
   val currentVersion: Version = NoVersion
   def impl(s: S[O], n: Int): O =
     hok.apply(n)(s)
 }
 
 object ApplyWithProvenance {
-  def apply[S[_], A : ClassTag : Encoder : Decoder](implicit hok: implicits.Traversable[S]) = new ApplyWithProvenance[S, A]
+  def apply[S[_], A : ClassTag : Encoder : Decoder : Codec](implicit hok: implicits.Traversable[S]) = new ApplyWithProvenance[S, A]
 }
 
 object ApplyToRangeWithProvenance extends Function2WithProvenance[Range, Int, Int] {

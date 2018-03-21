@@ -364,3 +364,7 @@ object Multiply extends Function2WithProvenance[Int, Int, Int] {
 
   def impl(a: Int, b: Int): Int = a * b
 }
+
+object TestMe extends App {
+
+}

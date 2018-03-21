@@ -15,8 +15,8 @@ package com.cibo.provenance.monadics
 
 
 import scala.language.higherKinds
-import com.cibo.provenance.{implicits, _}
-import io.circe.{Decoder, Encoder, ObjectEncoder}
+import com.cibo.provenance._
+import io.circe.{Decoder, Encoder}
 
 import scala.reflect.ClassTag
 
@@ -24,7 +24,8 @@ import scala.reflect.ClassTag
 class IndicesRangeWithProvenance[S[_], O](
   implicit hok: implicits.Traversable[S],
   en: Encoder[Range],
-  de: Decoder[Range]
+  de: Decoder[Range],
+  oc: Codec[Range]
 ) extends Function1WithProvenance[S[O], Range]  {
   val currentVersion: Version = NoVersion
   def impl(s: S[O]): Range = hok.indicesRange(s)
@@ -40,6 +41,8 @@ object IndicesRangeWithProvenance {
       obj => Tuple3(obj.start, obj.end, obj.step)
     }
 
+  implicit val rangeCodec: Codec[Range] = new Codec[Range]
+
   def apply[S[_], A](implicit converter: implicits.Traversable[S]) =
     new IndicesRangeWithProvenance[S, A]
 }
@@ -47,7 +50,8 @@ object IndicesRangeWithProvenance {
 object IndicesOfRangeWithProvenance extends Function1WithProvenance[Range, Range]()(
   ClassTag(classOf[Range]),
   IndicesRangeWithProvenance.rangeEncoder,
-  IndicesRangeWithProvenance.rangeDecoder
+  IndicesRangeWithProvenance.rangeDecoder,
+  IndicesRangeWithProvenance.rangeCodec
 ) {
   val currentVersion: Version = NoVersion
   def impl(range: Range): Range = range.indices

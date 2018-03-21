@@ -118,8 +118,9 @@ object FunctionCallWithProvenance {
       esa: Encoder[Option[A]],
       dsa: Decoder[Option[A]],
       ea: Encoder[A],
-      da: Decoder[A]
-    ) extends OptionalCall[A](call)(ctsa, cta, esa, dsa, ea, da)
+      da: Decoder[A],
+      ca: Codec[A]
+    ) extends OptionalCall[A](call)(ctsa, cta, esa, dsa, ea, da, ca)
 
   implicit class TraversableCallExt[S[_], A](call: FunctionCallWithProvenance[S[A]])
     (implicit
@@ -132,8 +133,11 @@ object FunctionCallWithProvenance {
       esi: Encoder[S[Int]],
       da: Decoder[A],
       dsa: Decoder[S[A]],
-      dsi: Decoder[S[Int]]
-    ) extends TraversableCall[S, A](call)(hok, cta, ctsa, ctsi, ea, esa, esi, da, dsa, dsi)
+      dsi: Decoder[S[Int]],
+      ca: Codec[A],
+      csa: Codec[S[A]],
+      csi: Codec[S[Int]]
+    ) extends TraversableCall[S, A](call)(hok, cta, ctsa, ctsi, ea, esa, esi, da, dsa, dsi, ca, csa, csi)
 
 
   implicit def createDecoder[O]: Decoder[FunctionCallWithProvenance[O]] =
@@ -154,8 +158,9 @@ object FunctionCallResultWithProvenance {
       esa: Encoder[Option[A]],
       dsa: Decoder[Option[A]],
       ea: Encoder[A],
-      da: Decoder[A]
-    ) extends OptionalResult[A](result: FunctionCallResultWithProvenance[Option[A]])(ctsa, cta, esa, dsa, ea, da)
+      da: Decoder[A],
+      ca: Codec[A]
+    ) extends OptionalResult[A](result: FunctionCallResultWithProvenance[Option[A]])(ctsa, cta, esa, dsa, ea, da, ca)
 
   implicit class TraversableResultExt[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
     (implicit
@@ -168,8 +173,11 @@ object FunctionCallResultWithProvenance {
       esi: Encoder[S[Int]],
       da: Decoder[A],
       dsa: Decoder[S[A]],
-      dsi: Decoder[S[Int]]
-    ) extends TraversableResult[S, A](result)(hok, cta, ctsa, ctsi, ea, esa, esi, da, dsa, dsi)
+      dsi: Decoder[S[Int]],
+      ca: Codec[A],
+      csa: Codec[S[A]],
+      csi: Codec[S[Int]]
+    ) extends TraversableResult[S, A](result)(hok, cta, ctsa, ctsi, ea, esa, esi, da, dsa, dsi, ca, csa, csi)
 }
 
 
