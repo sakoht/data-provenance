@@ -336,9 +336,6 @@ abstract class Function1WithProvenance[[#I1#], O](
 ) extends FunctionWithProvenance[O] with Serializable {
   self =>
 
-  assert(oc.encoder == en)
-  assert(oc.decoder == de)
-
   /**
     * Each Function1WithProvenance should declare a currentVersion, and update this value
     * whenever the impl() logic will return different values for the same inputs.

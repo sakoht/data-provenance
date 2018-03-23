@@ -26,12 +26,12 @@ class DevelopmentVersionSpec extends FunSpec with Matchers {
       implicit val rt: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))
 
       val result1 = myFunc(123).resolve
-      result1.call.versionValue(rt).dev shouldBe true
-      result1.call.versionValue(rt).id.endsWith(DevVersion.suffix)
+      result1.call.versionValue(rt).isDev shouldBe true
+      result1.call.versionValue(rt).id.endsWith(Version.devSuffix)
 
       val result2 = myFunc(456).resolve
-      result2.call.versionValue.dev shouldBe true
-      result2.call.versionValue.id.endsWith(DevVersion.suffix)
+      result2.call.versionValue.isDev shouldBe true
+      result2.call.versionValue.id.endsWith(Version.devSuffix)
     }
   }
 }

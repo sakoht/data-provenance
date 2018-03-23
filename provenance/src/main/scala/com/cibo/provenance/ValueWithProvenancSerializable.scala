@@ -144,6 +144,7 @@ object FunctionCallWithUnknownProvenanceSerializable {
   }
 
   private def load[T](saved: FunctionCallWithUnknownProvenanceSerializable, clazz: Class[T])(implicit rt: ResultTracker, ct: ClassTag[T]): UnknownProvenance[_] = {
+
     implicit val en: Encoder[T] = ???
     implicit val de: Decoder[T] = ???
     val value: T = rt.loadValue[T](saved.valueDigest)

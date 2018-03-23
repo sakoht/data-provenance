@@ -9,3 +9,20 @@ package com.cibo.provenance
   * @param id: A stringified SHA1 hex value.
   */
 case class Digest(id: String)
+
+
+object Digest {
+  import io.circe.{Decoder, DecodingFailure, Encoder, HCursor}
+
+  implicit val encoder: Encoder[Digest] = Encoder.instance {
+    (obj: Digest) =>
+      val id = unapply(obj).get
+      Encoder.encodeString.apply(id)
+  }
+
+  implicit val decoder: Decoder[Digest] = Decoder.instance {
+    (c: HCursor) =>
+      val obj: Digest = apply(c.value.asString.get)
+      Right(obj).asInstanceOf[Either[DecodingFailure, Digest]]
+  }
+}
