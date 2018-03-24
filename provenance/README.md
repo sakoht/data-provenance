@@ -45,10 +45,7 @@ val out: String = foo(123, 9.99)
 out == "123,9.99"
 ```
 
-The above Scala `Function2` takes two inputs, and has three parameterized types: the output type followed by each of 
-the input types. Scala implements `Function0` - `Function22`.  This pattern of having `SomeModadN[T]` is similar for 
-many builtin classes in the scala core, and in many libraries.This pattern is similar for many builtin classes.
-See classes like `Tuple1`-`Tuple22` for common examples.
+The above Scala `Function2` takes two inputs, and has three parameterized types: `I1`, `I2` and `O`.  Scala implements `Function0` - `Function22`, with inputs up to `I22`.  (A pattern followed by many of the internal classes, such as TupleN, etc.)
 
 
 Adding Provenance
@@ -69,9 +66,9 @@ object foo extends Function2WithProvenance[Int, Double, String] {
 ```
 
 The implicit contract is with the above object is:
-- the `impl(..)` produces deterministic results for the same inputs at any given declared version
-- the the version number will be updated when a software change intentionally change results
-- the system will track enough data that, when the above fails, the system self-corrects
+- The `impl(..)` produces _deterministic_ results for the same inputs at any given declared version.
+- The the version number will be updated when a software change intentionally change results.
+- The system will track enough data that, when the above fails, the system self-corrects.
 
 
 Using a FunctionWithProvenance
@@ -79,19 +76,17 @@ Using a FunctionWithProvenance
 
 Applying the function doesn't actually _run_ the implementation.  It returns a handle, similar to a `Future`, except the
 wrapped value might have been executed in the past, or in another might be in-process on another machine, or might never
-be executed at all:
+be executed at all, and simply be created to interrogate and discard:
 
-The type returned is an inner class of type `.Call`, specifically build to capture the parameters an a version:
+The type returned is an inner class of type `.Call`.  It is specifically constructed to capture the parameters and a `Version`:
+
 ```scala
-import io.circe.generic.auto._
-
 val call1: foo.Call = foo(123, 9.99)
-call1.i1 == UnknownProvenance(123)
-call1.i2 == UnknownProvenance(9.99)
-call1.v == UnknownProvenance(Version("0.1"))
-```
 
-The call might later be executed, or passed to another process, queued, or used as a parameter for a database query.
+assert(call1.i1 == UnknownProvenance(123))
+assert(call1.i2 == UnknownProvenance(9.99))
+assert(call1.v == UnknownProvenance(Version("0.1")))
+```
 
 The standard way to convert a call into a result is to call `.resolve`, which will look for an existing result,
 and if it isn't found, will run the implementation, make one, and save it.
@@ -102,9 +97,9 @@ val result1: foo.Result = call1.resolve     // see also resolveFuture to get bac
 The result contains both the `output` and the `call` that created it, and also commit/build information for the specific
 software that actually ran the `impl()`:
 ```scala
-result1.output == "123,9.99"                // the actual output of impl()
+result1.output == "123,9.99"                // the actual output value from impl()
 result1.call == call1.deflate               // the logical call that made it (in a "deflated" form, see Inflation and Deflation below)
-result1.buildInfo == YOURPACKAGE.BuildInfo  // the specific commitId and buildId of the software
+result1.buildInfo == YOURPACKAGE.BuildInfo  // the specific commitId and buildId of the software (see BuildInfo below)
 result1.buildInfo.commitId                  // the git commit
 result1.buildInfo.buildId                   // the unique buildID of the software (a high-precision timestamp).
 ```
@@ -239,6 +234,7 @@ data available.  The BuildInfo created must be implicitly available to make a Re
 
 The system can detects the three above failure modes retroactively, as the developer "posts evidence" to a future test 
 suite, which casts light on the errors made at previous commits/builds.  (TODO: go into detail)
+
 
 Shorter Example
 ---------------
@@ -502,7 +498,6 @@ Terminology Note:
   plus the `BuildInfo` that produced the output, and the output value itself.
 - The iterative resolution process replaces calls in the tree with results.
 
- 
 API Part 2
 -----------
 
@@ -521,34 +516,55 @@ shrinking the memory footprint.
 By default the result `.outputAsVirtualValue` holds the actual value `T` and the `Digest` after being saved.  When
 re-inflated (described below) the actual data re-vivifies lazily. 
 
-### Deflation & Inflation
+### Internal Classes:
 
 Since a `FunctionCallWithProvenance` can have nested inputs of arbitrary depth, the size of a call tree
 can possibly get extremely long, with each new call adding a layer.  Saving each naively would mean that every object
 saves out an ever-growing history object, most of which is copied in ints predecessor.
 
-To handle this, when a result it saved, it is converted into a `FunctionCallResultWithProvenanceDeflated`, as are its 
-inputs, recursively.  These are, in turn, composed of a `FunctionCallWithProvenanceDeflated`, an output value _digest_, 
-and a light version of the BuildInfo that contains only the commit and build ID strings.  These reference each other
-by digest ID rather than by software reference, but since serialization is consistent, the same ID will have the 
-same history in any tracking system that stores it.
+These classes are not mostly invisible to regular usage, but are still accessible through the public API.  They
+are used to represent data as it transitions to storage, and as it is passed along a wire protocol.
 
-These are part of the `ValueWithProvenance[_]` sealed trait, so any call can contain calls/results that are deflated
-after some depth.
+#### `*Serializable`
+
+`*Serializable` classes are serializable equivalents to the `ValueWithProvenance` hierarchy.  They:
+- represent type information as strings instead of real types
+- are broken into granular pieces
+- are the objects that are _actually_ converted into JSON and saved
+
+When a complicated provenance history is saved, each addition effectively appends a few of these into the tracking system for each new call.
+
+#### `*Saved`
+
+These are wrappers for the `*Serializable` classes that are aware of _output_ type, and are valid members of the regular `ValueWithProvenance` hierarchy.  When saving, the original objects are replaced with these.  When re-loading objects they come back in this form, and only fully vivify historical inputs when `.inflate` or `.inflateRecurse` is called. 
+
+
+#### Deflation & Inflation
+
+When a result it saved, it is converted into a `FunctionCallResultWithProvenanceSerializable`, as are its 
+inputs, recursively.  These are, in turn, composed of a `FunctionCallWithProvenanceSerializable`, an output value _digest_, 
+and a light version of the `BuildInfo` that contains only the commit and build ID values.  
+
+These reference each other by digest ID rather than by software reference, but since serialization is consistent, 
+the same ID will have the same history in any tracking system that stores it.
+
+The serialized data endpionts are returned wrapped in `FunctionCall{Result}WithProvenanceSaved[O]`, which act as drop-in replacements for the fully-vivified original.  These are part of the `ValueWithProvenance[_]` sealed trait, so any call can contain calls/results that are deflated after some depth.
 
 The methods to take a call or result back and forth from its deflated and inflated states are:
-- `.deflate`: returns the *Deflated equivalent of an inflated object, or itself if already deflated
+- `.deflate`: returns the *Saved equivalent of an inflated object, or itself if already deflated
 - `.inflate`: returns the inflated equivalent of a deflated object, or itself if already inflated
 
 Extening history with a single call actually just appends the following to storage:
-1. one `FunctionCallResultWithProvenanceDeflated`, which links to the input IDs, the output ID, commit ID, build ID, and... 
-2. one `FunctionCallWithProvenanceDeflated`, which knows the function, version, output class name, and references...
-3. one `FunctionCallWithProvenance`, fully serialized, but with its input results fully deflated (see #1)
+1. the serialized value of the output
+2. the serialized value of any inputs that were not already saved (usually only when values with UnknownProvenance are supplied)
+3. a single small `FunctionCallWithProvenanceSerialized` object which:
+ - embeds a serialized version of each of its `FunctionCallResultWithProvenanceSerialized`
+4. the list of IDs of the output values of all if the input functions
+5. the new associations between the above represented by the new result
 
-Note that the latter two are explicitly serialized as bytes.  The first is assembled from them, and other data stored
-in the data fabric (described below).
+The `FunctionCallResultWithProvenanceSerialized` embeded contains the ID used in the inputs contains the IDs of the underlying calls, not the full recursive input chain, so it appends naturally without bloat.  A single digest ID can represent the entire history.  When histories intersect they data there is no duplication.
 
-A single digest ID can represent the entire history, and when histories intersect they data there is no duplication.
+It is possible that a new result will simply include #5 above, if, for instance, the same function was called previously on the with the same inputs, with those inputs coming from different source functions, all of which were, themselves, called at other times in some other context.  Or is possibly a no-op if there is a race condition that causes the result to be generated twice in parallel.
 
 
 Data Fabric
@@ -581,8 +597,8 @@ data-provenance/cbf6eb1142cf44792e76a86e0d32fd89f94935a9/as/Int/from/com.cibo.pr
 functions/com.cibo.provenance.Add/1.0/input-group-values/805b0523984a5b175938cfbdcd04015d6ee41ec4
 functions/com.cibo.provenance.Add/1.0/inputs-to-output/805b0523984a5b175938cfbdcd04015d6ee41ec4/cbf6eb1142cf44792e76a86e0d32fd89f94935a9/DUMMY-COMMIT/1955.11.12T22.04.00Z
 functions/com.cibo.provenance.Add/1.0/output-to-provenance/cbf6eb1142cf44792e76a86e0d32fd89f94935a9/805b0523984a5b175938cfbdcd04015d6ee41ec4/54b994cc3625bd54213e4dc9017b98c85cabedff
-functions/com.cibo.provenance.Add/1.0/provenance-to-inputs/54b994cc3625bd54213e4dc9017b98c85cabedff/805b0523984a5b175938cfbdcd04015d6ee41ec4
-functions/com.cibo.provenance.Add/1.0/provenance-values/690bd39b1116c99020ee054e2b7db238a76f0d19
+functions/com.cibo.provenance.Add/1.0/call-inputs/54b994cc3625bd54213e4dc9017b98c85cabedff/805b0523984a5b175938cfbdcd04015d6ee41ec4
+functions/com.cibo.provenance.Add/1.0/calls/690bd39b1116c99020ee054e2b7db238a76f0d19
 commits/DUMMY-COMMIT/builds/1955.11.12T22.04.00Z/9b95f61961d21c6e90064e7146b5d06e6c936e25
 ```
 
@@ -669,23 +685,11 @@ See "Races, Conflicts and Collisions" below for details on situations which resu
 in this path structure, what they signify, and how they are handled.
 
 
-##### `provenance-values-typed` & `provenance-values-deflated`:
+##### `calls`
 ```
-functions/com.cibo.provenance.Add/1.0/provenance-values-deflated/0f2bbc4919dd3e9272fb8f5b77058940d0b658eb
-functions/com.cibo.provenance.Add/1.0/provenance-values-typed/690bd39b1116c99020ee054e2b7db238a76f0d19
+functions/com.cibo.provenance.Add/1.0/calls/0f2bbc4919dd3e9272fb8f5b77058940d0b658eb
 ```
-The provenance-values-typed path captures all "full" `FunctionCallResultWithProvenance` after deflating all of the
-inputs.
-
-The provenance-values-deflated then captures the `FunctionCallResultWithProvenanceDeflated` made from it.  This 
-keeps the ID of its full-formed predecessor.  
-
-The deflated version is then used when recording this path as an input to other calls.  This lets us decomposes the 
-full tree into separate objects so that long provenance does not result in larger and larger entries in the history 
-chain.  The deflated version also only requires that the output type be instantiatable in the application, so it can 
-bridge across libraries.
-
-This is a small object, as the output value and input values are all stored as SHA1s in the core `data/` tree.
+The `calls/` path captures all `FunctionCallWithProvenanceSerialized` including its input `FunctionCallResultWithProvenance`s.
 
 ##### `output-to-provenance`:
 ```
@@ -695,9 +699,9 @@ This captures the FunctionCallResultWithProvenance to a given output/input pair.
 child paths under any parent path, when multiple inputs happen to produce the same outupt, or when multiple upstream
 paths lead to the same inputs. 
 
-##### `provenance-to-inputs`:
+##### `call-inputs`:
 ```
-functions/com.cibo.provenance.Add/1.0/provenance-to-inputs/54b994cc3625bd54213e4dc9017b98c85cabedff/805b0523984a5b175938cfbdcd04015d6ee41ec4
+functions/com.cibo.provenance.Add/1.0/call-inputs/54b994cc3625bd54213e4dc9017b98c85cabedff/805b0523984a5b175938cfbdcd04015d6ee41ec4
 ```
 This "completes the loop", allowing a given provenance object to look up its inputs.  The inputs can hypothetically be
 known before the implementation executes, but they are typically only saved when other data is saved.
@@ -725,7 +729,7 @@ When a function vanishes, the same logic used for externally generated results a
 
 Best Practices
 --------------
-1. Don't go too granular.  Wrap units of work in provenance tracking where they would take noticeable time to repeat, and where a small amount of I/O is worth it to circumvent repetition.
+1. Don't go too granular.  Wrap units of work in provenance tracking where they would take noticeable time to repeat, and where a small amount of I/O is worth it to circumvent repetition, record status, etc.
 2. Be granular enough.  If the first part of your pipeline rarely changes and the second part changes often, be sure they are at wrapped in at least two different functions with provenance.  And if you go too broad _every_ change will iterate the master version.  Which defeats the purpose.
 3. Pick a new function name when you change signatures dramatically.  You are safe to just iterate the version when the interface remains stable, or the new interface is a superset of the old, with automatic defaults.
 4. If you want default parameters, make additional overrides to `apply()`.
