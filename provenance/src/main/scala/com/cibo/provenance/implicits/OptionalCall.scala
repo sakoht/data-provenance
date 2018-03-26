@@ -26,7 +26,7 @@ class OptionalCall[A](call: FunctionCallWithProvenance[Option[A]])
 
   self =>
 
-  implicit val csa: Codec[Option[A]] = new Codec[Option[A]]
+  implicit val csa: Codec[Option[A]] = Codec.fromImplicits[Option[A]]
 
   import com.cibo.provenance.ResultTracker
 

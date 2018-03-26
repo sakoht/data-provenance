@@ -54,13 +54,30 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
     digest: Digest
   ): Option[FunctionCallWithKnownProvenanceSerializableWithInputs] = None // never
 
-  def loadValueOption[O : ClassTag : Encoder : Decoder](digest: Digest): Option[O] = None // never
+  def loadValueOption[O : ClassTag : Codec](digest: Digest): Option[O] = None // never
 
   def loadValueSerializedDataOption(className: String, digest: Digest): Option[Array[Byte]] = None // never
 
   def loadBuildInfoOption(commitId: String, buildId: String): Option[BuildInfo] = None // never
+
+  def loadCodecByType[T : ClassTag]: Codec[T] =
+    throw new UnavailableData("No codec data with this tracker")
+
+  def loadCodecByClassNameAndCodecDigest[T : ClassTag](valueClassName: String, codecDigest: Digest): Codec[T] =
+    throw new UnavailableData("No codec data with this tracker")
+
+  def loadCodecStreamByValueDigest[T : ClassTag](valueDigest: Digest): Seq[Codec[T]] =
+    Seq.empty
 }
 
+
+class UnavailableData(msg: String) extends RuntimeException(f"Unavailable for ResultTrackerNone: $msg")
+
+/*
 object ResultTrackerNone {
-  //def apply(implicit val buildInfo: BuildInfo) = new ResultTrackerNone(buildInfo)
+  import io.circe.generic.semiauto._
+  def encoder = deriveEncoder[ResultTrackerNone]
+  def decoder = deriveDecoder[ResultTrackerNone]
 }
+*/
+

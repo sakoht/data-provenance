@@ -1,9 +1,12 @@
 package com.cibo.provenance
 
 
+import com.typesafe.scalalogging.Logger
 import io.circe.{Decoder, Encoder}
+import org.slf4j.LoggerFactory
 
 import scala.reflect.ClassTag
+import scala.util.{Failure, Success, Try}
 
 /**
   * Created by ssmith on 5/16/17.
@@ -24,7 +27,10 @@ import scala.reflect.ClassTag
   * and decides if/how to move things into that state (run things) indirectly, though that is not part of the
   * base API currently.
   */
-trait ResultTracker {
+trait ResultTracker extends Serializable {
+
+  @transient
+  lazy val logger = com.typesafe.scalalogging.Logger(LoggerFactory.getLogger(getClass.getName))
 
   /**
     * This is the core function of a ResultTracker.  It converts a call which may or may not have
@@ -172,9 +178,69 @@ trait ResultTracker {
     * @tparam T       The type of data.
     * @return         An Option of O that is Some[O] if the digest ID is found in storage.
     */
-  def loadValueOption[T : ClassTag : Encoder : Decoder](digest: Digest): Option[T]
+  def loadValueOption[T : ClassTag : Codec](digest: Digest): Option[T]
+
+  def loadValueOption(className: String, digest: Digest): Option[_] = {
+    val clazz = Class.forName(className)
+    loadValueOption(clazz, digest)
+  }
+
+  protected def loadValueOption[T](clazz: Class[T], digest: Digest): Option[_] = {
+    implicit val ct: ClassTag[T] = ClassTag(clazz)
+    Try {
+      val (value, codec) = loadValueWithCodec[T](digest)
+      value
+    } match {
+      case Success(codec) =>
+        Some(codec)
+      case Failure(err) =>
+        logger.error(f"Failed ot load codec: $err")
+        None
+    }
+  }
+
+  def loadValueWithCodec[T : ClassTag](valueDigest: Digest): (T, Codec[T]) = {
+    val stream = loadCodecStreamByValueDigest[T](valueDigest: Digest).flatMap {
+      codec =>
+        implicit val c: Codec[T] = codec
+        val foundAndLoadable: Option[T] =
+          Try {
+            loadValueOption[T](valueDigest) match {
+              case Some(value) =>
+                value
+              case None =>
+                throw new RuntimeException(s"Failed to find value of type ${implicitly[ClassTag[T]]} for digest $valueDigest")
+            }
+          } match {
+            case Success(value) =>
+              Some(value)
+            case Failure(err) =>
+              logger.error(err.toString)
+              None
+          }
+        foundAndLoadable.map { value => (value, codec)}
+    }
+    stream.headOption match {
+      case Some(pair) =>
+        pair
+      case None =>
+        throw new RuntimeException(f"Failed to find codec for value digest $valueDigest for type ${implicitly[ClassTag[T]]}")
+    }
+  }
+
+  def loadCodecByType[T : ClassTag]: Codec[T]
+
+  def loadCodecByCodecDigest[T : ClassTag](codecDigest: Digest): Codec[T] = {
+    val valueClassName = Util.classToName[T]
+    loadCodecByClassNameAndCodecDigest[T](valueClassName, codecDigest)
+  }
+
+  def loadCodecByClassNameAndCodecDigest[T : ClassTag](valueClassName: String, codecDigest: Digest): Codec[T]
+
+  def loadCodecStreamByValueDigest[T : ClassTag](valueDigest: Digest): Seq[Codec[T]]
 
   def loadBuildInfoOption(commitId: String, buildId: String): Option[BuildInfo]
+
 
   /**
     * A type-agnostic version of loadValueSerializedDataOption.  This works with a class string as text.

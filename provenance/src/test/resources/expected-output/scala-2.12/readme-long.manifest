@@ -1,4 +1,15 @@
+    4836 ./codecs/com.cibo.provenance.Function1WithProvenance/80876888f2779435dd637d59eb054a7e3cef4be0
+     978 ./codecs/scala.Int/16cf459e12ca111e64428429d78fd10f85d538eb
+   12975 ./codecs/scala.collection.immutable.List/977483560c5fd0e0f2e82f1a14615cc97bbb9201
      441 ./commits/DUMMY-COMMIT/builds/1955.11.12T22.04.00Z/9541548cc513437a9db5c5c677e61e45db512a65
+       2 ./data-codecs/19990eb53ca4eca8497c1ed4d5c7bf1829432847/scala.collection.immutable.List/977483560c5fd0e0f2e82f1a14615cc97bbb9201
+       2 ./data-codecs/2808261d3d5acd23a1a24919d4054b147701aa7a/scala.collection.immutable.List/977483560c5fd0e0f2e82f1a14615cc97bbb9201
+       2 ./data-codecs/45a408f92e74ec0e16cf4507a4e89d006211c8dc/scala.collection.immutable.List/977483560c5fd0e0f2e82f1a14615cc97bbb9201
+       2 ./data-codecs/6fe2476069478125931ede7fac176f8f07fd9ef1/scala.collection.immutable.List/977483560c5fd0e0f2e82f1a14615cc97bbb9201
+       2 ./data-codecs/9b25d900f4470f9c92e3d784db114fa1ea26e9f3/com.cibo.provenance.Function1WithProvenance/80876888f2779435dd637d59eb054a7e3cef4be0
+       2 ./data-codecs/da4b9237bacccdf19c0760cab7aec4a8359010b0/scala.Int/16cf459e12ca111e64428429d78fd10f85d538eb
+       2 ./data-codecs/e8b8f94f3e45c3516d466ade0118f2d8bd460834/scala.collection.immutable.List/977483560c5fd0e0f2e82f1a14615cc97bbb9201
+       2 ./data-codecs/fd0cc4e80429f53a34e6d8c74245ce58e1096020/scala.collection.immutable.List/977483560c5fd0e0f2e82f1a14615cc97bbb9201
        2 ./data-provenance/12c6fc06c99a462375eeb3f43dfd832b08ca9e17/as/scala.Int/from/com.cibo.provenance.incrementMe/0.1/with-inputs/f4e04ac45694a97e0fb9e3066d3ce78168f5178c/with-provenance/f3c87899988d427a0a83be842874485549fd8133/at/DUMMY-COMMIT/1955.11.12T22.04.00Z
        2 ./data-provenance/12c6fc06c99a462375eeb3f43dfd832b08ca9e17/as/scala.Int/from/com.cibo.provenance.monadics.ApplyWithProvenance/-/with-inputs/8262d37ca2b74aec56b368b6bf5f1f2c789c85d9/with-provenance/640a4ea3f8da11a3c5bd06457884a6c6d9e8f2f2/at/DUMMY-COMMIT/1955.11.12T22.04.00Z
        2 ./data-provenance/17ba0791499db908433b80f37c5fbc89b870084b/as/scala.Int/from/com.cibo.provenance.incrementMe/0.1/with-inputs/44bc572efb3d58d007ecf96393d21d5fb171a6ec/with-provenance/84cd679eee0767064d2511160706e7662f169258/at/DUMMY-COMMIT/1955.11.12T22.04.00Z
@@ -257,4 +268,4 @@
        2 ./functions/com.cibo.provenance.trioToList/0.1/inputs-to-output/624e7fe94fbc5c3d4354ff9797b93ff4edd17750/45a408f92e74ec0e16cf4507a4e89d006211c8dc/DUMMY-COMMIT/1955.11.12T22.04.00Z
        2 ./functions/com.cibo.provenance.trioToList/0.1/output-to-provenance/45a408f92e74ec0e16cf4507a4e89d006211c8dc/624e7fe94fbc5c3d4354ff9797b93ff4edd17750/9b9ef9fbf10388f16431da4a75033dfb0b1ea23e
        2 ./functions/com.cibo.provenance.trioToList/0.1/output-uses/45a408f92e74ec0e16cf4507a4e89d006211c8dc/from-input-group/c12de56040be9183a9313f553de69304f71fde58/with-prov/9b9ef9fbf10388f16431da4a75033dfb0b1ea23e/went-to/com.cibo.provenance.monadics.ApplyWithProvenance/-/input-group/c12de56040be9183a9313f553de69304f71fde58/arg/0
-   26791 total
+   45596 total

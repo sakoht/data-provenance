@@ -442,7 +442,7 @@ case class FunctionCallWithProvenanceSaved[O](data: FunctionCallWithProvenanceSe
 }
 
 
-case class FunctionCallResultWithProvenanceSaved[O](data: FunctionCallResultWithKnownProvenanceSerializable)
+case class FunctionCallResultWithProvenanceSaved[O](data: FunctionCallResultWithProvenanceSerializable)
   extends ValueWithProvenanceSaved[O] with Result[O] with Serializable {
 
   def outputDigest: Digest = data.outputDigest

@@ -280,41 +280,6 @@ abstract class Function0WithProvenance[O : ClassTag : Encoder : Decoder] extends
 
 }
 
-class Codec[T: Encoder : Decoder] {
-  def encoder = implicitly[Encoder[T]]
-  def decoder = implicitly[Decoder[T]]
-}
-
-object Codec {
-  implicit def mk[T : Encoder : Decoder] = new Codec[T]
-
-  implicit def mkOpt[T : Codec]: Codec[Option[T]] = {
-    val c: Codec[T] = implicitly[Codec[T]]
-    implicit val e: Encoder[T] = c.encoder
-    implicit val d: Decoder[T] = c.decoder
-    import io.circe.generic.semiauto._
-    implicit val e2: Encoder[Option[T]] = deriveEncoder[Option[T]]
-    implicit val d2: Decoder[Option[T]] = deriveDecoder[Option[T]]
-    new Codec[Option[T]]
-  }
-
-
-  /*
-  implicit val codecBoolean: Codec[Boolean] = {
-    import io.circe.generic.auto._
-    new Codec[Boolean]
-  }
-
-  implicit val rangeCodec: Codec[Range] = {
-    import io.circe.generic.auto._
-    new Codec[Range]
-  }
-  */
-}
-
-trait InputCodecGroup
-case class InputCodecGroup0() extends InputCodecGroup
-
 
 [1..21#
 

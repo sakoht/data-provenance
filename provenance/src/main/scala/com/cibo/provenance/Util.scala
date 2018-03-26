@@ -17,6 +17,36 @@ object Util extends LazyLogging {
   import java.io._
   import org.apache.commons.codec.digest.DigestUtils
   import scala.reflect.ClassTag
+  import scala.util.{Failure, Success, Try}
+
+
+  def classToName[T](clazz: Class[T])(implicit ct: ClassTag[T]) = {
+    val name1 = ct.toString
+    Try(Class.forName(name1)) match {
+      case Success(clazz1) if clazz1 == clazz => name1
+      case Failure(_) =>
+        val name2 = "scala." + name1
+        Try(Class.forName(name2)) match {
+          case Success(clazz2) if clazz2 == clazz => name2
+          case Failure(_) =>
+            throw new RuntimeException(f"Failed to resolve a class name for $clazz")
+        }
+    }
+  }
+
+  def classToName[T](implicit ct: ClassTag[T]) = {
+    val name1 = ct.toString
+    Try(Class.forName(name1)) match {
+      case Success(clazz1) => name1
+      case Failure(_) =>
+        val name2 = "scala." + name1
+        Try(Class.forName(name2)) match {
+          case Success(clazz2) => name2
+          case Failure(_) =>
+            throw new RuntimeException(f"Failed to resolve a class name for $ct")
+        }
+    }
+  }
 
   def getBytesAndDigest[T : Encoder : Decoder](obj: T, checkConsistency: Boolean = true): (Array[Byte], Digest) = {
     val bytes1 = serializeImpl(obj, checkConsistency)
@@ -95,7 +125,6 @@ object Util extends LazyLogging {
     oos.close()
     baos.toByteArray
   }
-  
 
   def deserializeRaw[T](bytes: Array[Byte]): T = {
     val bais = new ByteArrayInputStream(bytes)
