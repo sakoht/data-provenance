@@ -44,7 +44,7 @@ object myStrLen extends Function1WithProvenance[String, Int] {
 }
 
 object myApp1 extends App {
-  implicit val bi: BuildInfo = com.cibo.provenance.DummyBuildInfo // use com.mycompany.myapp.BuildInfo
+  implicit val bi: BuildInfo = com.cibo.provenance.BuildInfoDummy // use com.mycompany.myapp.BuildInfo
   implicit val rt: ResultTracker = ResultTrackerSimple(args(0))   //"s3://mybucket/myroot")
 
   import io.circe.generic.auto._
@@ -74,7 +74,7 @@ object addMe extends Function2WithProvenance[Int, Int, Int] {
 
 object myApp2 extends App {
 
-  implicit val bi: BuildInfo = DummyBuildInfo
+  implicit val bi: BuildInfo = BuildInfoDummy
   implicit val rt: ResultTracker = ResultTrackerSimple(args(0)) // or s3://...
 
   import io.circe.generic.auto._

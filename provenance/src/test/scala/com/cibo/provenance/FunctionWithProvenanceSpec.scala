@@ -29,7 +29,7 @@ class FunctionWithProvenanceSpec extends FunSpec with Matchers {
 
   // Use a dummy result tracker that stores nothing, re-runs everything.
   // Set the implicit BuildInfo to the DummyBuildInfo which uses a fake git commit and build ID.
-  implicit val rt: ResultTracker = ResultTrackerNone()(currentAppBuildInfo = DummyBuildInfo)
+  implicit val rt: ResultTracker = ResultTrackerNone()(currentAppBuildInfo = BuildInfoDummy)
 
   describe("functions with provenance") {
     it("should work with raw/primitive inputs") {

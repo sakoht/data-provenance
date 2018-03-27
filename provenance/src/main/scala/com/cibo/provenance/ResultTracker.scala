@@ -297,9 +297,16 @@ trait ResultTracker extends Serializable {
     extends RuntimeException(f"Cannot deflate calls with an unresolved version: $call")
 
   /**
-    * A known failure mode for the ResultTracker.
+    * Known failure modes for the ResultTracker.
     */
+
   class FailedSaveException(msg: String) extends RuntimeException(msg)
+
+  class DataNotFoundException(msg: String) extends RuntimeException(msg)
+
+  class SerializationInconsistencyException(msg: String) extends RuntimeException(msg)
+
+  class DataInconsistencyException(msg: String) extends RuntimeException(msg)
 }
 
 

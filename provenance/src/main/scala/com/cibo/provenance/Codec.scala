@@ -1,37 +1,96 @@
 package com.cibo.provenance
 
-import io.circe.{Decoder, Encoder}
+import io.circe._
+import java.io.Serializable
 
+/**
+  * A wrapper around a circe Encoder[T] and Decoder[T].
+  *
+  * @param encoder  An Encoder[T]
+  * @param decoder  A Decoder[T] that matches it.
+  * @tparam T       The type of data to be encoded/decoded.
+  */
 case class Codec[T](encoder: Encoder[T], decoder: Decoder[T]) extends Serializable
+
 
 object Codec {
   import scala.language.implicitConversions
 
-  def fromImplicits[T : Encoder : Decoder]: Codec[T] =
+  /**
+    * Implicitly create a Codec[T] wherever an Encoder[T] and Decoder[T] are implicitly available.
+    * These can be provided by io.circe.generic.semiauto._ w/o penalty, or .auto._ with some penalty.
+    *
+    * @tparam T The type of data to be encoded/decoded.
+    * @return A Codec[T] created from implicits.
+    */
+  implicit def createCodec[T : Encoder : Decoder]: Codec[T] =
     Codec(implicitly[Encoder[T]], implicitly[Decoder[T]])
 
-  // Create these implicitly where an encoder/decoder pair is available.
-  // This just cuts down on the number of things passed-around.
-  implicit def mk[T : Encoder : Decoder]: Codec[T] = Codec.fromImplicits[T]
+  /**
+    * Implicitly create a Codec[ Codec[T] ] so we can serialize/deserialize Codecs.
+    * This allows us to fully round-trip data across processes.
+    *
+    * @tparam T   The type of data underlying the underlying Codec
+    * @return     a Codec[ Codec[T] ]
+    */
+  implicit def selfCodec[T]: Codec[Codec[T]] =
+    Codec(new BinaryEncoder[Codec[T]], new BinaryDecoder[Codec[T]])
+}
 
-  // Ando convert back to either an encoder or decoder where needed.
-  implicit def getDecoder[T](codec: Codec[T]): Decoder[T] = codec.decoder
-  implicit def getEncoder[T](codec: Codec[T]): Encoder[T] = codec.encoder
 
-  // Make a Codec for an Option[T] wherever there is a Codec for the underlying T
-  implicit def mkOpt[T : Codec]: Codec[Option[T]] = {
-    val c: Codec[T] = implicitly[Codec[T]]
-    implicit val e: Encoder[T] = c.encoder
-    implicit val d: Decoder[T] = c.decoder
-    import io.circe.generic.semiauto._
-    implicit val e2: Encoder[Option[T]] = deriveEncoder[Option[T]]
-    implicit val d2: Decoder[Option[T]] = deriveDecoder[Option[T]]
-    Codec.fromImplicits[Option[T]]
-  }
+/**
+  * This uses the raw Java binary serialization internally, and puts the byte array into
+  * simple JSON.  It handles the provenance monads that have arbitrary complex depth,
+  * with types known at the base class but arbitrary types in subclasses.
+  *
+  * @tparam T: Some type (Serializable)
+  */
+private class BinaryDecoder[T <: Serializable] extends Decoder[T] with Serializable {
+  // NOTE: This is its own class, wrapping a regular circe encoder, because the
+  // real encoder isn't _itelf_ serializable, and some functions (like map), that
+  // take functions inadvertently serialize the encoders themselves.  This makes
+  // any case like that work seamlessly, and reconstruct with fidelity later without
+  // creating a data payload.
 
-  // Allow encoders and decoders to, ultimately, save and load themselves.
-  // These do _not_ need to save with consistent hashes, and are adjacent to the data hierarchy.
-  implicit def selfCodec[T]: Codec[Codec[T]] = Codec(selfEncoder[T], selfDecoder[T])
-  implicit def selfEncoder[T]: Encoder[Codec[T]] = new BinaryEncoder[Codec[T]]
-  implicit def selfDecoder[T]: Decoder[Codec[T]] = new BinaryDecoder[Codec[T]]
+  @transient
+  private lazy val dec =  Decoder.forProduct2("bytes", "length")(getObj[T])
+
+  private def getObj[O](bytes: Array[Byte], length: Int): O =
+    Util.deserializeRaw(bytes)
+
+  def apply(c: HCursor) = dec.apply(c)
+}
+
+
+/**
+  * This uses the raw Java binary serialization internally, and puts the byte array into
+  * simple JSON.  It handles the provenance monads that have arbitrary complex depth,
+  * with types known at the base class but arbitrary types in subclasses.
+  *
+  * @tparam T: Some type (serializable)
+  */
+private class BinaryEncoder[T <: Serializable] extends Encoder[T] with Serializable {
+  // NOTE: This is its own class, wrapping a regular circe encoder, because the
+  // real encoder isn't _itelf_ serializable, and some functions (like map), that
+  // take functions inadvertently serialize the encoders themselves.  This makes
+  // any case like that work seamlessly, and reconstruct with fidelity later without
+  // creating a data payload.
+
+  @transient
+  private lazy val enc: ObjectEncoder[T] =
+    Encoder.forProduct2("bytes", "length") {
+      obj =>
+        val bytes: Array[Byte] =
+          try {
+            Util.getBytesAndDigestRaw(obj)._1
+          } catch {
+            case e: Exception =>
+              val ee = e
+              println(f"Error serializing: $ee")
+              throw e
+          }
+        Tuple2(bytes, bytes.length)
+    }
+
+  def apply(a: T): Json = enc.apply(a)
 }

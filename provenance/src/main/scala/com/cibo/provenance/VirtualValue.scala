@@ -7,7 +7,7 @@ import scala.reflect.ClassTag
 /**
   * Created by ssmith on 10/6/17.
   *
-  * This encapsulates a value such that it can go from a real object to a byte array to a digest and back.
+  * This encapsulates a value such that it can go from a real object, to a byte array, to a digest and back.
   *
   * @param valueOption            The actual value of type T (optional).
   * @param digestOption           The digest of the serialization of the value T (optional)
@@ -106,7 +106,7 @@ case class VirtualValue[T](
 }
 
 object VirtualValue {
-  def apply[T](obj: T)(implicit ct: ClassTag[T]): VirtualValue[T] =
+  def apply[T : ClassTag](obj: T): VirtualValue[T] =
     VirtualValue(valueOption = Some(obj), digestOption = None, serializedDataOption = None)
 
   def unapply[T : ClassTag : Codec](v: VirtualValue[T])(implicit rt: ResultTracker): T =

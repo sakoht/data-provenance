@@ -1,17 +1,12 @@
 package com.cibo.provenance
 
-import java.time.Instant
+import io.circe._
 
-import io.circe.{Decoder, DecodingFailure, Encoder, Json}
-
+import scala.reflect.ClassTag
 
 /**
   * Created by ssmith on 10/22/17.
   *
-  * Apps using this library generate a BuildInfo object at compile time that extends this trait.
-  */
-
-/**
   * A `BuildInfo` object captures the `commitId` and `buildId` for a given software build, along with other related
   * values.
   *
@@ -40,194 +35,59 @@ trait BuildInfo extends Serializable {
   def builtAtString: String
   def builtAtMillis: Long
 
-  // Provenance Library Core
+  // Provenance Library Core Data
   def commitId: String
   def buildId: String = builtAtString.replace(":",".").replace(" ",".").replace("-",".")
 
+  // Common Methods
   def abbreviate: BuildInfoBrief = BuildInfoBrief(commitId, buildId)
   def debrief(implicit rt: ResultTracker): BuildInfo = this
 
   override def toString: String = f"BuildInfo($commitId@$buildId)"
 
-  def mkCodec: Codec[BuildInfo] = Codec(BuildInfo.createEncoder[BuildInfo], BuildInfo.createDecoder[BuildInfo])
+  def codec: Codec[_ <: BuildInfo]
 
+  def toEncoded: Json
+
+  @transient
   lazy val toBytesAndDigest: (Array[Byte], Digest) =
-    Util.getBytesAndDigest(this)(this.mkCodec)
+    Util.getBytesAndDigest(this)(BuildInfo.codec)
 
   def toBytes = toBytesAndDigest._1
+
   def toDigest = toBytesAndDigest._2
 }
 
 
-
 object BuildInfo {
+  import scala.language.implicitConversions
+
   // A custom encoding uses the "vcs" field to differentiate subclasses.
   // This is not a sealed trait so it cannot happen automatically w/ circe macros.
 
-  implicit def createDecoder[A <:  BuildInfo]: Decoder[A] = Decoder.instance(
+  private val encoder: Decoder[BuildInfo] = Decoder.instance(
     c => {
-      (
-        c.downField("vcs").as[String] match {
-          case Right(value) => value match {
-            case "git" => c.as[GitBuildInfo](GitBuildInfo.codec.decoder)
-            case "none" => c.as[NoBuildInfo](NoBuildInfo.codec.decoder)
+      c.downField("vcs").as[String] match {
+        case Right(value) =>
+          // NOTE: We could add reflection rather than hard-coding the list of VCS types.
+          value match {
+            case "git" => c.as[BuildInfoGit](BuildInfoGit.codec.decoder)
+            case "none" => c.as[BuildInfoNone](BuildInfoNone.codec.decoder)
             case "brief" => c.as[BuildInfoBrief](BuildInfoBrief.codec.decoder)
             case other => throw new RuntimeException(f"Unrecognized VCS: $other")
           }
-          case Left(err) =>
-            throw err
-        }
-      ).asInstanceOf[Either[io.circe.DecodingFailure, A]]
+        case Left(err) =>
+          throw err
+      }
     }
   )
 
-  implicit def createEncoder[A <:  BuildInfo]: Encoder[A] =
-    new Encoder[A] {
-      def apply(obj: A): Json =
-        obj match {
-          case o: GitBuildInfo => GitBuildInfo.codec.encoder(o)
-          case o: NoBuildInfo => NoBuildInfo.codec.encoder(o)
-          case o: BuildInfoBrief => BuildInfoBrief.codec.encoder(o)
-          case other =>
-            throw new RuntimeException(f"Unrecognized type of BuildInfo: $other")
-        }
-    }
-}
+  private val decoder: Encoder[BuildInfo] =
+    Encoder.instance { _.toEncoded }
 
-/**
-  * SbtBuildInfo uses this as the base trait for projects using `git`.
-  * A custom object extending this trait will be created and inserted into the build.
-  *
-  * When that object is serialized and later re-loaded, it comes back a a GitBuildInfoSaved (below).
-  */
-trait GitBuildInfo extends BuildInfo with Serializable {
-  def gitBranch: String
-  def gitRepoClean: String
-  def gitHeadRev: String
-  def gitCommitAuthor: String
-  def gitCommitDate: String
-  def gitDescribe: String
-
-  def commitId: String = gitHeadRev
-}
-
-/**
-  * A re-loaded instance of a saved GitBuildInfo.
-  *
-  * @param name
-  * @param version
-  * @param scalaVersion
-  * @param sbtVersion
-  * @param builtAtString
-  * @param builtAtMillis
-  * @param gitBranch
-  * @param gitRepoClean
-  * @param gitHeadRev
-  * @param gitCommitAuthor
-  * @param gitCommitDate
-  * @param gitDescribe
-  */
-case class GitBuildInfoSaved(
-  name: String,
-  version: String,
-  scalaVersion: String,
-  sbtVersion: String,
-  builtAtString: String,
-  builtAtMillis: Long,
-  gitBranch: String,
-  gitRepoClean: String,
-  gitHeadRev: String,
-  gitCommitAuthor: String,
-  gitCommitDate: String,
-  gitDescribe: String
-) extends GitBuildInfo
-
-
-object GitBuildInfo {
-  private val encoder: Encoder[GitBuildInfo] =
-    Encoder.forProduct15(
-      "vcs", "name", "version", "scalaVersion", "sbtVersion", "builtAtString", "builtAtMillis", "commitId", "buildId",
-      "gitBranch", "gitRepoClean", "gitHeadRev", "gitCommitAuthor", "gitCommitDate", "gitDescribe"
-    ) {
-      bi =>
-        Tuple15(
-          "git", bi.name, bi.version, bi.scalaVersion, bi.sbtVersion, bi.builtAtString, bi.builtAtMillis,
-          bi.commitId, bi.buildId, bi.gitBranch, bi.gitRepoClean, bi.gitHeadRev, bi.gitCommitAuthor,
-          bi.gitCommitDate, bi.gitDescribe
-        )
-    }
-
-  private val decoder: Decoder[GitBuildInfo] =
-    Decoder.forProduct15(
-      "vcs", "name", "version", "scalaVersion", "sbtVersion", "builtAtString", "builtAtMillis", "commitId", "buildId",
-      "gitBranch", "gitRepoClean", "gitHeadRev", "gitCommitAuthor", "gitCommitDate", "gitDescribe"
-    ) {
-      (
-        vcs: String, name: String, version: String, scalaVersion: String, sbtVersion: String,
-        builtAtString: String, builtAtMillis: Long, commitId: String, buildId: String,
-        gitBranch: String, gitRepoClean: String, gitHeadRev: String,
-        gitCommitAuthor: String, gitCommitDate: String, gitDescribe: String
-      ) =>
-        GitBuildInfoSaved(
-          name, version, scalaVersion, sbtVersion, builtAtString, builtAtMillis,
-          gitBranch, gitRepoClean, gitHeadRev, gitCommitAuthor, gitCommitDate, gitDescribe
-        )
-    }
-
-  implicit val codec: Codec[GitBuildInfo] = Codec(encoder, decoder)
+  implicit def codec: Codec[BuildInfo] =
+    Codec(decoder, encoder)
 }
 
 
-trait NoBuildInfo extends BuildInfo with Serializable {
-  def name: String = "-"
-  def version: String = "-"
-  def scalaVersion: String = "-"
-  def sbtVersion: String = "-"
-  def builtAtString: String = "-"
-  def builtAtMillis: Long = 0L
-
-  def commitId: String = "-"
-  override def buildId: String = "-"
-}
-
-
-object NoBuildInfo extends NoBuildInfo {
-  private val encoder: Encoder[NoBuildInfo] = Encoder.forProduct1("vcs")(_ => Tuple1("none"))
-  private val decoder: Decoder[NoBuildInfo] = Decoder.forProduct1("vcs")((vcs: String) => NoBuildInfo)
-  implicit val codec: Codec[NoBuildInfo] = Codec(encoder, decoder)
-}
-
-
-case class BuildInfoBrief(commitId: String, override val buildId: String) extends BuildInfo {
-  def impl: NoBuildInfo = NoBuildInfo
-
-  def name: String = impl.name
-  def version: String = impl.version
-  def scalaVersion: String = impl.scalaVersion
-  def sbtVersion: String = impl.sbtVersion
-
-  def builtAtString: String = impl.builtAtString
-  def builtAtMillis: Long = impl.builtAtMillis
-
-  override def abbreviate: BuildInfoBrief = this
-  override def debrief(implicit rt: ResultTracker):  BuildInfo = rt.loadBuildInfoOption(commitId, buildId).get
-}
-
-
-object BuildInfoBrief {
-
-  private val encoder: Encoder[BuildInfoBrief] =
-    Encoder.forProduct3("vcs", "commitId", "buildId") {
-      bi => Tuple3("brief", bi.commitId, bi.buildId)
-    }
-
-  private val decoder: Decoder[BuildInfoBrief] =
-    Decoder.forProduct3("vcs", "commitId", "buildId") {
-      (vcs: String, commitId: String, buildId: String) => BuildInfoBrief(commitId, buildId)
-    }
-
-  implicit val codec: Codec[BuildInfoBrief] = Codec(encoder, decoder)
-
-
-}
 

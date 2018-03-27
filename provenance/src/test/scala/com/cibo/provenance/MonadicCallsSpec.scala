@@ -13,7 +13,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
   import com.cibo.provenance.monadics._
 
   val outputBaseDir: String = TestUtils.testOutputBaseDir
-  implicit val buildInfo: BuildInfo = DummyBuildInfo
+  implicit val buildInfo: BuildInfo = BuildInfoDummy
 
   describe("Calls and results that return a Traversable") {
 

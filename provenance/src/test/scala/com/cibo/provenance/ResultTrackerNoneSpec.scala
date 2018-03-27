@@ -10,7 +10,7 @@ class ResultTrackerNoneSpec extends FunSpec with Matchers {
 
   describe("The null ResultTracker") {
 
-    implicit val buildInfo: BuildInfo = DummyBuildInfo
+    implicit val buildInfo: BuildInfo = BuildInfoDummy
     implicit val noTracking: ResultTrackerNone = ResultTrackerNone()
 
     it("causes functions re-run every time to produce results.") {

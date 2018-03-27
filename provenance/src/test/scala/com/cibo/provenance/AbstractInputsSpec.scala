@@ -6,7 +6,7 @@ import org.scalatest.{FunSpec, Matchers}
 class AbstractInputsSpec extends FunSpec with Matchers {
 
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir
-  implicit val buildInfo: BuildInfo = DummyBuildInfo
+  implicit val buildInfo: BuildInfo = BuildInfoDummy
 
   describe("functions with abstract input types") {
 

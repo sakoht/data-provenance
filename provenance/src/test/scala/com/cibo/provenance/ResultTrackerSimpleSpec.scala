@@ -16,7 +16,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir
 
   // This dummy BuildInfo is used by all ResultTrackers below.
-  implicit val buildInfo: BuildInfo = DummyBuildInfo
+  implicit val buildInfo: BuildInfo = BuildInfoDummy
 
   // This is called at the end of each test to regression-test the low-level storage.
   // We test only the manifests since the SHA1 in the name is the digest of the file,
@@ -136,7 +136,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       Add.runCount = 0
 
       // Ensure the build has _not_ been saved yet.
-      rt.loadBuildInfoOption(DummyBuildInfo.commitId, DummyBuildInfo.buildId) shouldEqual None
+      rt.loadBuildInfoOption(BuildInfoDummy.commitId, BuildInfoDummy.buildId) shouldEqual None
 
       Add.runCount = 0
       val s1 = Add(Add(1,2), Add(3,4))
@@ -145,12 +145,12 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       rc1 shouldBe 3
 
       // Verify we saved the build, and got the BuildInfo in a fully-fleshed-out subclass.
-      val reloadedDummy: GitBuildInfo =
-        rt.loadBuildInfoOption(DummyBuildInfo.commitId, DummyBuildInfo.buildId).get.asInstanceOf[GitBuildInfo]
+      val reloadedDummy: BuildInfoGit =
+        rt.loadBuildInfoOption(BuildInfoDummy.commitId, BuildInfoDummy.buildId).get.asInstanceOf[BuildInfoGit]
 
       // These are logically equal, though the original was a raw object from SbtBuildInfo,
       // and the reload is a case class with the same fields.
-      reloadedDummy.toString shouldEqual DummyBuildInfo.toString
+      reloadedDummy.toString shouldEqual BuildInfoDummy.toString
 
       Add.runCount = 0
       val s2 = Add(Add(1,2), Add(3,4))

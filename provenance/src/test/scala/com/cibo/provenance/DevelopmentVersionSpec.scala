@@ -8,7 +8,7 @@ class DevelopmentVersionSpec extends FunSpec with Matchers {
 
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir
 
-  implicit val buildInfo: BuildInfo = DummyBuildInfo
+  implicit val buildInfo: BuildInfo = BuildInfoDummy
 
 
   describe("Functions with a version with the 'dev' flag.") {

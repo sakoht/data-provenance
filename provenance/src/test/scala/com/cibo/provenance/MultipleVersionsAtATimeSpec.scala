@@ -11,7 +11,7 @@ import org.scalatest.{FunSpec, Matchers}
 
 class MultipleVersionsAtATimeSpec extends FunSpec with Matchers {
 
-  implicit val buildInfo: BuildInfo = DummyBuildInfo
+  implicit val buildInfo: BuildInfo = BuildInfoDummy
   implicit val storage: ResultTrackerNone = ResultTrackerNone()
 
   describe("Functions with provenance support one 'currentVersion' by default") {

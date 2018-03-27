@@ -1,8 +1,6 @@
 package com.cibo.provenance
 
 import com.amazonaws.services.s3.model.PutObjectResult
-import io.circe._
-import io.circe.generic.auto._
 import com.cibo.io.s3.{S3DB, SyncablePath}
 import com.cibo.provenance.exceptions.InconsistentVersionException
 import com.cibo.cache.GCache
@@ -153,7 +151,7 @@ class ResultTrackerSimple(
                 f"went-to/$functionName/$functionVersionId/input-group/$inputGroupId/arg/$n"
             saveEmptyObjectToPath(path)
           case other =>
-            throw new RuntimeException("???")
+            throw new FailedSaveException(f"Unexpected input type $other.  Cannot save result $resultSerializable!")
         }
     }
 
@@ -291,18 +289,10 @@ class ResultTrackerSimple(
   
   def saveCodecImpl[T : ClassTag : Codec](outputClassName: String, outputDigest: Digest): Digest = {
     val codec = implicitly[Codec[T]]
-
-    implicit val cd = Codec.selfCodec[T]
+    implicit val codecCodec = Codec.selfCodec[T]
     val (codecBytes, codecDigest) =
-      try {
-        Util.getBytesAndDigest(codec, checkForInconsistentSerialization(codec))
-      } catch {
-        case e: Exception =>
-          val ee = e
-          throw new RuntimeException(f"Failed to serialize codec $codec: $e")
-      }
+      Util.getBytesAndDigest(codec, checkForInconsistentSerialization(codec))
     saveBytes(f"codecs/$outputClassName/${codecDigest.id}", codecBytes)
-
     codecDigest
   }
 
@@ -385,10 +375,12 @@ class ResultTrackerSimple(
             println(e.toString)
             loadValue[O](outputId)(call.outputClassTag, call.outputCodec)
         }
+
         val outputId2 = Util.digestObject(output)
         if (outputId2 != outputId) {
-          throw new RuntimeException(f"Output value saved as $outputId reloads with a digest of $outputId2: $output")
+          throw new SerializationInconsistencyException(f"Output value saved as $outputId reloads with a digest of $outputId2: $output")
         }
+
         val outputWrapped = VirtualValue(valueOption = Some(output), digestOption = Some(outputId), serializedDataOption = None)
         val bi = BuildInfoBrief(commitId, buildId)
         call.newResult(outputWrapped)(bi)
@@ -431,7 +423,7 @@ class ResultTrackerSimple(
       case Nil =>
         None
       case many =>
-        throw new RuntimeException(f"Multiple objects saved for build $commitId/$buildId?: $many")
+        throw new DataInconsistencyException(f"Multiple objects saved for build $commitId/$buildId?: $many")
     }
   }
 
@@ -495,7 +487,7 @@ class ResultTrackerSimple(
           case Some(bytes) =>
             Util.deserialize(bytes)
           case None =>
-            throw new RuntimeException(f"Failed to find data for input digest $digest for $fname $fversion!")
+            throw new DataNotFoundException(f"Failed to find data for input digest $digest for $fname $fversion!")
         }
     }
   }
@@ -688,7 +680,7 @@ class ResultTrackerSimple(
   protected def saveObject[T : ClassTag: Codec](path: String, obj: T): String = {
     obj match {
       case _ : Array[Byte] =>
-        throw new RuntimeException("Attempt to save pre-serialized data?")
+        throw new FailedSaveException("Attempt to save pre-serialized data?")
       case _ =>
         val (bytes, digest) = Util.getBytesAndDigest(obj, checkForInconsistentSerialization(obj))
         saveBytes(path, bytes)
@@ -725,7 +717,6 @@ object ResultTrackerSimple {
   // will be referenced in the codec.
 }
 
-
-class ReadOnlyTrackerException(msg: String) extends RuntimeException
-
+class ReadOnlyTrackerException(msg: String)
+  extends RuntimeException(f"Attempt to use a read-only tracker to write data: $msg")
 

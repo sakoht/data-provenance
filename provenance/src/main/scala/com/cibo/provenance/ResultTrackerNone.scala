@@ -1,8 +1,7 @@
 package com.cibo.provenance
 
-import io.circe.{Decoder, Encoder}
-
 import scala.reflect.ClassTag
+
 
 /**
   * Created by ssmith on 5/16/17.
@@ -73,11 +72,4 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
 class UnavailableData(msg: String) extends RuntimeException(f"Unavailable for ResultTrackerNone: $msg")
 
-/*
-object ResultTrackerNone {
-  import io.circe.generic.semiauto._
-  def encoder = deriveEncoder[ResultTrackerNone]
-  def decoder = deriveDecoder[ResultTrackerNone]
-}
-*/
 

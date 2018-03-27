@@ -39,7 +39,7 @@ object IndicesRangeWithProvenance {
       obj => Tuple3(obj.start, obj.end, obj.step)
     }
 
-  implicit val rangeCodec: Codec[Range] = Codec.fromImplicits[Range]
+  implicit val rangeCodec: Codec[Range] = Codec(rangeEncoder, rangeDecoder)
 
   def apply[S[_], A](implicit converter: implicits.Traversable[S]) =
     new IndicesRangeWithProvenance[S, A]

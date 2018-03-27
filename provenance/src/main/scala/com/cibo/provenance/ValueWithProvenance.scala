@@ -344,7 +344,7 @@ case class UnknownProvenance[O : ClassTag : Codec](value: O)
   def functionName: String = toString
 
   @transient
-  private lazy implicit val rt: ResultTracker = ResultTrackerNone()(NoBuildInfo)
+  private lazy implicit val rt: ResultTracker = ResultTrackerNone()(BuildInfoNone)
 
   @transient
   private lazy val cachedResult: UnknownProvenanceValue[O] =
@@ -375,7 +375,7 @@ case class UnknownProvenance[O : ClassTag : Codec](value: O)
 case class UnknownProvenanceValue[O : ClassTag](
   override val call: UnknownProvenance[O],
   override val outputAsVirtualValue: VirtualValue[O]
-) extends Function0CallResultWithProvenance[O](call, outputAsVirtualValue)(NoBuildInfo) with Serializable {
+) extends Function0CallResultWithProvenance[O](call, outputAsVirtualValue)(BuildInfoNone) with Serializable {
 
   // Note: This class is present to complete the API, but nothing in the system instantiates it.
   // The newResult method is never called for an UnknownProvenance[T].
