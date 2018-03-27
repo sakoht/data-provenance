@@ -2,31 +2,17 @@ package com.cibo.provenance
 
 import io.circe._
 
-
+/**
+  * This encoder is ResultTracker-specific.  It is fabricated during the save process by the tracker.
+  *
+  * @param rt The ResultTracker that "owns" the save process.
+  * @tparam O The output type of the ValueWithProvenance.
+  * @tparam T The overall type of ValueWithProvenance being saved.
+  */
 class ValueWithProvenanceEncoder[O, T <: ValueWithProvenance[O]](implicit rt: ResultTracker) extends Encoder[T] {
   def apply(obj: T): Json =  {
     val serializable: ValueWithProvenanceSerializable = ValueWithProvenanceSerializable.save[O](obj)
-    val json: Json = ValueWithProvenanceSerializable.en.apply(serializable)
+    val json: Json = ValueWithProvenanceSerializable.encoder.apply(serializable)
     json
   }
 }
-
-
-object ValueWithProvenanceEncoder {
-  /*
-  implicit def decoderEncoder[O, T <: ValueWithProvenance[O]]: Encoder[ValueWithProvenanceEncoder[O, T]] =
-    new Encoder[ValueWithProvenanceEncoder[O, T]] {
-      def apply(a: ValueWithProvenanceEncoder[O, T]) = ???
-    }
-
-  implicit def decoderDecoder[O, T <: ValueWithProvenance[O]]: Decoder[ValueWithProvenanceEncoder[O, T]] =
-    new Decoder[ValueWithProvenanceEncoder[O, T]] {
-      def apply(c: HCursor) = ???
-    }
-  */
-
-  def create[O, T <: ValueWithProvenance[O]](outputClass: Class[O], monadClass: Class[T])(implicit rt: ResultTracker)
-    : ValueWithProvenanceEncoder[O, T] =
-      new ValueWithProvenanceEncoder[O, T]
-}
-

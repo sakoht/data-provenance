@@ -47,7 +47,8 @@ object TestUtils extends LazyLogging with Matchers {
 
     val actualOutputLocalPath = actualOutputDirPath.getLocalPathString
 
-    val newManifestBytes = getOutputAsBytes(s"cd $actualOutputLocalPath && wc -c `find . -type file | sort`")
+    val newManifestBytes =
+      getOutputAsBytes(s"cd $actualOutputLocalPath && wc -c `find . -type file | sort | grep -v codecs`")
     val newManifestString = new String(newManifestBytes)
 
     val rootSubdir = "src/test/resources/expected-output"
@@ -82,7 +83,7 @@ object TestUtils extends LazyLogging with Matchers {
       case e: Exception =>
         // For any failure, replae the test content.  This will show up in git status, and it can be committed or not.
         expectedManifestFile.getParentFile.mkdirs()
-        logger.error(f"Writing $expectedManifestFile to put in source control.  Rever this if the change is not intentional.")
+        logger.error(f"Writing $expectedManifestFile to put in source control.  Reverse this if the change is not intentional.")
         Files.write(Paths.get(expectedManifestFile.getAbsolutePath), newManifestBytes)
         throw e
     }

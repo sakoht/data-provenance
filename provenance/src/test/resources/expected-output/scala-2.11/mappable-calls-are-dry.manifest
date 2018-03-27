@@ -1,15 +1,4 @@
-     973 ./codecs/scala.Int/d872c8a33ba91367adc4de95915b6e24cf69f60b
-    8619 ./codecs/scala.collection.Seq/610ba122ea44c6baa62116644d612be0d05944c4
      441 ./commits/DUMMY-COMMIT/builds/1955.11.12T22.04.00Z/9541548cc513437a9db5c5c677e61e45db512a65
-       2 ./data-codecs/12c6fc06c99a462375eeb3f43dfd832b08ca9e17/scala.Int/d872c8a33ba91367adc4de95915b6e24cf69f60b
-       2 ./data-codecs/17ba0791499db908433b80f37c5fbc89b870084b/scala.Int/d872c8a33ba91367adc4de95915b6e24cf69f60b
-       2 ./data-codecs/356a192b7913b04c54574d18c28d46e6395428ab/scala.Int/d872c8a33ba91367adc4de95915b6e24cf69f60b
-       2 ./data-codecs/77de68daecd823babbb58edb1c8e14d7106e83bb/scala.Int/d872c8a33ba91367adc4de95915b6e24cf69f60b
-       2 ./data-codecs/98fbc42faedc02492397cb5962ea3a3ffc0a9243/scala.Int/d872c8a33ba91367adc4de95915b6e24cf69f60b
-       2 ./data-codecs/b6589fc6ab0dc82cf12099d1c2d40ab994e8410c/scala.Int/d872c8a33ba91367adc4de95915b6e24cf69f60b
-       2 ./data-codecs/b6692ea5df920cad691c20319a6fffd7a4a766b8/scala.Int/d872c8a33ba91367adc4de95915b6e24cf69f60b
-       2 ./data-codecs/d25277ef5cab775557a6cd7419bc3b9e77b06156/scala.collection.Seq/610ba122ea44c6baa62116644d612be0d05944c4
-       2 ./data-codecs/da4b9237bacccdf19c0760cab7aec4a8359010b0/scala.Int/d872c8a33ba91367adc4de95915b6e24cf69f60b
        2 ./data-provenance/12c6fc06c99a462375eeb3f43dfd832b08ca9e17/as/scala.Int/from/com.cibo.provenance.monadics.ApplyWithProvenance/-/with-inputs/d07780a6b2cc74b83c9f2201cb1d7d352540f315/with-provenance/d89588d32874b395383db4c3f2a59c095f2df4f0/at/DUMMY-COMMIT/1955.11.12T22.04.00Z
        2 ./data-provenance/17ba0791499db908433b80f37c5fbc89b870084b/as/scala.Int/from/com.cibo.provenance.monadics.ApplyWithProvenance/-/with-inputs/24892d5b87d60d29346232f3ab9db6f377461ec6/with-provenance/b4e6918c7aa9a56c50a57d789b4f281ecaed2ac1/at/DUMMY-COMMIT/1955.11.12T22.04.00Z
        2 ./data-provenance/98fbc42faedc02492397cb5962ea3a3ffc0a9243/as/scala.Int/from/com.cibo.provenance.monadics.ApplyWithProvenance/-/with-inputs/450e5fc6481699826f9bdf0f8a1a635cb73376bd/with-provenance/66d9511858d762d0e840e4d4d5e03644104c9a1b/at/DUMMY-COMMIT/1955.11.12T22.04.00Z
@@ -53,4 +42,4 @@
        2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/output-to-provenance/17ba0791499db908433b80f37c5fbc89b870084b/24892d5b87d60d29346232f3ab9db6f377461ec6/b4e6918c7aa9a56c50a57d789b4f281ecaed2ac1
        2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/output-to-provenance/98fbc42faedc02492397cb5962ea3a3ffc0a9243/450e5fc6481699826f9bdf0f8a1a635cb73376bd/66d9511858d762d0e840e4d4d5e03644104c9a1b
        2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/output-to-provenance/b6692ea5df920cad691c20319a6fffd7a4a766b8/f0380b0a82e04fe902609251de4c442ba29c389b/d260666cf00dc70a1f57bef8ed2d0b55729c39a6
-   13868 total
+    4258 total

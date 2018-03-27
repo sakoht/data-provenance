@@ -68,9 +68,12 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
 
       val obj1: Add.Call = Add(1, 2)
       val id = rt.saveOutputValue(obj1)
+
       val obj2pair: (Add.Call, Codec[Add.Call]) = rt.loadValueWithCodec[Add.Call](id)
       val obj2v: Add.Call = obj2pair._1
+      obj2v shouldEqual obj1
       val obj2c: Codec[Add.Call] = obj2pair._2
+
       val obj2 = rt.loadValue[Add.Call](id)
       obj2 shouldEqual obj1
 

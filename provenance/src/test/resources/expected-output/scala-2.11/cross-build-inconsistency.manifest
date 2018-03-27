@@ -1,9 +1,5 @@
-     973 ./codecs/scala.Int/d872c8a33ba91367adc4de95915b6e24cf69f60b
       55 ./commits/commit1/builds/build1/10cda243ceb13371e8daa9170c5d2af63d410f0c
       55 ./commits/commit1/builds/build2/d3918c2ae661eae89bfcb9826f908e53995dd270
-       2 ./data-codecs/1b6453892473a467d07372d45eb05abc2031647a/scala.Int/d872c8a33ba91367adc4de95915b6e24cf69f60b
-       2 ./data-codecs/356a192b7913b04c54574d18c28d46e6395428ab/scala.Int/d872c8a33ba91367adc4de95915b6e24cf69f60b
-       2 ./data-codecs/da4b9237bacccdf19c0760cab7aec4a8359010b0/scala.Int/d872c8a33ba91367adc4de95915b6e24cf69f60b
        2 ./data-provenance/1b6453892473a467d07372d45eb05abc2031647a/as/scala.Int/from/com.cibo.provenance.Add/1.0/with-inputs/c06a73ec389b2ec4d80027cfd1c6196458ac6064/with-provenance/a50646828fd455458fd00ba577e27f443940633f/at/commit1/build2
        2 ./data-provenance/da4b9237bacccdf19c0760cab7aec4a8359010b0/as/scala.Int/from/com.cibo.provenance.Add/1.0/with-inputs/c06a73ec389b2ec4d80027cfd1c6196458ac6064/with-provenance/a50646828fd455458fd00ba577e27f443940633f/at/commit1/build1
        1 ./data/1b6453892473a467d07372d45eb05abc2031647a
@@ -18,4 +14,4 @@
        2 ./functions/com.cibo.provenance.Add/1.0/inputs-to-output/c06a73ec389b2ec4d80027cfd1c6196458ac6064/da4b9237bacccdf19c0760cab7aec4a8359010b0/commit1/build1
        2 ./functions/com.cibo.provenance.Add/1.0/output-to-provenance/1b6453892473a467d07372d45eb05abc2031647a/c06a73ec389b2ec4d80027cfd1c6196458ac6064/a50646828fd455458fd00ba577e27f443940633f
        2 ./functions/com.cibo.provenance.Add/1.0/output-to-provenance/da4b9237bacccdf19c0760cab7aec4a8359010b0/c06a73ec389b2ec4d80027cfd1c6196458ac6064/a50646828fd455458fd00ba577e27f443940633f
-    1789 total
+     810 total
