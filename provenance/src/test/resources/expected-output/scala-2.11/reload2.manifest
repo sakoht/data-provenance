@@ -1,1 +1,10 @@
-   14067 ./data/c2840d26cae7131ed9c56513da7792f6285ba281
+    6355 ./codecs/com.cibo.provenance.Function2WithProvenance$Call/af6db58920d3ce12035a5ca0e5f817014b2a0e4a
+     973 ./codecs/scala.Int/d872c8a33ba91367adc4de95915b6e24cf69f60b
+       2 ./data-codecs/356a192b7913b04c54574d18c28d46e6395428ab/scala.Int/d872c8a33ba91367adc4de95915b6e24cf69f60b
+       2 ./data-codecs/7182e9982a155d2a5cdabd099aae555b5270a40e/com.cibo.provenance.Function2WithProvenance$Call/af6db58920d3ce12035a5ca0e5f817014b2a0e4a
+       2 ./data-codecs/da4b9237bacccdf19c0760cab7aec4a8359010b0/scala.Int/d872c8a33ba91367adc4de95915b6e24cf69f60b
+       1 ./data/356a192b7913b04c54574d18c28d46e6395428ab
+     446 ./data/7182e9982a155d2a5cdabd099aae555b5270a40e
+       1 ./data/da4b9237bacccdf19c0760cab7aec4a8359010b0
+     388 ./functions/com.cibo.provenance.Add/1.0/calls/4c892204b0508210a3152e1e71fb95c73c48f746
+    8170 total
