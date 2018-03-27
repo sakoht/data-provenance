@@ -1,13 +1,6 @@
 package com.cibo.provenance
 
 
-import com.typesafe.scalalogging.Logger
-import io.circe.{Decoder, Encoder}
-import org.slf4j.LoggerFactory
-
-import scala.reflect.ClassTag
-import scala.util.{Failure, Success, Try}
-
 /**
   * Created by ssmith on 5/16/17.
   *
@@ -28,6 +21,10 @@ import scala.util.{Failure, Success, Try}
   * base API currently.
   */
 trait ResultTracker extends Serializable {
+  import org.slf4j.LoggerFactory
+
+  import scala.reflect.ClassTag
+  import scala.util.{Failure, Success, Try}
 
   @transient
   lazy val logger = com.typesafe.scalalogging.Logger(LoggerFactory.getLogger(getClass.getName))
@@ -112,11 +109,11 @@ trait ResultTracker extends Serializable {
     *
     * This is used by the 
     *
-    * @param obj:   The object to save.  It must have a circe Encoder and Decoder implicitly available.
+    * @param obj:   The object to save.  It must have a circe Codec implicitly available.
     * @tparam T     The type of data to save.
     * @return       The Digest of the serialized data.  A unique ID usable to re-load later.
     */
-  def saveOutputValue[T : ClassTag : Encoder : Decoder](obj: T): Digest
+  def saveOutputValue[T : ClassTag : Codec](obj: T): Digest
   
   def saveBuildInfo: Digest
 
@@ -135,7 +132,7 @@ trait ResultTracker extends Serializable {
     * @param obj      The object to check for.  It must have a circe encoder/decoder.  It will be digested pre-query.
     * @return         A boolean flag that is true if the value is stored.
     */
-  def hasValue[T : ClassTag : Encoder : Decoder](obj: T): Boolean
+  def hasValue[T : ClassTag : Codec](obj: T): Boolean
 
   /**
     * Check storage for a given input/output value by SHA1 Digest.
@@ -263,7 +260,7 @@ trait ResultTracker extends Serializable {
     * @tparam O       The type of the output data.
     * @return         An optional array of serialized bytes.
     */
-  def loadValueSerializedDataOption[O : ClassTag : Encoder : Decoder](digest: Digest): Option[Array[Byte]] = {
+  def loadValueSerializedDataOption[O : ClassTag : Codec](digest: Digest): Option[Array[Byte]] = {
     val ct = implicitly[ClassTag[O]]
     loadValueSerializedDataOption(ct.runtimeClass.getName, digest)
   }
@@ -276,7 +273,7 @@ trait ResultTracker extends Serializable {
     * @tparam T       The type of data.
     * @return         An Option of T that is Some[T] if the digest ID is found in storage.
     */
-  def loadValue[T : ClassTag : Encoder : Decoder](digest: Digest): T = {
+  def loadValue[T : ClassTag : Codec](digest: Digest): T = {
     val ct = implicitly[ClassTag[T]]
     val className = Util.classToName[T]
     val clazz = Class.forName(className)

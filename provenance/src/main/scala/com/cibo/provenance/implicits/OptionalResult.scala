@@ -18,10 +18,7 @@ class OptionalResult[A](result: FunctionCallResultWithProvenance[Option[A]])
   (implicit
     ctsa: ClassTag[Option[A]],
     cta: ClassTag[A],
-    esa: Encoder[Option[A]],
-    dsa: Decoder[Option[A]],
-    ea: Encoder[A],
-    da: Decoder[A],
+    csa: Codec[Option[A]],
     ca: Codec[A]
   ) {
 
@@ -31,7 +28,7 @@ class OptionalResult[A](result: FunctionCallResultWithProvenance[Option[A]])
 
   def nonEmpty(implicit rt: ResultTracker) = result.call.nonEmpty.resolve
 
-  def map[B : ClassTag : Encoder : Decoder : Codec](
+  def map[B : ClassTag : Codec](
     f: ValueWithProvenance[Function1WithProvenance[A, B]]
   )(
     implicit rt: ResultTracker,

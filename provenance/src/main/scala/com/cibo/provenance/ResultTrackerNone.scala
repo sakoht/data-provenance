@@ -26,7 +26,7 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
   def saveCall[O](v: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceSaved[O] =
     FunctionCallWithProvenanceSaved(v)
 
-  def saveOutputValue[T : ClassTag: Encoder : Decoder](obj: T): Digest = {
+  def saveOutputValue[T : ClassTag: Codec](obj: T): Digest = {
     // also a no-op that just calculates the ID and returns it
     Util.digestObject(obj)
   }
@@ -44,7 +44,7 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
     Some(f.run(this))
   }
 
-  def hasValue[T : ClassTag : Encoder : Decoder](obj: T): Boolean = false // never
+  def hasValue[T : ClassTag : Codec](obj: T): Boolean = false // never
 
   def hasValue(digest: Digest): Boolean = false // never
 

@@ -26,7 +26,7 @@ import io.circe._
   * @param v:           The version of the Function0WithProvenance[O] being called.
   * @param implVersion: A lambda that contains the actual execution logic (cross-version).
   */
-abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: ValueWithProvenance[Version])(implVersion: (Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
+abstract class Function0CallWithProvenance[O : ClassTag : Codec](v: ValueWithProvenance[Version])(implVersion: (Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
 
   def inputs: Seq[ValueWithProvenance[_]] = Seq.empty
 
@@ -79,7 +79,7 @@ abstract class Function0CallWithProvenance[O : ClassTag : Encoder : Decoder](v: 
   * @param v:           The version of the Function1WithProvenance[O] being called.
   * @param implVersion: A lambda that contains the actual execution logic, cross-version.
   */
-abstract class Function1CallWithProvenance[[#I1#], O : ClassTag : Encoder : Decoder]([#i1: ValueWithProvenance[_ <: I1]#], v: ValueWithProvenance[Version])(implVersion: ([#I1#], Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
+abstract class Function1CallWithProvenance[[#I1#], O : ClassTag : Codec]([#i1: ValueWithProvenance[_ <: I1]#], v: ValueWithProvenance[Version])(implVersion: ([#I1#], Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
 
   def inputs: Seq[ValueWithProvenance[_]] = Seq([#i1#])
 

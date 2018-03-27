@@ -48,13 +48,17 @@ object Util extends LazyLogging {
     }
   }
 
-  def getBytesAndDigest[T : Encoder : Decoder](obj: T, checkConsistency: Boolean = true): (Array[Byte], Digest) = {
+  def getBytesAndDigest[T : Codec](obj: T, checkConsistency: Boolean = true): (Array[Byte], Digest) = {
     val bytes1 = serializeImpl(obj, checkConsistency)
     val digest1 = digestBytes(bytes1)
     (bytes1, digest1)
   }
 
-  def serializeImpl[T : Encoder : Decoder](obj: T, checkConsistency: Boolean = true): Array[Byte] = {
+  def serializeImpl[T : Codec](obj: T, checkConsistency: Boolean = true): Array[Byte] = {
+    val codec = implicitly[Codec[T]]
+    implicit val encoder = codec.encoder
+    implicit val decoder = codec.decoder
+
     val json: String = obj.asJson.noSpaces
 
     if (checkConsistency) {
@@ -75,7 +79,9 @@ object Util extends LazyLogging {
     json.getBytes("UTF-8")
   }
 
-  def deserialize[T](bytes: Array[Byte])(implicit e: io.circe.Encoder[T], d: io.circe.Decoder[T]): T = {
+  def deserialize[T](bytes: Array[Byte])(implicit cd: Codec[T]): T = {
+    implicit val encoder = cd.encoder
+    implicit val decoder = cd.decoder
     val s = new String(bytes, "UTF-8")
     decode[T](s) match {
       case Left(error) =>
@@ -85,7 +91,7 @@ object Util extends LazyLogging {
     }
   }
 
-  def digestObject[T : ClassTag : Encoder : Decoder](value: T): Digest = {
+  def digestObject[T : ClassTag : Codec](value: T): Digest = {
     value match {
       case _: Array[Byte] =>
         //logger.warn("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")

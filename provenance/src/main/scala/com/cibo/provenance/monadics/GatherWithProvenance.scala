@@ -13,7 +13,7 @@ import io.circe._
 
 import scala.reflect.ClassTag
 
-class GatherWithProvenance[E, O <: Seq[E] : ClassTag : Encoder : Decoder, I <: Seq[ValueWithProvenance[E]]] extends Function1WithProvenance[I, O]  {
+class GatherWithProvenance[E, O <: Seq[E] : ClassTag : Codec, I <: Seq[ValueWithProvenance[E]]] extends Function1WithProvenance[I, O]  {
 
   val currentVersion = NoVersion
 
@@ -28,13 +28,11 @@ class GatherWithProvenance[E, O <: Seq[E] : ClassTag : Encoder : Decoder, I <: S
     (implicit
       cti: ClassTag[I],
       cto: ClassTag[O],
-      en: Encoder[O],
-      dc: Decoder[O]
+      en: Codec[O]
     ): Call = {
 
       //val seq = in.asInstanceOf[Seq[ValueWithProvenance[E]]]
-      implicit val e: Encoder[I] = ???
-      implicit val d: Decoder[I] = ???
+      implicit val en: Codec[I] = ???
       val wrap = UnknownProvenance(in)
       apply(wrap, UnknownProvenance(currentVersion))
   }
@@ -43,14 +41,13 @@ class GatherWithProvenance[E, O <: Seq[E] : ClassTag : Encoder : Decoder, I <: S
 
 object GatherWithProvenance {
   // Return the GatherWithProvenance[T] for a given T, where T is some element type in a sequence.
-  def apply[E](implicit e1: Encoder[Seq[E]], d1: Decoder[Seq[E]]) =
+  def apply[E](implicit e1: Codec[Seq[E]]) =
     new GatherWithProvenance[E, Seq[E], Seq[ValueWithProvenance[E]]]
 
   // Actually call the above on a given Seq.
-  def gather[E, O <: Seq[E] : ClassTag : Encoder : Decoder](seq: O) = {
+  def gather[E, O <: Seq[E] : ClassTag : Codec](seq: O) = {
     implicit val ct2 = implicitly[ClassTag[O]].asInstanceOf[ClassTag[Seq[E]]]
-    implicit val en2 = implicitly[Encoder[O]].asInstanceOf[Encoder[Seq[E]]]
-    implicit val de2 = implicitly[Decoder[O]].asInstanceOf[Decoder[Seq[E]]]
+    implicit val cd2 = implicitly[Codec[O]].asInstanceOf[Codec[Seq[E]]]
 
     val gatherer: GatherWithProvenance[E, Seq[E], Seq[ValueWithProvenance[E]]] = apply[E]
 

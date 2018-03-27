@@ -49,14 +49,10 @@ trait BuildInfo extends Serializable {
 
   override def toString: String = f"BuildInfo($commitId@$buildId)"
 
-  def mkEncoder: Encoder[BuildInfo] = BuildInfo.createEncoder[BuildInfo]
-  def mkDecoder: Decoder[BuildInfo] = BuildInfo.createDecoder[BuildInfo]
+  def mkCodec: Codec[BuildInfo] = Codec(BuildInfo.createEncoder[BuildInfo], BuildInfo.createDecoder[BuildInfo])
 
   lazy val toBytesAndDigest: (Array[Byte], Digest) =
-    Util.getBytesAndDigest(this)(
-      this.mkEncoder,
-      this.mkDecoder
-    )
+    Util.getBytesAndDigest(this)(this.mkCodec)
 
   def toBytes = toBytesAndDigest._1
   def toDigest = toBytesAndDigest._2
@@ -73,9 +69,9 @@ object BuildInfo {
       (
         c.downField("vcs").as[String] match {
           case Right(value) => value match {
-            case "git" => c.as[GitBuildInfo](GitBuildInfo.decoder)
-            case "none" => c.as[NoBuildInfo](NoBuildInfo.decoder)
-            case "brief" => c.as[BuildInfoBrief](BuildInfoBrief.decoder)
+            case "git" => c.as[GitBuildInfo](GitBuildInfo.codec.decoder)
+            case "none" => c.as[NoBuildInfo](NoBuildInfo.codec.decoder)
+            case "brief" => c.as[BuildInfoBrief](BuildInfoBrief.codec.decoder)
             case other => throw new RuntimeException(f"Unrecognized VCS: $other")
           }
           case Left(err) =>
@@ -89,9 +85,9 @@ object BuildInfo {
     new Encoder[A] {
       def apply(obj: A): Json =
         obj match {
-          case o: GitBuildInfo => GitBuildInfo.encoder(o)
-          case o: NoBuildInfo => NoBuildInfo.mkEncoder(o)
-          case o: BuildInfoBrief => BuildInfoBrief.encoder(o)
+          case o: GitBuildInfo => GitBuildInfo.codec.encoder(o)
+          case o: NoBuildInfo => NoBuildInfo.codec.encoder(o)
+          case o: BuildInfoBrief => BuildInfoBrief.codec.encoder(o)
           case other =>
             throw new RuntimeException(f"Unrecognized type of BuildInfo: $other")
         }
@@ -148,7 +144,7 @@ case class GitBuildInfoSaved(
 
 
 object GitBuildInfo {
-  implicit val encoder: Encoder[GitBuildInfo] =
+  private val encoder: Encoder[GitBuildInfo] =
     Encoder.forProduct15(
       "vcs", "name", "version", "scalaVersion", "sbtVersion", "builtAtString", "builtAtMillis", "commitId", "buildId",
       "gitBranch", "gitRepoClean", "gitHeadRev", "gitCommitAuthor", "gitCommitDate", "gitDescribe"
@@ -161,7 +157,7 @@ object GitBuildInfo {
         )
     }
 
-  implicit val decoder: Decoder[GitBuildInfo] =
+  private val decoder: Decoder[GitBuildInfo] =
     Decoder.forProduct15(
       "vcs", "name", "version", "scalaVersion", "sbtVersion", "builtAtString", "builtAtMillis", "commitId", "buildId",
       "gitBranch", "gitRepoClean", "gitHeadRev", "gitCommitAuthor", "gitCommitDate", "gitDescribe"
@@ -177,6 +173,8 @@ object GitBuildInfo {
           gitBranch, gitRepoClean, gitHeadRev, gitCommitAuthor, gitCommitDate, gitDescribe
         )
     }
+
+  implicit val codec: Codec[GitBuildInfo] = Codec(encoder, decoder)
 }
 
 
@@ -194,8 +192,9 @@ trait NoBuildInfo extends BuildInfo with Serializable {
 
 
 object NoBuildInfo extends NoBuildInfo {
-  implicit val encoder: Encoder[NoBuildInfo] = Encoder.forProduct1("vcs")(_ => Tuple1("none"))
-  implicit val decoder: Decoder[NoBuildInfo] = Decoder.forProduct1("vcs")((vcs: String) => NoBuildInfo)
+  private val encoder: Encoder[NoBuildInfo] = Encoder.forProduct1("vcs")(_ => Tuple1("none"))
+  private val decoder: Decoder[NoBuildInfo] = Decoder.forProduct1("vcs")((vcs: String) => NoBuildInfo)
+  implicit val codec: Codec[NoBuildInfo] = Codec(encoder, decoder)
 }
 
 
@@ -216,13 +215,19 @@ case class BuildInfoBrief(commitId: String, override val buildId: String) extend
 
 
 object BuildInfoBrief {
-  implicit val encoder: Encoder[BuildInfoBrief] =
+
+  private val encoder: Encoder[BuildInfoBrief] =
     Encoder.forProduct3("vcs", "commitId", "buildId") {
       bi => Tuple3("brief", bi.commitId, bi.buildId)
     }
-  implicit val decoder: Decoder[BuildInfoBrief] =
+
+  private val decoder: Decoder[BuildInfoBrief] =
     Decoder.forProduct3("vcs", "commitId", "buildId") {
       (vcs: String, commitId: String, buildId: String) => BuildInfoBrief(commitId, buildId)
     }
+
+  implicit val codec: Codec[BuildInfoBrief] = Codec(encoder, decoder)
+
+
 }
 

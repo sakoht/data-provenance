@@ -21,12 +21,6 @@ class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
   cta: ClassTag[A],
   ctsa: ClassTag[S[A]],
   ctsi: ClassTag[S[Int]],
-  ea: Encoder[A],
-  esa: Encoder[S[A]],
-  esi: Encoder[S[Int]],
-  da: Decoder[A],
-  dsa: Decoder[S[A]],
-  dsi: Decoder[S[Int]],
   oca: Codec[A],
   ocsa: Codec[S[A]],
   ocsi: Codec[S[Int]]
@@ -45,10 +39,6 @@ class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
     (implicit
       ctsb: ClassTag[S[B]],
       ctb: ClassTag[B],
-      esb: Encoder[S[B]],
-      eb: Encoder[B],
-      dsb: Decoder[S[B]],
-      db: Decoder[B],
       cb: Codec[B],
       csb: Codec[S[B]]
     ): MapWithProvenance[A, S, B]#Call =
@@ -58,10 +48,6 @@ class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
     (implicit
       ctsb: ClassTag[S[B]],
       ctb: ClassTag[B],
-      esb: Encoder[S[B]],
-      eb: Encoder[B],
-      dsb: Decoder[S[B]],
-      db: Decoder[B],
       cb: Codec[B],
       csb: Codec[S[B]]
     ): MapWithProvenance[A, S, B]#Call =

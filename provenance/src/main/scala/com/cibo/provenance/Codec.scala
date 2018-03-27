@@ -31,6 +31,7 @@ object Codec {
 
   // Allow encoders and decoders to, ultimately, save and load themselves.
   // These do _not_ need to save with consistent hashes, and are adjacent to the data hierarchy.
+  implicit def selfCodec[T]: Codec[Codec[T]] = Codec(selfEncoder[T], selfDecoder[T])
   implicit def selfEncoder[T]: Encoder[Codec[T]] = new BinaryEncoder[Codec[T]]
   implicit def selfDecoder[T]: Decoder[Codec[T]] = new BinaryDecoder[Codec[T]]
 }

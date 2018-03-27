@@ -78,7 +78,7 @@ sealed trait ValueWithProvenance[O] extends Serializable {
   def resolveAndExtractDigest(implicit rt: ResultTracker): Digest = {
     val call = unresolve(rt)
     val result = resolve(rt)
-    val valueDigested = result.outputAsVirtualValue.resolveDigest(call.outputEncoder, call.outputDecoder)
+    val valueDigested = result.outputAsVirtualValue.resolveDigest(call.outputCodec)
     valueDigested.digestOption.get
   }
 }
@@ -89,7 +89,7 @@ object ValueWithProvenance {
 
   // Convert any value T to an UnknownProvenance[T] wherever a ValueWithProvenance is expected.
   // This is how "normal" data is passed into FunctionWithProvenance transparently.
-  implicit def convertValueWithNoProvenance[T: ClassTag : Encoder : Decoder, U <: T](value: U): ValueWithProvenance[T] = {
+  implicit def convertValueWithNoProvenance[T: ClassTag : Codec, U <: T](value: U): ValueWithProvenance[T] = {
     UnknownProvenance(value.asInstanceOf[T])
   }
 
@@ -97,9 +97,8 @@ object ValueWithProvenance {
     (implicit
       rt: ResultTracker,
       ct: ClassTag[Seq[A]],
-      en: Encoder[Seq[A]],
-      dc: Decoder[Seq[A]],
-      en2: Encoder[Seq[ValueWithProvenance[A]]]
+      cd: Codec[Seq[A]],
+      cd2: Codec[Seq[ValueWithProvenance[A]]]
     ): GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call = {
     val gatherer: GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]] = GatherWithProvenance[A]
     val call: gatherer.Call = gatherer(seq)
@@ -115,12 +114,9 @@ object FunctionCallWithProvenance {
     (implicit
       ctsa: ClassTag[Option[A]],
       cta: ClassTag[A],
-      esa: Encoder[Option[A]],
-      dsa: Decoder[Option[A]],
-      ea: Encoder[A],
-      da: Decoder[A],
+      csa: Codec[Option[A]],
       ca: Codec[A]
-    ) extends OptionalCall[A](call)(ctsa, cta, esa, dsa, ea, da, ca)
+    ) extends OptionalCall[A](call)(ctsa, cta, csa, ca)
 
   implicit class TraversableCallExt[S[_], A](call: FunctionCallWithProvenance[S[A]])
     (implicit
@@ -128,16 +124,10 @@ object FunctionCallWithProvenance {
       cta: ClassTag[A],
       ctsa: ClassTag[S[A]],
       ctsi: ClassTag[S[Int]],
-      ea: Encoder[A],
-      esa: Encoder[S[A]],
-      esi: Encoder[S[Int]],
-      da: Decoder[A],
-      dsa: Decoder[S[A]],
-      dsi: Decoder[S[Int]],
       ca: Codec[A],
       csa: Codec[S[A]],
       csi: Codec[S[Int]]
-    ) extends TraversableCall[S, A](call)(hok, cta, ctsa, ctsi, ea, esa, esi, da, dsa, dsi, ca, csa, csi)
+    ) extends TraversableCall[S, A](call)(hok, cta, ctsa, ctsi, ca, csa, csi)
 
 
   implicit def createDecoder[O]: Decoder[FunctionCallWithProvenance[O]] =
@@ -155,12 +145,9 @@ object FunctionCallResultWithProvenance {
     (implicit
       ctsa: ClassTag[Option[A]],
       cta: ClassTag[A],
-      esa: Encoder[Option[A]],
-      dsa: Decoder[Option[A]],
-      ea: Encoder[A],
-      da: Decoder[A],
+      csa: Codec[Option[A]],
       ca: Codec[A]
-    ) extends OptionalResult[A](result: FunctionCallResultWithProvenance[Option[A]])(ctsa, cta, esa, dsa, ea, da, ca)
+    ) extends OptionalResult[A](result: FunctionCallResultWithProvenance[Option[A]])(ctsa, cta, csa, ca)
 
   implicit class TraversableResultExt[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
     (implicit
@@ -168,16 +155,10 @@ object FunctionCallResultWithProvenance {
       cta: ClassTag[A],
       ctsa: ClassTag[S[A]],
       ctsi: ClassTag[S[Int]],
-      ea: Encoder[A],
-      esa: Encoder[S[A]],
-      esi: Encoder[S[Int]],
-      da: Decoder[A],
-      dsa: Decoder[S[A]],
-      dsi: Decoder[S[Int]],
       ca: Codec[A],
       csa: Codec[S[A]],
       csi: Codec[S[Int]]
-    ) extends TraversableResult[S, A](result)(hok, cta, ctsa, ctsi, ea, esa, esi, da, dsa, dsi, ca, csa, csi)
+    ) extends TraversableResult[S, A](result)(hok, cta, ctsa, ctsi, ca, csa, csi)
 }
 
 
@@ -194,14 +175,12 @@ trait Result[O] extends ValueWithProvenance[O] with Serializable {
 
 // The regular pair of Call/Result work for normal functions.
 
-abstract class FunctionCallWithProvenance[O : ClassTag : io.circe.Encoder : io.circe.Decoder](var vv: ValueWithProvenance[Version]) extends Call[O] with Serializable {
+abstract class FunctionCallWithProvenance[O : ClassTag : Codec](var vv: ValueWithProvenance[Version]) extends Call[O] with Serializable {
   self =>
 
   def outputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
 
-  def outputEncoder: io.circe.Encoder[O] = implicitly[io.circe.Encoder[O]]
-
-  def outputDecoder: io.circe.Decoder[O] = implicitly[io.circe.Decoder[O]]
+  def outputCodec: Codec[O] = implicitly[Codec[O]]
 
   // Abstract interface.  These are implemented in each Function{n}CallSignatureWithProvenance subclass.
 
@@ -256,8 +235,7 @@ abstract class FunctionCallWithProvenance[O : ClassTag : io.circe.Encoder : io.c
         val resolvedInput = input.resolve
         type Z = Any
         val inputValue: Z = resolvedInput.output
-        implicit val e: Encoder[Z] = resolvedInput.call.outputEncoder.asInstanceOf[Encoder[Z]]
-        implicit val d: Decoder[Z] = resolvedInput.call.outputDecoder.asInstanceOf[Decoder[Z]]
+        implicit val cd: Codec[Z] = resolvedInput.call.outputCodec.asInstanceOf[Codec[Z]]
         val id = Util.digestObject(inputValue)
         val inputValueDigest = id.id
         inputValueDigest
@@ -295,7 +273,7 @@ abstract class FunctionCallResultWithProvenance[O](
   def outputAsVirtualValue: VirtualValue[O] = pOutputAsVirtualValue
 
   def output(implicit rt: ResultTracker): O =
-    pOutputAsVirtualValue.resolveValue(rt, pCall.outputEncoder, pCall.outputDecoder).valueOption.get
+    pOutputAsVirtualValue.resolveValue(rt, pCall.outputCodec).valueOption.get
 
   def outputClassTag: ClassTag[O] = pCall.outputClassTag
 
@@ -350,7 +328,7 @@ abstract class FunctionCallResultWithProvenance[O](
   * @param value  The value with unknown provenance to be added into tracking.
   * @tparam O     The type of hte value
   */
-case class UnknownProvenance[O : ClassTag : Encoder : Decoder](value: O)
+case class UnknownProvenance[O : ClassTag : Codec](value: O)
   extends Function0CallWithProvenance[O](null)(null) with Serializable {
 
   // NOTE: The `null` version and implVersion parameters prevent a bootstrapping problem.

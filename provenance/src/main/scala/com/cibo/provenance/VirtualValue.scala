@@ -28,7 +28,7 @@ case class VirtualValue[T](
 
   def className: String = ct.runtimeClass.getName
 
-  def resolveValue(implicit rt: ResultTracker, e: Encoder[T], d: Decoder[T]): VirtualValue[T] =
+  def resolveValue(implicit rt: ResultTracker, cd: Codec[T]): VirtualValue[T] =
     valueOption match {
       case Some(_) =>
         this
@@ -49,7 +49,7 @@ case class VirtualValue[T](
         copy(valueOption = Some(value))
     }
 
-  def resolveSerialization(implicit rt: ResultTracker, e: Encoder[T], d: Decoder[T]): VirtualValue[T] =
+  def resolveSerialization(implicit rt: ResultTracker, cd: Codec[T]): VirtualValue[T] =
     serializedDataOption match {
       case Some(_) =>
         this
@@ -71,7 +71,7 @@ case class VirtualValue[T](
         copy(serializedDataOption = Some(serialization))
     }
 
-  def resolveDigest(implicit e: Encoder[T], d: Decoder[T]): VirtualValue[T] = digestOption match {
+  def resolveDigest(implicit cd: Codec[T]): VirtualValue[T] = digestOption match {
     case Some(_) =>
       this
     case None =>
@@ -109,13 +109,13 @@ object VirtualValue {
   def apply[T](obj: T)(implicit ct: ClassTag[T]): VirtualValue[T] =
     VirtualValue(valueOption = Some(obj), digestOption = None, serializedDataOption = None)
 
-  def unapply[T : ClassTag : Encoder : Decoder](v: VirtualValue[T])(implicit rt: ResultTracker): T =
+  def unapply[T : ClassTag : Codec](v: VirtualValue[T])(implicit rt: ResultTracker): T =
     v.resolveValue.valueOption.get
 
-  implicit def toDeflatable[T : ClassTag : Encoder : Decoder](obj: T): VirtualValue[T] =
+  implicit def toDeflatable[T : ClassTag : Codec](obj: T): VirtualValue[T] =
     apply(obj)
 
-  implicit def fromDeflatable[T : ClassTag : Encoder : Decoder](v: VirtualValue[T])(implicit rt: ResultTracker): T =
+  implicit def fromDeflatable[T : ClassTag : Codec](v: VirtualValue[T])(implicit rt: ResultTracker): T =
     unapply(v)
 }
 

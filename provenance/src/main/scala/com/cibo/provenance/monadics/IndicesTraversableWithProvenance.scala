@@ -19,11 +19,9 @@ import io.circe.{Decoder, Encoder}
 
 import scala.reflect.ClassTag
 
-class IndicesTraversableWithProvenance[S[_], O : ClassTag : Encoder : Decoder](
+class IndicesTraversableWithProvenance[S[_], O : ClassTag : Codec](
   implicit hok: implicits.Traversable[S],
   ctsi: ClassTag[S[Int]],
-  ensi: Encoder[S[Int]],
-  desi: Decoder[S[Int]],
   ocsi: Codec[S[Int]]
 ) extends Function1WithProvenance[S[O], S[Int]]  {
   val currentVersion: Version = NoVersion
@@ -31,11 +29,9 @@ class IndicesTraversableWithProvenance[S[_], O : ClassTag : Encoder : Decoder](
 }
 
 object IndicesTraversableWithProvenance {
-  def apply[S[_], A : ClassTag : Encoder : Decoder](
+  def apply[S[_], A : ClassTag : Codec](
     implicit converter: implicits.Traversable[S],
     ctsi: ClassTag[S[Int]],
-    ensi: Encoder[S[Int]],
-    desi: Decoder[S[Int]],
     csi: Codec[S[Int]]
   ) =
     new IndicesTraversableWithProvenance[S, A]

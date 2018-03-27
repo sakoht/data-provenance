@@ -12,17 +12,19 @@ case class Digest(id: String)
 
 
 object Digest {
-  import io.circe.{Decoder, DecodingFailure, Encoder, HCursor}
+  import io.circe._
 
-  implicit val encoder: Encoder[Digest] = Encoder.instance {
+  private val encoder: Encoder[Digest] = Encoder.instance {
     (obj: Digest) =>
       val id = unapply(obj).get
       Encoder.encodeString.apply(id)
   }
 
-  implicit val decoder: Decoder[Digest] = Decoder.instance {
+  private val decoder: Decoder[Digest] = Decoder.instance {
     (c: HCursor) =>
       val obj: Digest = apply(c.value.asString.get)
       Right(obj).asInstanceOf[Either[DecodingFailure, Digest]]
   }
+
+  implicit val codec: Codec[Digest] = Codec(encoder, decoder)
 }

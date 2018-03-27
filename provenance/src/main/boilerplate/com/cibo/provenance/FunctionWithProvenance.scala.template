@@ -39,7 +39,7 @@ import scala.reflect.ClassTag
   *
   */
 @SerialVersionUID(10001L)
-abstract class FunctionWithProvenance[O : ClassTag : Encoder : Decoder] extends Serializable {
+abstract class FunctionWithProvenance[O : ClassTag : Codec] extends Serializable {
   import com.cibo.provenance.exceptions.{UnknownVersionException, UnrunnableVersionException}
 
   def name: String = getClass.getName.stripSuffix("$")
@@ -50,9 +50,8 @@ abstract class FunctionWithProvenance[O : ClassTag : Encoder : Decoder] extends 
   override def toString = f"$name@$currentVersion"
 
   def outputClassTag = implicitly[ClassTag[O]]
-  def outputEncoder = implicitly[Encoder[O]]
-  def outputDecoder = implicitly[Decoder[O]]
-  
+  def outputCodec = implicitly[Codec[O]]
+
   // By default only the current version is loadable and runnable.
   // These can be overridden if the software needs support for multiple historical versions at once
   // beyond history tracking.
@@ -80,6 +79,8 @@ abstract class FunctionWithProvenance[O : ClassTag : Encoder : Decoder] extends 
 
 
 object FunctionWithProvenance {
+
+  implicit def codec[T <: FunctionWithProvenance[_]]: Codec[T] = Codec(encoder, decoder)
 
   implicit def encoder[T <: FunctionWithProvenance[_]]: Encoder[T] =
     Encoder.forProduct2("name", "version") {
@@ -113,7 +114,7 @@ object FunctionWithProvenance {
   *
   * @tparam O:   The output type.
   */
-abstract class Function0WithProvenance[O : ClassTag : Encoder : Decoder] extends FunctionWithProvenance[O] with Serializable {
+abstract class Function0WithProvenance[O : ClassTag : Codec] extends FunctionWithProvenance[O] with Serializable {
   self =>
 
   /**
@@ -283,8 +284,6 @@ abstract class Function0WithProvenance[O : ClassTag : Encoder : Decoder] extends
 
 [1..21#
 
-case class InputCodecGroup1[[#I1#]]([#c1: Codec[I1]#]) extends InputCodecGroup
-
 /**
   * A Function1 with per-function versioning, and intermediate `.Call` and `.Result` tracking.
   *
@@ -294,10 +293,7 @@ case class InputCodecGroup1[[#I1#]]([#c1: Codec[I1]#]) extends InputCodecGroup
   */
 abstract class Function1WithProvenance[[#I1#], O](
   implicit ct: ClassTag[O],
-  en: Encoder[O],
-  de: Decoder[O],
-  oc: Codec[O],
-  ic: InputCodecGroup1[[#I1#]] = null
+  oc: Codec[O]
 ) extends FunctionWithProvenance[O] with Serializable {
   self =>
 

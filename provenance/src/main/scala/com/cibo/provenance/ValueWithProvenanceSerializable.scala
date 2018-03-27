@@ -34,8 +34,8 @@ object ValueWithProvenanceSerializable {
   // The codec for the *Serializable object tree is simple and can be auto-derived by circe.
   // The codec for the regular ValueWithProvenance[_] piggy-backs on this codec.
   import io.circe.generic.semiauto._
-  implicit val encoder: Encoder[ValueWithProvenanceSerializable] = deriveEncoder[ValueWithProvenanceSerializable]
-  implicit val decoder: Decoder[ValueWithProvenanceSerializable] = deriveDecoder[ValueWithProvenanceSerializable]
+  implicit val codec: Codec[ValueWithProvenanceSerializable] =
+    Codec(deriveEncoder[ValueWithProvenanceSerializable], deriveDecoder[ValueWithProvenanceSerializable])
 
   def save[O](value: ValueWithProvenance[O])(implicit rt: ResultTracker): ValueWithProvenanceSerializable = {
     value match {
@@ -84,12 +84,10 @@ case class FunctionCallWithUnknownProvenanceSerializable(
     implicit val ct: ClassTag[T] = ClassTag(clazz)
     val rts = rt.asInstanceOf[ResultTrackerSimple]
     val (value, codec) = rts.loadValueWithCodec[T](valueDigest)
-    implicit val en: Encoder[T] = codec.encoder
-    implicit val de: Decoder[T] = codec.decoder
-    UnknownProvenance(value)
+    UnknownProvenance(value)(ct, codec)
   }
 
-  def loadWithKnownTypeAndCodec[T : ClassTag : Encoder : Decoder](implicit rt: ResultTracker): UnknownProvenance[_] = {
+  def loadWithKnownTypeAndCodec[T : ClassTag : Codec](implicit rt: ResultTracker): UnknownProvenance[_] = {
     val value: T = rt.loadValue[T](valueDigest)
     UnknownProvenance(value)
   }
@@ -99,8 +97,7 @@ case class FunctionCallWithUnknownProvenanceSerializable(
 object FunctionCallWithUnknownProvenanceSerializable {
   def save[O](call: UnknownProvenance[O])(implicit rt: ResultTracker): FunctionCallWithUnknownProvenanceSerializable = {
     implicit val outputClassTag: ClassTag[O] = call.outputClassTag
-    implicit val outputEncoder: io.circe.Encoder[O] = call.outputEncoder
-    implicit val outputDecoder: io.circe.Decoder[O] = call.outputDecoder
+    implicit val outputCodec: Codec[O] = call.outputCodec
 
     val outputClassName = Util.classToName(outputClassTag)
 
@@ -177,9 +174,7 @@ case class FunctionCallWithKnownProvenanceSerializableWithInputs(
 object FunctionCallWithKnownProvenanceSerializableWithInputs {
   def save[O](call: FunctionCallWithProvenance[O])(implicit rt: ResultTracker): FunctionCallWithKnownProvenanceSerializableWithInputs = {
     implicit val outputClassTag: ClassTag[O] = call.outputClassTag
-    implicit val outputEncoder: io.circe.Encoder[O] = call.outputEncoder
-    implicit val outputDecoder: io.circe.Decoder[O] = call.outputDecoder
-
+    implicit val outputCodec: Codec[O] = call.outputCodec
     val outputClassName = Util.classToName(outputClassTag)
 
     val callInSavableForm =
@@ -282,8 +277,7 @@ case class FunctionCallResultWithKnownProvenanceSerializable(
 
   private def load[T](clazz: Class[T])(implicit rt: ResultTracker): FunctionCallResultWithProvenance[T] = {
     val call = this.call.load(rt).asInstanceOf[FunctionCallWithProvenance[T]]
-    implicit val en = call.outputEncoder
-    implicit val de = call.outputDecoder
+    implicit val cd = call.outputCodec
     implicit val ct = call.outputClassTag
     val bi = BuildInfoBrief(commitId, buildId)
     val output: T = rt.loadValue[T](outputDigest)
@@ -303,8 +297,7 @@ object FunctionCallResultWithKnownProvenanceSerializable {
 
     val output = result.output
     implicit val outputClassTag: ClassTag[O] = call.outputClassTag
-    implicit val outputEncoder: io.circe.Encoder[O] = call.outputEncoder
-    implicit val outputDecoder: io.circe.Decoder[O] = call.outputDecoder
+    implicit val outputCodec: Codec[O] = call.outputCodec
     val outputDigest = rt.saveOutputValue(output) //result.resolveAndExtractDigest
 
     val resultInSavableForm =

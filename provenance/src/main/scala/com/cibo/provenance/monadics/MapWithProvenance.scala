@@ -20,16 +20,6 @@ class MapWithProvenance[A, S[_], B](
   ctsb: ClassTag[S[B]],
   ctsa: ClassTag[S[A]],
   ctsi: ClassTag[S[Int]],
-  eb: Encoder[B],
-  ea: Encoder[A],
-  esb: Encoder[S[B]],
-  esa: Encoder[S[A]],
-  esi: Encoder[S[Int]],
-  db: Decoder[B],
-  da: Decoder[A],
-  dsb: Decoder[S[B]],
-  dsa: Decoder[S[A]],
-  dsi: Decoder[S[Int]],
   ob: Codec[B],
   ca: Codec[A],
   csb: Codec[S[B]],
@@ -52,7 +42,7 @@ class MapWithProvenance[A, S[_], B](
       FunctionCallResultWithProvenance.TraversableResultExt[S, A](
         aResolved
       )(
-        hok, cta, ctsa, ctsi, ea, esa, esi, da, dsa, dsi, ca, csa, csi
+        hok, cta, ctsa, ctsi, ca, csa, csi
       )
     val aGranular: S[FunctionCallResultWithProvenance[A]] = aTraversable.scatter
 
@@ -78,20 +68,10 @@ object MapWithProvenance {
     ctsb: ClassTag[S[B]],
     ctsa: ClassTag[S[A]],
     ctsi: ClassTag[S[Int]],
-    eb: Encoder[B],
-    ea: Encoder[A],
-    esb: Encoder[S[B]],
-    esa: Encoder[S[A]],
-    esi: Encoder[S[Int]],
-    db: Decoder[B],
-    da: Decoder[A],
-    dsb: Decoder[S[B]],
-    dsa: Decoder[S[A]],
-    dsi: Decoder[S[Int]],
     ob: Codec[B],
     oa: Codec[A],
     osb: Codec[S[B]],
     osa: Codec[S[A]],
     osi: Codec[S[Int]]
-  ) = new MapWithProvenance[A, S, B]()(hok, ctb, cta, ctsb, ctsa, ctsi, eb, ea, esb, esa, esi, db, da, dsb, dsa, dsi, ob, oa, osb, osa, osi)
+  ) = new MapWithProvenance[A, S, B]()(hok, ctb, cta, ctsb, ctsa, ctsi, ob, oa, osb, osa, osi)
 }

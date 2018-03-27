@@ -23,8 +23,6 @@ import scala.reflect.ClassTag
 
 class IndicesRangeWithProvenance[S[_], O](
   implicit hok: implicits.Traversable[S],
-  en: Encoder[Range],
-  de: Decoder[Range],
   oc: Codec[Range]
 ) extends Function1WithProvenance[S[O], Range]  {
   val currentVersion: Version = NoVersion
@@ -49,8 +47,6 @@ object IndicesRangeWithProvenance {
 
 object IndicesOfRangeWithProvenance extends Function1WithProvenance[Range, Range]()(
   ClassTag(classOf[Range]),
-  IndicesRangeWithProvenance.rangeEncoder,
-  IndicesRangeWithProvenance.rangeDecoder,
   IndicesRangeWithProvenance.rangeCodec
 ) {
   val currentVersion: Version = NoVersion

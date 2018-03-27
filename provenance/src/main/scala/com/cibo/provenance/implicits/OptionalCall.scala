@@ -17,16 +17,11 @@ class OptionalCall[A](call: FunctionCallWithProvenance[Option[A]])
   (implicit
     ctsa: ClassTag[Option[A]],
     cta: ClassTag[A],
-    esa: Encoder[Option[A]],
-    dsa: Decoder[Option[A]],
-    ea: Encoder[A],
-    da: Decoder[A],
+    csa: Codec[Option[A]],
     ca: Codec[A]
   ) {
 
   self =>
-
-  implicit val csa: Codec[Option[A]] = Codec.fromImplicits[Option[A]]
 
   import com.cibo.provenance.ResultTracker
 
@@ -35,7 +30,7 @@ class OptionalCall[A](call: FunctionCallWithProvenance[Option[A]])
   def get = GetWithProvenance(call)
   def isEmpty = IsEmptyWithProvenance(call)
   def nonEmpty = NonEmptyWithProvenance(call)
-  def map[B : ClassTag : Encoder : Decoder : Codec](
+  def map[B : ClassTag : Codec](
     f: ValueWithProvenance[Function1WithProvenance[A, B]]
   )(
     implicit bc: Codec[Option[B]]
@@ -57,7 +52,7 @@ class OptionalCall[A](call: FunctionCallWithProvenance[Option[A]])
     def impl(o: Option[A]) = o.nonEmpty
   }
 
-  class MapWithProvenance[B : ClassTag : Encoder : Decoder : Codec](implicit ob: Codec[Option[B]]) extends Function2WithProvenance[Option[A], Function1WithProvenance[A, B], Option[B]] {
+  class MapWithProvenance[B : ClassTag : Codec](implicit ob: Codec[Option[B]]) extends Function2WithProvenance[Option[A], Function1WithProvenance[A, B], Option[B]] {
     val currentVersion: Version = NoVersion
     override protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
       val aOptionResolved: FunctionCallResultWithProvenance[_ <: Option[A]] = call.i1.resolve

@@ -21,12 +21,6 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
     cta: ClassTag[A],
     ctsa: ClassTag[S[A]],
     ctsi: ClassTag[S[Int]],
-    ea: Encoder[A],
-    esa: Encoder[S[A]],
-    esi: Encoder[S[Int]],
-    da: Decoder[A],
-    dsa: Decoder[S[A]],
-    dsi: Decoder[S[Int]],
     ca: Codec[A],
     csa: Codec[S[A]],
     csi: Codec[S[Int]]
@@ -43,10 +37,6 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
       (implicit
         ctsb: ClassTag[S[B]],
         ctb: ClassTag[B],
-        esb: Encoder[S[B]],
-        eb: Encoder[B],
-        dsb: Decoder[S[B]],
-        db: Decoder[B],
         cb: Codec[B],
         csb: Codec[S[B]]
       ): MapWithProvenance[A, S, B]#Call =
@@ -56,10 +46,6 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
       (implicit
         ctsb: ClassTag[S[B]],
         ctb: ClassTag[B],
-        esb: Encoder[S[B]],
-        eb: Encoder[B],
-        dsb: Decoder[S[B]],
-        db: Decoder[B],
         cb: Codec[B],
         csb: Codec[S[B]]
       ): MapWithProvenance[A, S, B]#Call =
@@ -72,7 +58,7 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
         FunctionCallWithProvenance.TraversableCallExt[S, A](
           call1
         )(
-          hok, cta, ctsa, ctsi, ea, esa, esi, da, dsa, dsi, ca, csa, csi
+          hok, cta, ctsa, ctsi, ca, csa, csi
         )
       val oneCallPerMember: S[FunctionCallWithProvenance[A]] = call2.scatter
       def getResult(call: FunctionCallWithProvenance[A]): FunctionCallResultWithProvenance[A] = call.resolve
