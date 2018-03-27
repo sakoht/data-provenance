@@ -73,7 +73,9 @@ class ResultTrackerSimple(
 
   // The cache for saved results.
   val resultCacheSize = 1000L
-  private val resultCache =
+
+  @transient
+  private lazy val resultCache =
     GCache[FunctionCallResultWithKnownProvenanceSerializable, Boolean]()
       .maximumSize(resultCacheSize)
       .logRemoval(logger)
@@ -250,7 +252,11 @@ class ResultTrackerSimple(
   }
 
   def saveOutputValue[T : ClassTag : Encoder : Decoder](obj: T): Digest = {
+    val ct = implicitly[ClassTag[T]]
+    val clazz: Class[_ <: T] = obj.getClass
+    val ct3 = ClassTag(clazz)
     val (bytes, digest) = Util.getBytesAndDigest(obj, checkForInconsistentSerialization(obj))
+    val outputClassName = Util.classToName[T]
     saveCodec[T](digest)
     if (!hasValue(digest)) {
       val path = f"data/${digest.id}"
@@ -262,7 +268,9 @@ class ResultTrackerSimple(
 
   // The cache for saved codecs.
   val codecCacheSize = 1000L
-  private val codecCache =
+
+  @transient
+  private lazy val codecCache =
     GCache[Codec[_], Digest]()
       .maximumSize(codecCacheSize)
       .logRemoval(logger)
@@ -270,17 +278,19 @@ class ResultTrackerSimple(
 
   def saveCodec[T : ClassTag : Encoder : Decoder : Codec](outputDigest: Digest): Digest = {
     val codec = implicitly[Codec[T]]
-    Option(codecCache.getIfPresent(codec)) match {
+    val outputClassName = Util.classToName[T]
+    val codecDigest = Option(codecCache.getIfPresent(codec)) match {
       case None =>
-        val codecDigest = saveCodecImpl[T](outputDigest)
+        val codecDigest = saveCodecImpl[T](outputClassName, outputDigest)
         codecCache.put(codec, codecDigest)
         codecDigest
       case Some(codecDigest) =>
         codecDigest
     }
+    saveEmptyObjectToPath(f"data-codecs/${outputDigest.id}/$outputClassName/${codecDigest.id}")
   }
   
-  def saveCodecImpl[T : ClassTag : Encoder : Decoder : Codec](outputDigest: Digest): Digest = {
+  def saveCodecImpl[T : ClassTag : Encoder : Decoder : Codec](outputClassName: String, outputDigest: Digest): Digest = {
     val codec = implicitly[Codec[T]]
 
     implicit val ee = new BinaryEncoder[Codec[T]]
@@ -293,10 +303,7 @@ class ResultTrackerSimple(
           val ee = e
           throw new RuntimeException(f"Failed to serialize codec $codec: $e")
       }
-    
-    val outputClassName = Util.classToName[T]
     saveBytes(f"codecs/$outputClassName/${codecDigest.id}", codecBytes)
-    saveEmptyObjectToPath(f"data-codecs/${outputDigest.id}/$outputClassName/${codecDigest.id}")
 
     codecDigest
   }
@@ -438,6 +445,7 @@ class ResultTrackerSimple(
   // private methods
 
   // This is called only once, and only rigth before a given build tries to actually save anything.
+  @transient
   lazy val saveBuildInfo: Digest = {
     val bi = currentAppBuildInfo
     val (bytes, digest) = Util.getBytesAndDigest(bi)
@@ -546,7 +554,9 @@ class ResultTrackerSimple(
   import scala.concurrent.duration._
   import scala.concurrent.Await
 
-  protected val s3db: S3DB = S3DB.fromSyncablePath(basePath)
+  @transient
+  protected lazy val s3db: S3DB = S3DB.fromSyncablePath(basePath)
+
   protected val saveTimeout: FiniteDuration = 5.minutes
 
   /**
@@ -564,11 +574,15 @@ class ResultTrackerSimple(
     */
 
   val lightCacheSize = 50000L
-  private val lightCache =
+
+  @transient
+  private lazy val lightCache =
     GCache[String, Unit]().maximumSize(lightCacheSize).buildWith[String, Unit]
 
   val heavyCacheSize = 500L
-  private val heavyCache =
+
+  @transient
+  private lazy val heavyCache =
     GCache[String, Array[Byte]]().maximumSize(heavyCacheSize).buildWith[String, Array[Byte]]
 
   //protected
@@ -660,7 +674,7 @@ class ResultTrackerSimple(
     }
   }
 
-  // Wrappers for loadBytes() and saveBytes:
+  // Wrappers for loadBytes() and saveBytes():
 
   protected def loadBytesOption(path: String): Option[Array[Byte]] = {
     try {

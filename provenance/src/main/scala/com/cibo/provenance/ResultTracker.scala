@@ -200,7 +200,9 @@ trait ResultTracker extends Serializable {
   }
 
   def loadValueWithCodec[T : ClassTag](valueDigest: Digest): (T, Codec[T]) = {
-    val stream = loadCodecStreamByValueDigest[T](valueDigest: Digest).flatMap {
+    val ct = implicitly[ClassTag[T]]
+    val stream1: List[Codec[T]] = loadCodecStreamByValueDigest[T](valueDigest: Digest).toList
+    val stream = stream1.flatMap {
       codec =>
         implicit val c: Codec[T] = codec
         val foundAndLoadable: Option[T] =
@@ -215,6 +217,7 @@ trait ResultTracker extends Serializable {
             case Success(value) =>
               Some(value)
             case Failure(err) =>
+              val s = err.getStackTrace()
               logger.error(err.toString)
               None
           }
@@ -273,7 +276,10 @@ trait ResultTracker extends Serializable {
     * @tparam T       The type of data.
     * @return         An Option of T that is Some[T] if the digest ID is found in storage.
     */
-  def loadValue[T : ClassTag : Encoder : Decoder](digest: Digest): T =
+  def loadValue[T : ClassTag : Encoder : Decoder](digest: Digest): T = {
+    val ct = implicitly[ClassTag[T]]
+    val className = Util.classToName[T]
+    val clazz = Class.forName(className)
     loadValueOption[T](digest) match {
       case Some(obj) =>
         obj
@@ -281,6 +287,8 @@ trait ResultTracker extends Serializable {
         val ct = implicitly[ClassTag[T]]
         throw new NoSuchElementException(f"Failed to find content for $ct with ID $digest!")
     }
+  }
+
 
   /**
     * An UnresolvedVersionException is thrown if the system attempts to deflate a call with an unresolved version.

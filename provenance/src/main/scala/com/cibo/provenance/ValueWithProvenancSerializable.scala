@@ -117,10 +117,6 @@ object FunctionCallWithUnknownProvenanceSerializable {
 
   def loadWithUnknownType(saved: FunctionCallWithUnknownProvenanceSerializable)(implicit rt: ResultTracker): UnknownProvenance[_] = {
     val clazz: Class[_] = Class.forName(saved.outputClassName)
-    if (clazz == classOf[Object])
-      println("ow")
-    else
-      println("ok")
     loadWithUnknownEncoderDecoder(saved, clazz)
   }
 
