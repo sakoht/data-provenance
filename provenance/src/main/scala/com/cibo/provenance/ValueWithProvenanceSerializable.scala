@@ -23,7 +23,7 @@ import scala.reflect.ClassTag
 sealed trait ValueWithProvenanceSerializable {
   def load(implicit rt: ResultTracker): ValueWithProvenance[_]
 
-  def wrap: ValueWithProvenanceSaved[_]
+  def wrap[O]: ValueWithProvenanceDeflated[O]
 }
 
 
@@ -53,7 +53,7 @@ sealed trait FunctionCallWithProvenanceSerializable extends ValueWithProvenanceS
 
   def load(implicit rt: ResultTracker): FunctionCallWithProvenance[_]
 
-  def wrap: FunctionCallWithProvenanceSaved[_] = FunctionCallWithProvenanceSaved(this)
+  def wrap[O]: FunctionCallWithProvenanceDeflated[O] = FunctionCallWithProvenanceDeflated[O](this)
 }
 
 
@@ -183,9 +183,9 @@ object FunctionCallWithKnownProvenanceSerializableWithInputs {
             versionValue,
             outputClassName,
             call.inputs.toList.map {
-              case dcall: FunctionCallWithProvenanceSaved[_] =>
+              case dcall: FunctionCallWithProvenanceDeflated[_] =>
                 dcall.data
-              case dresult: FunctionCallResultWithProvenanceSaved[_] =>
+              case dresult: FunctionCallResultWithProvenanceDeflated[_] =>
                 dresult.data
               case u: UnknownProvenance[_] =>
                 FunctionCallWithUnknownProvenanceSerializable.save(u)(rt)
@@ -220,7 +220,7 @@ case class FunctionCallWithKnownProvenanceSerializableWithoutInputs(
 ) extends FunctionCallWithKnownProvenanceSerializable {
 
   def expandInputs(rts: ResultTracker): FunctionCallWithKnownProvenanceSerializableWithInputs =
-    rts.loadCallMetaByDigest(functionName, functionVersion, digestOfEquivalentWithInputs) match {
+    rts.loadCallByDigest(functionName, functionVersion, digestOfEquivalentWithInputs) match {
       case Some(call) =>
         call
       case None =>
@@ -245,7 +245,7 @@ sealed trait FunctionCallResultWithProvenanceSerializable extends ValueWithProve
   def commitId: String
   def buildId: String
 
-  def wrap: FunctionCallResultWithProvenanceSaved[_] = FunctionCallResultWithProvenanceSaved(this)
+  def wrap[O]: FunctionCallResultWithProvenanceDeflated[O] = FunctionCallResultWithProvenanceDeflated[O](this)
 
   def load(implicit rt: ResultTracker): FunctionCallResultWithProvenance[_]
 }

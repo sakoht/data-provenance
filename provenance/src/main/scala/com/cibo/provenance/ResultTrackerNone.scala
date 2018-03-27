@@ -18,12 +18,12 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
   def saveResult(
     resultInSaveableForm: FunctionCallResultWithKnownProvenanceSerializable,
     inputResultsAlreadySaved: Vector[FunctionCallResultWithProvenanceSerializable]
-  ): FunctionCallResultWithProvenanceSaved[_] = {
-    FunctionCallResultWithProvenanceSaved(resultInSaveableForm)
+  ): FunctionCallResultWithProvenanceDeflated[_] = {
+    FunctionCallResultWithProvenanceDeflated(resultInSaveableForm)
   }
 
-  def saveCall[O](v: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceSaved[O] =
-    FunctionCallWithProvenanceSaved(v)
+  def saveCall[O](v: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O] =
+    FunctionCallWithProvenanceDeflated(v)
 
   def saveOutputValue[T : ClassTag: Codec](obj: T): Digest = {
     // also a no-op that just calculates the ID and returns it
@@ -38,7 +38,7 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
   def hasOutputForCall[O](v: FunctionCallWithProvenance[O]): Boolean = true // always
 
-  def loadResultForCallOption[O](f: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] = {
+  def loadResultByCallOption[O](f: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] = {
     // just re-run anything we need to "load"
     Some(f.run(this))
   }
@@ -47,7 +47,7 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
   def hasValue(digest: Digest): Boolean = false // never
 
-  def loadCallMetaByDigest(
+  def loadCallByDigest(
     functionName: String,
     functionVersion: Version,
     digest: Digest
@@ -55,7 +55,7 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
   def loadValueOption[O : ClassTag : Codec](digest: Digest): Option[O] = None // never
 
-  def loadValueSerializedDataOption(className: String, digest: Digest): Option[Array[Byte]] = None // never
+  def loadValueSerializedDataByClassNameAndDigestOption(className: String, digest: Digest): Option[Array[Byte]] = None // never
 
   def loadBuildInfoOption(commitId: String, buildId: String): Option[BuildInfo] = None // never
 
@@ -65,7 +65,7 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
   def loadCodecByClassNameAndCodecDigest[T : ClassTag](valueClassName: String, codecDigest: Digest): Codec[T] =
     throw new UnavailableData("No codec data with this tracker")
 
-  def loadCodecStreamByValueDigest[T : ClassTag](valueDigest: Digest): Seq[Codec[T]] =
+  def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest): Seq[Codec[T]] =
     Seq.empty
 }
 

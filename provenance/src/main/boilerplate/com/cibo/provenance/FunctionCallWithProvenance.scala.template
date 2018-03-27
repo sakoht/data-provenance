@@ -41,14 +41,14 @@ abstract class Function0CallWithProvenance[O : ClassTag : Codec](v: ValueWithPro
   def unresolveInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
     nocopy(duplicate(v.unresolve), this)
 
-  def inflateInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
-    nocopy(duplicate(v.inflate), this)
+  def loadInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+    nocopy(duplicate(v.load), this)
 
-  def inflateRecurse(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
-    nocopy(duplicate(v.inflateRecurse), this)
+  def loadRecurse(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+    nocopy(duplicate(v.loadRecurse), this)
 
-  def deflateInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
-    nocopy(duplicate(v.inflate), this)
+  def saveInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+    nocopy(duplicate(v.load), this)
 
   /*
   def run(implicit rt: ResultTracker): Function0CallResultWithProvenance[O] = {
@@ -94,14 +94,14 @@ abstract class Function1CallWithProvenance[[#I1#], O : ClassTag : Codec]([#i1: V
   def unresolveInputs(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
     nocopy(duplicate([#i1.unresolve#], v.unresolve), this)
 
-  def inflateInputs(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
-    nocopy(duplicate([#i1.inflate#], v.inflate), this)
+  def loadInputs(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
+    nocopy(duplicate([#i1.load#], v.load), this)
 
-  def inflateRecurse(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
-    nocopy(duplicate([#i1.inflateRecurse#], v.inflate.inflateRecurse), this)
+  def loadRecurse(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
+    nocopy(duplicate([#i1.loadRecurse#], v.load.loadRecurse), this)
 
-  def deflateInputs(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
-    nocopy(duplicate([#i1.deflate#], v.inflate), this)
+  def saveInputs(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
+    nocopy(duplicate([#i1.save#], v.load), this)
 
   def run(implicit rt: ResultTracker): Function1CallResultWithProvenance[[#I1#], O]
 

@@ -52,7 +52,7 @@ trait ResultTracker extends Serializable {
     */
   def resolve[O](call: FunctionCallWithProvenance[O]): FunctionCallResultWithProvenance[O] = {
     val callWithInputDigests = call.resolveInputs(rt=this)
-    loadResultForCallOption[O](callWithInputDigests) match {
+    loadResultByCallOption[O](callWithInputDigests) match {
       case Some(existingResult) =>
         existingResult
       case None =>
@@ -85,7 +85,7 @@ trait ResultTracker extends Serializable {
     * @tparam O:    The output type of the call and returned deflated call.
     * @return       The deflated call created during saving.
     */
-  def saveCall[O](callInSavableForm: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceSaved[O]
+  def saveCall[O](callInSavableForm: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O]
   
   /**
     * Write out one `FunctionCallResultWithProvenanceSaved`.  
@@ -102,7 +102,7 @@ trait ResultTracker extends Serializable {
   def saveResult(
     resultInSavableForm: FunctionCallResultWithKnownProvenanceSerializable,
     inputResults: Vector[FunctionCallResultWithProvenanceSerializable]
-  ): FunctionCallResultWithProvenanceSaved[_]
+  ): FunctionCallResultWithProvenanceDeflated[_]
 
   /**
     * Save a regular input/output value to the storage fabric.
@@ -149,7 +149,7 @@ trait ResultTracker extends Serializable {
     * @tparam O       The outut type of the call.
     * @return         An Option[FunctionCallResultWithProvenance] that has Some if the result exists.
     */
-  def loadResultForCallOption[O](call: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]]
+  def loadResultByCallOption[O](call: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]]
 
   /**
     * Load the saved representation of a Call if its digest is known.
@@ -162,7 +162,7 @@ trait ResultTracker extends Serializable {
     * @param digest             The digested value of the serialized call.
     * @return                   A FunctionCallWithProvenance[O] that is NOT deflated, but still has deflated inputs.
     */
-  def loadCallMetaByDigest(
+  def loadCallByDigest(
     functionName: String,
     functionVersion: Version,
     digest: Digest
@@ -197,9 +197,8 @@ trait ResultTracker extends Serializable {
   }
 
   def loadValueWithCodec[T : ClassTag](valueDigest: Digest): (T, Codec[T]) = {
-    val ct = implicitly[ClassTag[T]]
-    val stream1: List[Codec[T]] = loadCodecStreamByValueDigest[T](valueDigest: Digest).toList
-    val stream = stream1.flatMap {
+    val allCodecs: List[Codec[T]] = loadCodecsByValueDigest[T](valueDigest: Digest).toList
+    val workingCodecValuePairs = allCodecs.flatMap {
       codec =>
         implicit val c: Codec[T] = codec
         val foundAndLoadable: Option[T] =
@@ -214,13 +213,12 @@ trait ResultTracker extends Serializable {
             case Success(value) =>
               Some(value)
             case Failure(err) =>
-              val s = err.getStackTrace()
               logger.error(err.toString)
               None
           }
         foundAndLoadable.map { value => (value, codec)}
     }
-    stream.headOption match {
+    workingCodecValuePairs.headOption match {
       case Some(pair) =>
         pair
       case None =>
@@ -237,7 +235,7 @@ trait ResultTracker extends Serializable {
 
   def loadCodecByClassNameAndCodecDigest[T : ClassTag](valueClassName: String, codecDigest: Digest): Codec[T]
 
-  def loadCodecStreamByValueDigest[T : ClassTag](valueDigest: Digest): Seq[Codec[T]]
+  def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest): Seq[Codec[T]]
 
   def loadBuildInfoOption(commitId: String, buildId: String): Option[BuildInfo]
 
@@ -249,7 +247,7 @@ trait ResultTracker extends Serializable {
     * @param digest       The digest ID of the value (query param).
     * @return             An optional array of serialized bytes.
     */
-  def loadValueSerializedDataOption(className: String, digest: Digest): Option[Array[Byte]]
+  def loadValueSerializedDataByClassNameAndDigestOption(className: String, digest: Digest): Option[Array[Byte]]
 
   // Support methods
 
@@ -260,10 +258,8 @@ trait ResultTracker extends Serializable {
     * @tparam O       The type of the output data.
     * @return         An optional array of serialized bytes.
     */
-  def loadValueSerializedDataOption[O : ClassTag : Codec](digest: Digest): Option[Array[Byte]] = {
-    val ct = implicitly[ClassTag[O]]
-    loadValueSerializedDataOption(ct.runtimeClass.getName, digest)
-  }
+  def loadValueSerializedDataOption[O : ClassTag : Codec](digest: Digest): Option[Array[Byte]] =
+    loadValueSerializedDataByClassNameAndDigestOption(Util.classToName[O], digest)
 
   /**
     * Retrieve one value from storage if the specified digest key is found.
@@ -274,9 +270,9 @@ trait ResultTracker extends Serializable {
     * @return         An Option of T that is Some[T] if the digest ID is found in storage.
     */
   def loadValue[T : ClassTag : Codec](digest: Digest): T = {
-    val ct = implicitly[ClassTag[T]]
-    val className = Util.classToName[T]
-    val clazz = Class.forName(className)
+    //val ct = implicitly[ClassTag[T]]
+    //val className = Util.classToName[T]
+    //val clazz = Class.forName(className)
     loadValueOption[T](digest) match {
       case Some(obj) =>
         obj

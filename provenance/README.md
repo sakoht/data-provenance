@@ -98,7 +98,7 @@ The result contains both the `output` and the `call` that created it, and also c
 software that actually ran the `impl()`:
 ```scala
 result1.output == "123,9.99"                // the actual output value from impl()
-result1.call == call1.deflate               // the logical call that made it (in a "deflated" form, see Inflation and Deflation below)
+result1.call.loadRecurse == call1           // the call on the result is "deflated" but can re-vivify to the original
 result1.buildInfo == YOURPACKAGE.BuildInfo  // the specific commitId and buildId of the software (see BuildInfo below)
 result1.buildInfo.commitId                  // the git commit
 result1.buildInfo.buildId                   // the unique buildID of the software (a high-precision timestamp).
@@ -536,7 +536,7 @@ When a complicated provenance history is saved, each addition effectively append
 
 #### `*Saved`
 
-These are wrappers for the `*Serializable` classes that are aware of _output_ type, and are valid members of the regular `ValueWithProvenance` hierarchy.  When saving, the original objects are replaced with these.  When re-loading objects they come back in this form, and only fully vivify historical inputs when `.inflate` or `.inflateRecurse` is called. 
+These are wrappers for the `*Serializable` classes that are aware of _output_ type, and are valid members of the regular `ValueWithProvenance` hierarchy.  When saving, the original objects are replaced with these.  When re-loading objects they come back in this form, and only fully vivify historical inputs when `.load` or `.loadRecurse` is called. 
 
 
 #### Deflation & Inflation
@@ -551,8 +551,8 @@ the same ID will have the same history in any tracking system that stores it.
 The serialized data endpionts are returned wrapped in `FunctionCall{Result}WithProvenanceSaved[O]`, which act as drop-in replacements for the fully-vivified original.  These are part of the `ValueWithProvenance[_]` sealed trait, so any call can contain calls/results that are deflated after some depth.
 
 The methods to take a call or result back and forth from its deflated and inflated states are:
-- `.deflate`: returns the *Saved equivalent of an inflated object, or itself if already deflated
-- `.inflate`: returns the inflated equivalent of a deflated object, or itself if already inflated
+- `.save`: returns the *Deflated equivalent of an inflated object after recursively saving everything
+- `.load`: returns the inflated equivalent of a deflated object, or itself if already inflated
 
 Extening history with a single call actually just appends the following to storage:
 1. the serialized value of the output

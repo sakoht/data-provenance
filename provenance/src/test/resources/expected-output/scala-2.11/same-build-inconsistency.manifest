@@ -7,7 +7,7 @@
        1 ./data/da4b9237bacccdf19c0760cab7aec4a8359010b0
        2 ./functions/com.cibo.provenance.Add/1.0/call-resolved-inputs/72c56c5e90077373bf308e8cd519cc142e4ec96d/c06a73ec389b2ec4d80027cfd1c6196458ac6064
      620 ./functions/com.cibo.provenance.Add/1.0/calls/72c56c5e90077373bf308e8cd519cc142e4ec96d
-       2 ./functions/com.cibo.provenance.Add/1.0/conflict/Digest(c06a73ec389b2ec4d80027cfd1c6196458ac6064)
+       2 ./functions/com.cibo.provenance.Add/1.0/conflict/c06a73ec389b2ec4d80027cfd1c6196458ac6064
        2 ./functions/com.cibo.provenance.Add/1.0/conflicted
       87 ./functions/com.cibo.provenance.Add/1.0/input-groups/c06a73ec389b2ec4d80027cfd1c6196458ac6064
        2 ./functions/com.cibo.provenance.Add/1.0/inputs-to-output/c06a73ec389b2ec4d80027cfd1c6196458ac6064/77de68daecd823babbb58edb1c8e14d7106e83bb/commit1/build1

@@ -3,33 +3,30 @@ package com.cibo.provenance
 /**
   * Created by ssmith on 9/12/17.
   *
-  * The following classes and traits are in this file:
+  * The primary class hierarchy in this file:
   *
-  *  ValueWithProvenance                             sealed trait
-  *    Call                                          sealed trait
-  *      FunctionCallWithProvenance                  abstract class with N abstract subclasses
-  *        UnknownProvenance                         case class derived from Function0CallWithProvenance
-  *      FunctionCallWithProvenanceDeflated          sealed trait
-  *        FunctionCallWithKnownProvenanceDeflated   case class
-  *        FunctionCallWithUnknownProvenanceDeflated case class
+  *   ValueWithProvenance                             sealed trait
+  *     Call                                          sealed trait
+  *       FunctionCallWithProvenance                  abstract class with N abstract subclasses
+  *         UnknownProvenance                         case class derived from Function0CallWithProvenance
+  *     Result                                        sealed trait
+  *       FunctionCallResultWithProvenance            abstract class with N abstract subclasses
+  *         UnknownProvenanceValue                    case class derived from Function0CallResultWithProvenance
   *
-  *    Result                                        sealed trait
-  *      FunctionCallResultWithProvenance            abstract class with N abstract subclasses
-  *        UnknownProvenanceValue                    case class derived from Function0CallResultWithProvenance
-  *      FunctionCallResultWithProvenanceDeflated    case class
+  * A secondary hierarchy allowing for "deflated" objects:
   *
-  *    ValueWithProvenanceDeflated                   sealed trait applying to both deflated types above
+  *   ValueWithProvenance                             sealed trait (above)
+  *     ValueWithProvenanceDeflated                   sealed trait
+  *       Call                                        sealed trait (above)
+  *         FunctionCallWithProvenanceDeflated        case class
+  *       Result                                      sealed trait (above)
+  *         FunctionCallResultWithProvenanceDeflated  case class
   *
   * Each Function{n}WithProvenance has internal subclasses .Call and .Result, which extend
   * FunctionCall{,Result}WithProvenance, and ensure that the types returned are as specific as possible.
   *
-  *
-  * ValueWithProvenance[O] is a sealed trait with the following primary implementations:
-  * - FunctionCallWithProvenance[O]: a function, its version, and its inputs (each a ValueWithProvenance[I*], etc)
-  * - FunctionCallResultWithProvenance[O]: adds output (the return value) plus the BuildInfo (commit and build metadata)
-  * - UnknownProvenance[O]: a special case of Function0CallWithProvenance[O] for data w/o history.
-  *
-  * The type parameter O refers to the return/output type of the function in question.
+  * The type parameter O refers to the return/output type of the function in question.  Each class above has
+  * a single type parameter, though subclasses may have 0-21 I* parameters representing input types.
   *
   * There is an implicit conversion from T -> UnknownProvenance[T] allowing for an
   * entry-points into the history.
@@ -62,12 +59,16 @@ import io.circe.generic.auto._
 
 sealed trait ValueWithProvenance[O] extends Serializable {
   def outputClassTag: ClassTag[O]
-  def isResolved: Boolean
+
   def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O]
+
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
-  def deflate(implicit rt: ResultTracker): ValueWithProvenanceSaved[O]
-  def inflate(implicit rt: ResultTracker): ValueWithProvenance[O]
-  def inflateRecurse(implicit rt: ResultTracker): ValueWithProvenance[O]
+
+  def save(implicit rt: ResultTracker): ValueWithProvenanceDeflated[O]
+
+  def load(implicit rt: ResultTracker): ValueWithProvenance[O]
+
+  def loadRecurse(implicit rt: ResultTracker): ValueWithProvenance[O]
 
   protected def nocopy[T](newObj: T, prevObj: T): T =
     if (newObj == prevObj)
@@ -164,13 +165,9 @@ object FunctionCallResultWithProvenance {
 
 // The primary 2 types of value are the Call and Result.
 
-trait Call[O] extends ValueWithProvenance[O] with Serializable {
-  val isResolved: Boolean = false
-}
+trait Call[O] extends ValueWithProvenance[O] with Serializable
 
-trait Result[O] extends ValueWithProvenance[O] with Serializable {
-  val isResolved: Boolean = true
-}
+trait Result[O] extends ValueWithProvenance[O] with Serializable
 
 
 // The regular pair of Call/Result work for normal functions.
@@ -192,11 +189,11 @@ abstract class FunctionCallWithProvenance[O : ClassTag : Codec](var vv: ValueWit
 
   def unresolveInputs(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
 
-  def deflateInputs(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
+  def saveInputs(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
 
-  def inflateInputs(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
+  def loadInputs(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
 
-  def inflateRecurse(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
+  def loadRecurse(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
 
   def run(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O]
 
@@ -242,10 +239,10 @@ abstract class FunctionCallWithProvenance[O : ClassTag : Codec](var vv: ValueWit
     }
   }
 
-  def getInputsDeflated(implicit rt: ResultTracker): Vector[FunctionCallResultWithProvenanceSaved[_]] = {
+  def getInputsDeflated(implicit rt: ResultTracker): Vector[FunctionCallResultWithProvenanceDeflated[_]] = {
     val inputSeq = inputs.toVector
     inputSeq.indices.map {
-      i => inputSeq(i).resolve.deflate
+      i => inputSeq(i).resolve.save
     }.toVector
   }
 
@@ -254,10 +251,10 @@ abstract class FunctionCallWithProvenance[O : ClassTag : Codec](var vv: ValueWit
     Util.digestObject(digests)
   }
 
-  def deflate(implicit rt: ResultTracker): FunctionCallWithProvenanceSaved[O] =
-    FunctionCallWithProvenanceSaved(FunctionCallWithProvenanceSerializable.save(this))
+  def save(implicit rt: ResultTracker): FunctionCallWithProvenanceDeflated[O] =
+    FunctionCallWithProvenanceDeflated(FunctionCallWithProvenanceSerializable.save(this))
 
-  def inflate(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
+  def load(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     this
 }
 
@@ -305,14 +302,14 @@ abstract class FunctionCallResultWithProvenance[O](
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     this.call.unresolve
 
-  def deflate(implicit rt: ResultTracker): FunctionCallResultWithProvenanceSaved[O] =
-    FunctionCallResultWithProvenanceSaved(FunctionCallResultWithKnownProvenanceSerializable.save(this))
+  def save(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] =
+    FunctionCallResultWithKnownProvenanceSerializable.save(this).wrap[O]
 
-  def inflate(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
+  def load(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
     this
 
-  def inflateRecurse(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = {
-    val call2 = this.call.inflateRecurse(rt)
+  def loadRecurse(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = {
+    val call2 = this.call.loadRecurse(rt)
     if (call2 != call) {
       call2.newResult(outputAsVirtualValue)(outputBuildInfo)
     } else {
@@ -362,11 +359,11 @@ case class UnknownProvenance[O : ClassTag : Codec](value: O)
 
   override def unresolve(implicit rt: ResultTracker): UnknownProvenance[O] = this
 
-  override def inflate(implicit rt: ResultTracker): UnknownProvenance[O] = this
+  override def load(implicit rt: ResultTracker): UnknownProvenance[O] = this
 
-  override def inflateInputs(implicit rt: ResultTracker): UnknownProvenance[O] = this
+  override def loadInputs(implicit rt: ResultTracker): UnknownProvenance[O] = this
 
-  override def inflateRecurse(implicit rt: ResultTracker): UnknownProvenance[O] = this
+  override def loadRecurse(implicit rt: ResultTracker): UnknownProvenance[O] = this
 
   override def toString: String = f"raw($value)"
 }
@@ -380,8 +377,8 @@ case class UnknownProvenanceValue[O : ClassTag](
   // Note: This class is present to complete the API, but nothing in the system instantiates it.
   // The newResult method is never called for an UnknownProvenance[T].
 
-  override def deflate(implicit rt: ResultTracker): FunctionCallResultWithProvenanceSaved[O] =
-    FunctionCallResultWithProvenanceSaved(FunctionCallResultWithKnownProvenanceSerializable.save(this))
+  override def save(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] =
+    FunctionCallResultWithKnownProvenanceSerializable.save(this).wrap[O]
 
   override def toString: String =
     f"raw($outputAsVirtualValue)"
@@ -395,33 +392,33 @@ case class UnknownProvenanceValue[O : ClassTag](
  * and also lets us save an object graph with small, incrementally appended pieces.
  *
  */
-sealed trait ValueWithProvenanceSaved[O] extends ValueWithProvenance[O] with Serializable
+sealed trait ValueWithProvenanceDeflated[O] extends ValueWithProvenance[O] with Serializable
 
 
-case class FunctionCallWithProvenanceSaved[O](data: FunctionCallWithProvenanceSerializable)
-  extends ValueWithProvenanceSaved[O] with Call[O] with Serializable {
+case class FunctionCallWithProvenanceDeflated[O](data: FunctionCallWithProvenanceSerializable)
+  extends ValueWithProvenanceDeflated[O] with Call[O] with Serializable {
 
   def outputClassTag = ClassTag(Class.forName(data.outputClassName))
 
   def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
-    inflate.resolve(rt)
+    load.resolve(rt)
 
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
-    inflate.unresolve(rt)
+    load.unresolve(rt)
 
-  def deflate(implicit rt: ResultTracker): FunctionCallWithProvenanceSaved[O] =
+  def save(implicit rt: ResultTracker): FunctionCallWithProvenanceDeflated[O] =
     this
 
-  def inflate(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
+  def load(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     data.load(rt).asInstanceOf[FunctionCallWithProvenance[O]]
 
-  def inflateRecurse(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
-    this.inflate(rt).inflateRecurse(rt)
+  def loadRecurse(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
+    this.load(rt).loadRecurse(rt)
 }
 
 
-case class FunctionCallResultWithProvenanceSaved[O](data: FunctionCallResultWithProvenanceSerializable)
-  extends ValueWithProvenanceSaved[O] with Result[O] with Serializable {
+case class FunctionCallResultWithProvenanceDeflated[O](data: FunctionCallResultWithProvenanceSerializable)
+  extends ValueWithProvenanceDeflated[O] with Result[O] with Serializable {
 
   def outputDigest: Digest = data.outputDigest
 
@@ -430,17 +427,17 @@ case class FunctionCallResultWithProvenanceSaved[O](data: FunctionCallResultWith
   def outputClassTag: ClassTag[O] = ClassTag(Class.forName(data.call.outputClassName))
 
   def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
-    inflate.resolve(rt)
+    load.resolve(rt)
 
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
-    inflate.unresolve(rt)
+    load.unresolve(rt)
 
-  def deflate(implicit rt: ResultTracker): FunctionCallResultWithProvenanceSaved[O] =
+  def save(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] =
     this
 
-  def inflate(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
+  def load(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
     data.load(rt).asInstanceOf[FunctionCallResultWithProvenance[O]]
 
-  def inflateRecurse(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
-    inflate.inflateRecurse(rt)
+  def loadRecurse(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
+    load.loadRecurse(rt)
 }

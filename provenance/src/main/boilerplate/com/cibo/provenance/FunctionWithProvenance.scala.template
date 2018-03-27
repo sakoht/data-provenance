@@ -235,14 +235,14 @@ abstract class Function0WithProvenance[O : ClassTag : Codec] extends FunctionWit
       override def unresolveInputs(implicit rt: ResultTracker): Call =
         nocopy(duplicate(v.unresolve), this)
 
-      override def inflateInputs(implicit rt: ResultTracker): Call =
-        nocopy(duplicate(v.inflate), this)
+      override def loadInputs(implicit rt: ResultTracker): Call =
+        nocopy(duplicate(v.load), this)
 
-      override def inflateRecurse(implicit rt: ResultTracker): Call =
-        nocopy(duplicate(v.inflateRecurse), this)
+      override def loadRecurse(implicit rt: ResultTracker): Call =
+        nocopy(duplicate(v.loadRecurse), this)
 
-      override def deflateInputs(implicit rt: ResultTracker): Call =
-        nocopy(duplicate(v.inflate), this)
+      override def saveInputs(implicit rt: ResultTracker): Call =
+        nocopy(duplicate(v.load), this)
 
       override def run(implicit rt: ResultTracker): Result =
         runCall(this)(rt)
@@ -432,14 +432,14 @@ abstract class Function1WithProvenance[[#I1#], O](
       override def unresolveInputs(implicit rt: ResultTracker): Call =
         nocopy(duplicate([#i1.unresolve#], v.unresolve), this)
 
-      override def inflateInputs(implicit rt: ResultTracker): Call =
-        nocopy(duplicate([#i1.inflate#], v.inflate), this)
+      override def loadInputs(implicit rt: ResultTracker): Call =
+        nocopy(duplicate([#i1.load#], v.load), this)
 
-      override def inflateRecurse(implicit rt: ResultTracker): Call =
-        nocopy(duplicate([#i1.inflateRecurse#], v.inflateRecurse), this)
+      override def loadRecurse(implicit rt: ResultTracker): Call =
+        nocopy(duplicate([#i1.loadRecurse#], v.loadRecurse), this)
 
-      override def deflateInputs(implicit rt: ResultTracker): Call =
-        nocopy(duplicate([#i1.deflate#], v.inflate), this)
+      override def saveInputs(implicit rt: ResultTracker): Call =
+        nocopy(duplicate([#i1.save#], v.load), this)
   }
 
   /**

@@ -95,7 +95,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       val idIgnored = FunctionCallResultWithKnownProvenanceSerializable.save(r2)
 
       // Use the signature itself to re-load, ignoring the saved ID.
-      val r2b = rt.loadResultForCallOption(s1).get
+      val r2b = rt.loadResultByCallOption(s1).get
       r2b.call.unresolve shouldEqual r2.call.unresolve
       r2b.output shouldEqual r2.output
 
@@ -390,8 +390,4 @@ object Multiply extends Function2WithProvenance[Int, Int, Int] {
   val currentVersion: Version = Version("1.0")
 
   def impl(a: Int, b: Int): Int = a * b
-}
-
-object TestMe extends App {
-
 }
