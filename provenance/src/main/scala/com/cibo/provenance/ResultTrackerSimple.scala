@@ -128,6 +128,8 @@ class ResultTrackerSimple(
     val inputIds: List[String] = inputResultsAlreadySaved.toList.map(_.outputDigest.id)
     val callId: String = resultSerializable.call.digestOfEquivalentWithInputs.id
 
+    val (resultBytes, resultDigest) = Util.getBytesAndDigest(resultSerializable)
+
     val prefix = f"functions/$functionName/$functionVersionId"
 
     saveObject(f"$prefix/input-groups/$inputGroupId", inputIds)
@@ -140,6 +142,8 @@ class ResultTrackerSimple(
       f"data-provenance/$outputId/as/$outputClassName/from/$functionName/$functionVersionId/" +
         f"with-inputs/$inputGroupId/with-provenance/$callWithInputsId/at/$commitId/$buildId"
     )
+
+    saveBytes(f"results/${resultDigest.id}", resultBytes)
 
     inputResultsAlreadySaved.indices.map {
       n =>
@@ -256,7 +260,8 @@ class ResultTrackerSimple(
     val prefix = f"functions/$functionName/$versionId"
     val callBytes = callSerializable.toBytes
     val callId = callSerializable.toDigest.id
-    saveBytes(f"functions/$functionName/${version.id}/calls/$callId", callBytes)
+    saveBytes(f"calls/$callId", callBytes)
+    saveLinkPath(f"functions/$functionName/${version.id}/calls/$callId")
     FunctionCallWithProvenanceDeflated(callSerializable)
   }
 
@@ -375,7 +380,8 @@ class ResultTrackerSimple(
   // Private Methods
 
   private def loadCallSerializedDataOption(functionName: String, version: Version, digest: Digest): Option[Array[Byte]] =
-    loadBytesOption(f"functions/$functionName/${version.id}/calls/${digest.id}")
+    //loadBytesOption(f"functions/$functionName/${version.id}/calls/${digest.id}")
+    loadBytesOption(f"calls/${digest.id}")
 
 
   private def loadOutputIdsForCallOption[O](call: FunctionCallWithProvenance[O]): Option[(Digest, String, String)] = {

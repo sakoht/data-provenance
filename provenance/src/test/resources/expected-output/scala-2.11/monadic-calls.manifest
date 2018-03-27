@@ -1,3 +1,36 @@
+     575 ./calls/05d9b8b1bfe16bbca667f9ebf6b1699151b020bb
+     897 ./calls/08886a07bb60958e69659e0eabbbb97800656a91
+     575 ./calls/1a0465418cdc2eecf91ce8b2fa262704a86c3e1b
+     575 ./calls/226349517d0d2ba710ab5b59d7d285e60d6f0a83
+     575 ./calls/2a6712f6ad06f47f762548173a065df6df6cb546
+     897 ./calls/30566bfb4e91d78a258a9b49b9eb7f394952b453
+     892 ./calls/32895cb0a1997f3c4feec905a1b63144a5d480f5
+     854 ./calls/38c2c1f54680ab40324bb65ed73a704729aa3bd5
+     575 ./calls/3fc92afbcbad4b014979c99e7d4767bd68683651
+     854 ./calls/46f1aa272babec08e420e3abc38a089c449c8f84
+     582 ./calls/54b547f4596d894073c7fe31b1d9fae9180d3e8d
+     618 ./calls/74eb8ff8355c3bf5b270ceba5aa28444909d93ef
+     575 ./calls/757990d6f49cfe274bd423f6e2d2a4bbc1fafa49
+     575 ./calls/7c55e56971cc4b3af7ee819b4cc4c3d494b5d833
+     575 ./calls/83472df7b7ed3afdde4ea3e4a926d6fb5fa1f453
+     849 ./calls/8381b039f439902084c9b3526a1f1fbf3a8e2e80
+     854 ./calls/86eb9332983d8182672649230423a272681e719f
+     849 ./calls/8e4ef7e2378668a10d04b9fd353d0dcbcde7c31a
+     854 ./calls/918f9cb3289371220a381d7e4dc8dd0d3222c16f
+     575 ./calls/931b247be1a9106b53db9e72bef43f69814099b8
+     623 ./calls/a2b9f70ef90ad9e25b48d8a92a056db440032c87
+     854 ./calls/ae70240e18380834acbe754d846e3b4cbf4a2f6e
+     854 ./calls/af02bef3e633cbe7166e57a1427a806ec63a114f
+     575 ./calls/b1f19520cbca98cca0648b4943ebaf9529b4ee16
+     854 ./calls/b239e9b79fb5b07ebc3968a0d025882bc9db09f3
+     575 ./calls/b8dc02513a09b9b5204bddd90d9705154459e12f
+     849 ./calls/d0602d47053bbc90661ce0ed71cec062a150441e
+     849 ./calls/e350ccd32dec4a6a92b489673aa868fb63d8a5fc
+     575 ./calls/e3a5f75cb0792187bf9d4af0dcc2d42664965f17
+     854 ./calls/e812fd8253ff93cb905ddcfa4f26adfd9007da5e
+     854 ./calls/ecd0eb211e8ef2968f49226f826d875e5d25246a
+     623 ./calls/ed7dbf236893928c3406ed2d0c3c547e5a03b81e
+     138 ./calls/fc3efc5ec078a9d6ce4018eb2c5cb7d695ad10ee
      441 ./commits/DUMMY-COMMIT/builds/1955.11.12T22.04.00Z/9541548cc513437a9db5c5c677e61e45db512a65
        2 ./data-provenance/05a8ea5382b9fd885261bb3eed0527d1d3b07262/as/scala.Int/from/com.cibo.provenance.SumValues/0.1/with-inputs/d98190b7926080f17b3fbd16788742eab68e710a/with-provenance/54b547f4596d894073c7fe31b1d9fae9180d3e8d/at/DUMMY-COMMIT/1955.11.12T22.04.00Z
        2 ./data-provenance/12c6fc06c99a462375eeb3f43dfd832b08ca9e17/as/scala.Int/from/com.cibo.provenance.monadics.ApplyWithProvenance/-/with-inputs/d07780a6b2cc74b83c9f2201cb1d7d352540f315/with-provenance/8381b039f439902084c9b3526a1f1fbf3a8e2e80/at/DUMMY-COMMIT/1955.11.12T22.04.00Z
@@ -60,7 +93,7 @@
        2 ./data/fc074d501302eb2b93e2554793fcaf50b3bf7291
        2 ./data/fe2ef495a1152561572949784c16bf23abb28057
        2 ./functions/com.cibo.provenance.MakeDummyOutputList/0.0/call-resolved-inputs/fc3efc5ec078a9d6ce4018eb2c5cb7d695ad10ee/97d170e1550eee4afc0af065b78cda302a97674c
-     138 ./functions/com.cibo.provenance.MakeDummyOutputList/0.0/calls/fc3efc5ec078a9d6ce4018eb2c5cb7d695ad10ee
+       2 ./functions/com.cibo.provenance.MakeDummyOutputList/0.0/calls/fc3efc5ec078a9d6ce4018eb2c5cb7d695ad10ee
        2 ./functions/com.cibo.provenance.MakeDummyOutputList/0.0/input-groups/97d170e1550eee4afc0af065b78cda302a97674c
        2 ./functions/com.cibo.provenance.MakeDummyOutputList/0.0/inputs-to-output/97d170e1550eee4afc0af065b78cda302a97674c/d25277ef5cab775557a6cd7419bc3b9e77b06156/DUMMY-COMMIT/1955.11.12T22.04.00Z
        2 ./functions/com.cibo.provenance.MakeDummyOutputList/0.0/output-to-provenance/d25277ef5cab775557a6cd7419bc3b9e77b06156/97d170e1550eee4afc0af065b78cda302a97674c/fc3efc5ec078a9d6ce4018eb2c5cb7d695ad10ee
@@ -82,18 +115,18 @@
        2 ./functions/com.cibo.provenance.MyIncrement/0.0/call-resolved-inputs/b1f19520cbca98cca0648b4943ebaf9529b4ee16/14eb08cb7f504410a430dc0b24875d83bd59fac3
        2 ./functions/com.cibo.provenance.MyIncrement/0.0/call-resolved-inputs/b8dc02513a09b9b5204bddd90d9705154459e12f/741656fadeab88d33d56836089b5bcd700959830
        2 ./functions/com.cibo.provenance.MyIncrement/0.0/call-resolved-inputs/e3a5f75cb0792187bf9d4af0dcc2d42664965f17/7acdec9b94409d3cfcf37a8b413846a573e53467
-     575 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/05d9b8b1bfe16bbca667f9ebf6b1699151b020bb
-     575 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/1a0465418cdc2eecf91ce8b2fa262704a86c3e1b
-     575 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/226349517d0d2ba710ab5b59d7d285e60d6f0a83
-     575 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/2a6712f6ad06f47f762548173a065df6df6cb546
-     575 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/3fc92afbcbad4b014979c99e7d4767bd68683651
-     575 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/757990d6f49cfe274bd423f6e2d2a4bbc1fafa49
-     575 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/7c55e56971cc4b3af7ee819b4cc4c3d494b5d833
-     575 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/83472df7b7ed3afdde4ea3e4a926d6fb5fa1f453
-     575 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/931b247be1a9106b53db9e72bef43f69814099b8
-     575 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/b1f19520cbca98cca0648b4943ebaf9529b4ee16
-     575 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/b8dc02513a09b9b5204bddd90d9705154459e12f
-     575 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/e3a5f75cb0792187bf9d4af0dcc2d42664965f17
+       2 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/05d9b8b1bfe16bbca667f9ebf6b1699151b020bb
+       2 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/1a0465418cdc2eecf91ce8b2fa262704a86c3e1b
+       2 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/226349517d0d2ba710ab5b59d7d285e60d6f0a83
+       2 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/2a6712f6ad06f47f762548173a065df6df6cb546
+       2 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/3fc92afbcbad4b014979c99e7d4767bd68683651
+       2 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/757990d6f49cfe274bd423f6e2d2a4bbc1fafa49
+       2 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/7c55e56971cc4b3af7ee819b4cc4c3d494b5d833
+       2 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/83472df7b7ed3afdde4ea3e4a926d6fb5fa1f453
+       2 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/931b247be1a9106b53db9e72bef43f69814099b8
+       2 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/b1f19520cbca98cca0648b4943ebaf9529b4ee16
+       2 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/b8dc02513a09b9b5204bddd90d9705154459e12f
+       2 ./functions/com.cibo.provenance.MyIncrement/0.0/calls/e3a5f75cb0792187bf9d4af0dcc2d42664965f17
       44 ./functions/com.cibo.provenance.MyIncrement/0.0/input-groups/0a16bc73b8e7dac378ac5e45f1c0654cd4a909a6
       44 ./functions/com.cibo.provenance.MyIncrement/0.0/input-groups/14eb08cb7f504410a430dc0b24875d83bd59fac3
       44 ./functions/com.cibo.provenance.MyIncrement/0.0/input-groups/3619a4c0cb278e38e8416021a0ea11dce718cf8f
@@ -131,7 +164,7 @@
        2 ./functions/com.cibo.provenance.MyIncrement/0.0/output-to-provenance/fc074d501302eb2b93e2554793fcaf50b3bf7291/14eb08cb7f504410a430dc0b24875d83bd59fac3/b1f19520cbca98cca0648b4943ebaf9529b4ee16
        2 ./functions/com.cibo.provenance.MyIncrement/0.0/output-to-provenance/fe2ef495a1152561572949784c16bf23abb28057/0a16bc73b8e7dac378ac5e45f1c0654cd4a909a6/3fc92afbcbad4b014979c99e7d4767bd68683651
        2 ./functions/com.cibo.provenance.SumValues/0.1/call-resolved-inputs/54b547f4596d894073c7fe31b1d9fae9180d3e8d/d98190b7926080f17b3fbd16788742eab68e710a
-     582 ./functions/com.cibo.provenance.SumValues/0.1/calls/54b547f4596d894073c7fe31b1d9fae9180d3e8d
+       2 ./functions/com.cibo.provenance.SumValues/0.1/calls/54b547f4596d894073c7fe31b1d9fae9180d3e8d
       44 ./functions/com.cibo.provenance.SumValues/0.1/input-groups/d98190b7926080f17b3fbd16788742eab68e710a
        2 ./functions/com.cibo.provenance.SumValues/0.1/inputs-to-output/d98190b7926080f17b3fbd16788742eab68e710a/05a8ea5382b9fd885261bb3eed0527d1d3b07262/DUMMY-COMMIT/1955.11.12T22.04.00Z
        2 ./functions/com.cibo.provenance.SumValues/0.1/output-to-provenance/05a8ea5382b9fd885261bb3eed0527d1d3b07262/d98190b7926080f17b3fbd16788742eab68e710a/54b547f4596d894073c7fe31b1d9fae9180d3e8d
@@ -148,19 +181,19 @@
        2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/call-resolved-inputs/e350ccd32dec4a6a92b489673aa868fb63d8a5fc/24892d5b87d60d29346232f3ab9db6f377461ec6
        2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/call-resolved-inputs/e812fd8253ff93cb905ddcfa4f26adfd9007da5e/66404be492617bd7bb9ee7e9e2472b5efec0a95a
        2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/call-resolved-inputs/ecd0eb211e8ef2968f49226f826d875e5d25246a/68023e6602fdb418e549cf88bedd2764cf8f3d94
-     854 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/38c2c1f54680ab40324bb65ed73a704729aa3bd5
-     854 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/46f1aa272babec08e420e3abc38a089c449c8f84
-     849 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/8381b039f439902084c9b3526a1f1fbf3a8e2e80
-     854 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/86eb9332983d8182672649230423a272681e719f
-     849 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/8e4ef7e2378668a10d04b9fd353d0dcbcde7c31a
-     854 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/918f9cb3289371220a381d7e4dc8dd0d3222c16f
-     854 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/ae70240e18380834acbe754d846e3b4cbf4a2f6e
-     854 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/af02bef3e633cbe7166e57a1427a806ec63a114f
-     854 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/b239e9b79fb5b07ebc3968a0d025882bc9db09f3
-     849 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/d0602d47053bbc90661ce0ed71cec062a150441e
-     849 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/e350ccd32dec4a6a92b489673aa868fb63d8a5fc
-     854 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/e812fd8253ff93cb905ddcfa4f26adfd9007da5e
-     854 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/ecd0eb211e8ef2968f49226f826d875e5d25246a
+       2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/38c2c1f54680ab40324bb65ed73a704729aa3bd5
+       2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/46f1aa272babec08e420e3abc38a089c449c8f84
+       2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/8381b039f439902084c9b3526a1f1fbf3a8e2e80
+       2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/86eb9332983d8182672649230423a272681e719f
+       2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/8e4ef7e2378668a10d04b9fd353d0dcbcde7c31a
+       2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/918f9cb3289371220a381d7e4dc8dd0d3222c16f
+       2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/ae70240e18380834acbe754d846e3b4cbf4a2f6e
+       2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/af02bef3e633cbe7166e57a1427a806ec63a114f
+       2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/b239e9b79fb5b07ebc3968a0d025882bc9db09f3
+       2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/d0602d47053bbc90661ce0ed71cec062a150441e
+       2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/e350ccd32dec4a6a92b489673aa868fb63d8a5fc
+       2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/e812fd8253ff93cb905ddcfa4f26adfd9007da5e
+       2 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/calls/ecd0eb211e8ef2968f49226f826d875e5d25246a
       87 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/input-groups/24892d5b87d60d29346232f3ab9db6f377461ec6
       87 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/input-groups/340d47b01cd64072bb3d6bd412b2570ed2ad0ce4
       87 ./functions/com.cibo.provenance.monadics.ApplyWithProvenance/-/input-groups/450e5fc6481699826f9bdf0f8a1a635cb73376bd
@@ -215,9 +248,9 @@
        2 ./functions/com.cibo.provenance.monadics.IndicesTraversableWithProvenance/-/call-resolved-inputs/74eb8ff8355c3bf5b270ceba5aa28444909d93ef/535c32f976079e9132de8845ef94e04bed7c742b
        2 ./functions/com.cibo.provenance.monadics.IndicesTraversableWithProvenance/-/call-resolved-inputs/a2b9f70ef90ad9e25b48d8a92a056db440032c87/7f1d94d1ce2f298a1f034badc7d9ff6e2bae5be0
        2 ./functions/com.cibo.provenance.monadics.IndicesTraversableWithProvenance/-/call-resolved-inputs/ed7dbf236893928c3406ed2d0c3c547e5a03b81e/10d6f12323228417e5682992c0137d8428bebaab
-     618 ./functions/com.cibo.provenance.monadics.IndicesTraversableWithProvenance/-/calls/74eb8ff8355c3bf5b270ceba5aa28444909d93ef
-     623 ./functions/com.cibo.provenance.monadics.IndicesTraversableWithProvenance/-/calls/a2b9f70ef90ad9e25b48d8a92a056db440032c87
-     623 ./functions/com.cibo.provenance.monadics.IndicesTraversableWithProvenance/-/calls/ed7dbf236893928c3406ed2d0c3c547e5a03b81e
+       2 ./functions/com.cibo.provenance.monadics.IndicesTraversableWithProvenance/-/calls/74eb8ff8355c3bf5b270ceba5aa28444909d93ef
+       2 ./functions/com.cibo.provenance.monadics.IndicesTraversableWithProvenance/-/calls/a2b9f70ef90ad9e25b48d8a92a056db440032c87
+       2 ./functions/com.cibo.provenance.monadics.IndicesTraversableWithProvenance/-/calls/ed7dbf236893928c3406ed2d0c3c547e5a03b81e
       44 ./functions/com.cibo.provenance.monadics.IndicesTraversableWithProvenance/-/input-groups/10d6f12323228417e5682992c0137d8428bebaab
       44 ./functions/com.cibo.provenance.monadics.IndicesTraversableWithProvenance/-/input-groups/535c32f976079e9132de8845ef94e04bed7c742b
       44 ./functions/com.cibo.provenance.monadics.IndicesTraversableWithProvenance/-/input-groups/7f1d94d1ce2f298a1f034badc7d9ff6e2bae5be0
@@ -230,9 +263,9 @@
        2 ./functions/com.cibo.provenance.monadics.MapWithProvenance/-/call-resolved-inputs/08886a07bb60958e69659e0eabbbb97800656a91/2290fd204c48c69159370adf06a3652da3bf6e12
        2 ./functions/com.cibo.provenance.monadics.MapWithProvenance/-/call-resolved-inputs/30566bfb4e91d78a258a9b49b9eb7f394952b453/b2c80501035f862bba91f47a4ee74e569516cb79
        2 ./functions/com.cibo.provenance.monadics.MapWithProvenance/-/call-resolved-inputs/32895cb0a1997f3c4feec905a1b63144a5d480f5/ab90e56ad2e83d1cfecfa900366283788215f8b9
-     897 ./functions/com.cibo.provenance.monadics.MapWithProvenance/-/calls/08886a07bb60958e69659e0eabbbb97800656a91
-     897 ./functions/com.cibo.provenance.monadics.MapWithProvenance/-/calls/30566bfb4e91d78a258a9b49b9eb7f394952b453
-     892 ./functions/com.cibo.provenance.monadics.MapWithProvenance/-/calls/32895cb0a1997f3c4feec905a1b63144a5d480f5
+       2 ./functions/com.cibo.provenance.monadics.MapWithProvenance/-/calls/08886a07bb60958e69659e0eabbbb97800656a91
+       2 ./functions/com.cibo.provenance.monadics.MapWithProvenance/-/calls/30566bfb4e91d78a258a9b49b9eb7f394952b453
+       2 ./functions/com.cibo.provenance.monadics.MapWithProvenance/-/calls/32895cb0a1997f3c4feec905a1b63144a5d480f5
       87 ./functions/com.cibo.provenance.monadics.MapWithProvenance/-/input-groups/2290fd204c48c69159370adf06a3652da3bf6e12
       87 ./functions/com.cibo.provenance.monadics.MapWithProvenance/-/input-groups/ab90e56ad2e83d1cfecfa900366283788215f8b9
       87 ./functions/com.cibo.provenance.monadics.MapWithProvenance/-/input-groups/b2c80501035f862bba91f47a4ee74e569516cb79
@@ -256,4 +289,37 @@
        2 ./functions/com.cibo.provenance.monadics.MapWithProvenance/-/output-uses/e85b4e40dc3cedb1a6a7cdc68e2e21673682e0d5/from-input-group/8350b16f7859104a4a92eecce7714bb65d22b462/with-prov/32895cb0a1997f3c4feec905a1b63144a5d480f5/went-to/com.cibo.provenance.monadics.ApplyWithProvenance/-/input-group/8350b16f7859104a4a92eecce7714bb65d22b462/arg/0
        2 ./functions/com.cibo.provenance.monadics.MapWithProvenance/-/output-uses/e85b4e40dc3cedb1a6a7cdc68e2e21673682e0d5/from-input-group/b2c80501035f862bba91f47a4ee74e569516cb79/with-prov/32895cb0a1997f3c4feec905a1b63144a5d480f5/went-to/com.cibo.provenance.monadics.MapWithProvenance/-/input-group/b2c80501035f862bba91f47a4ee74e569516cb79/arg/0
        2 ./functions/com.cibo.provenance.monadics.MapWithProvenance/-/output-uses/e85b4e40dc3cedb1a6a7cdc68e2e21673682e0d5/from-input-group/d151b505a73803943f3188a118cd189080338267/with-prov/32895cb0a1997f3c4feec905a1b63144a5d480f5/went-to/com.cibo.provenance.monadics.ApplyWithProvenance/-/input-group/d151b505a73803943f3188a118cd189080338267/arg/0
-   26277 total
+     387 ./results/01fabd6fe97a21223afaa29f16c815b137bba41d
+     406 ./results/044b200a95938f3500350ece1202da1c92c5fdcc
+     387 ./results/199717011f93195fa6b412ec5602e2f1a8bd60eb
+     385 ./results/19ee133474fed56745113d342a16b8f6baa9107f
+     387 ./results/246d83c63ebe7e52bc8bf40649971a7ca40b3500
+     426 ./results/2484520b0f405f5996b5e8f493be5678e926b773
+     387 ./results/2cd472c35864d9bb6e83c76df336c36472b23d2f
+     402 ./results/33272d8a6b5c3630693dfffb83f7911030f5d06b
+     387 ./results/37e636b78b3375ff0a7d303851c3efffc240a48b
+     402 ./results/422cc4f87996e8e0e420c5aa8c68872a5aded2af
+     387 ./results/4c13697c9b3c07527ca0aad55de6aa33fa084e9f
+     387 ./results/506d5c9be3be8660d159dd0ea352a60d66007f25
+     402 ./results/596a0d0ea1cde4ff83105ab1b93f5dec0cffbf77
+     402 ./results/59f3fa6e4dbe6dee9f23c9592ef1bd8a27b7668c
+     402 ./results/5f999d914235d3c2ef635f60a98da7049174607b
+     402 ./results/63ff3fa82408dcf13b2e8da22cbb1a661752e67c
+     426 ./results/6b45c40b707e174ddc0223b4063f7d47d2d900c8
+     402 ./results/7859ffbde898196c8f28a8f6848ed174b6494e12
+     402 ./results/7befbe2bedc3c73186048393707e290b385ba5e7
+     402 ./results/7d6bd085f3c857151936557e9c8ce86a00770057
+     402 ./results/7edd00e09ca3029b835eb6ad528a154eb497d24b
+     402 ./results/86d184d663ea702e3dbd714e3c59430c727e5b17
+     426 ./results/8f5dc9c649c246a509f864f291fa827590f7c5f2
+     387 ./results/a77fc4b919b632543c3cda4c422eaf303a74844a
+     387 ./results/ab36405e0302f7d200e51b66969310a6a7056b53
+     402 ./results/b03da0fb1c6681bbcb9f31c1adbf084c70e6aa65
+     402 ./results/b3f0bd7596f7f35cdd57ab231babc5041e65bf01
+     411 ./results/b6037c1dfc93302ccf971f06cb8e5a201a5cf975
+     411 ./results/b9d13d1b34ed512f5d5b10fb2d330a89cc5955d0
+     387 ./results/eb30ab6cd80291209147fe755c8c3c83d48e2ebe
+     387 ./results/ede74f1035cf229b7bdbf24fef27bef754150ce8
+     411 ./results/ee5a8be4034db3df1014b3cf61830ed6edefd523
+     387 ./results/f4e454f5529f56b41dabeb7ff549325a8e5a8e77
+   39515 total

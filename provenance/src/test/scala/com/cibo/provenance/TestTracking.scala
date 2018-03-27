@@ -7,7 +7,7 @@ trait TestTracking extends ResultTrackerSimple {
   import org.apache.commons.io.FileUtils
 
   override protected def checkForInconsistentSerialization[O](obj: O): Boolean = true
-  override protected def blockSavingConflicts(newResult: FunctionCallResultWithKnownProvenanceSerializable): Boolean = true
+  override protected def blockSavingConflicts(newResult: FunctionCallResultWithKnownProvenanceSerializable): Boolean = false
   override protected def checkForConflictedOutputBeforeSave(newResult: FunctionCallResultWithKnownProvenanceSerializable): Boolean = true
   override protected def checkForResultAfterSave(newResult: FunctionCallResultWithKnownProvenanceSerializable): Boolean = true
 
