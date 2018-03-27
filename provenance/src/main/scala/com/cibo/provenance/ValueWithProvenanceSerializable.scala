@@ -1,8 +1,6 @@
 package com.cibo.provenance
 
-import io.circe._
 import io.circe.generic.auto._
-
 import scala.reflect.ClassTag
 
 /**

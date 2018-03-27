@@ -1,11 +1,6 @@
 package com.cibo.provenance
 
-import com.amazonaws.services.s3.model.PutObjectResult
-import com.cibo.io.s3.{S3DB, SyncablePath}
-import com.cibo.provenance.exceptions.InconsistentVersionException
-import com.cibo.cache.GCache
-
-import scala.util.{Failure, Success, Try}
+import com.cibo.io.s3.SyncablePath
 
 /**
   * Created by ssmith on 5/16/17.
@@ -51,6 +46,15 @@ class ResultTrackerSimple(
   val underlyingTracker: Option[ResultTrackerSimple] = None
 )(implicit val currentAppBuildInfo: BuildInfo) extends ResultTracker {
 
+  import com.amazonaws.services.s3.model.PutObjectResult
+  import com.cibo.cache.GCache
+  import com.cibo.io.s3.S3DB
+  import com.cibo.provenance.exceptions.InconsistentVersionException
+  import io.circe.generic.auto._
+
+  import scala.reflect.ClassTag
+  import scala.util.{Failure, Success, Try}
+
   def over(underlying: ResultTrackerSimple): ResultTrackerSimple = {
     new ResultTrackerSimple(basePath, writable, Some(underlying))
   }
@@ -59,8 +63,6 @@ class ResultTrackerSimple(
     new ResultTrackerSimple(basePath, writable, Some(ResultTrackerSimple(underlyingPath, writable=false)))
   }
 
-  import scala.reflect.ClassTag
-
   // These flags allow the tracker to operate in a more conservative mode.
   // They are useful in development when things like serialization consistency are still uncertain.
   protected def checkForInconsistentSerialization[O](obj: O): Boolean = false
@@ -68,7 +70,6 @@ class ResultTrackerSimple(
   protected def checkForConflictedOutputBeforeSave(newResult: FunctionCallResultWithKnownProvenanceSerializable): Boolean = false
   protected def checkForResultAfterSave(newResult: FunctionCallResultWithKnownProvenanceSerializable): Boolean = false
 
-  // The cache for saved results.
   val resultCacheSize = 1000L
 
   @transient
