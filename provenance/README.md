@@ -5,10 +5,28 @@ This document describes the data-provenance library from the perspective of an a
 
 For development of the library itself, see README-DEVELOPMENT.md.
 
+Overview
+--------
+
+The data provenance library lets an app/library wrap a functions in a way that does tracking, storage, logic versioning, and workflow management.
+
+The developer starts with a system that contains deterministic funcitons for key processes.  By wrapping them in a `FunctionWithProvenance`, these capabilities are added:
+- saving output consistently
+- saving inputs and linking them to the outputs in the context of some function/version
+- proscribing a complete workflow chain and interrogating it in a separate process from which any of it is run
+- examining any output and traversing the workflow chain that led to it
+- thorough tracking for each output, including commit and build info from the software library
+- "shortcutting" past running the same code on the same inputs when an output has been created
+- per-function versions, to give direct control over when a re-run _should_ occur on the same inputs
+- mixing deterministic, tracked data with less tracked data in clean ways
+- a testing structure to retroactively correct for logic flaws
 
 Adding to Applications
 ----------------------
-An applications should add the following to its `libraryDependencies`: 
+
+To start a new project quickly, copy the example1 project in this repository and modify it to taste.
+
+For an existing project, add the following to `libraryDependencies` in the `.sbt` configuration: 
     
     `"com.cibo" %% "provenance" % "0.2"`
 
@@ -24,6 +42,8 @@ To get started, you can use the `DummyBuildInfo` provided by the provenance libr
 
 Background
 ----------
+
+This is a review of some basics about Scala functions as a type, and the multi-p
 
 A normal scala function might be declared like this:  
 ```scala
@@ -98,7 +118,7 @@ The result contains both the `output` and the `call` that created it, and also c
 software that actually ran the `impl()`:
 ```scala
 result1.output == "123,9.99"                // the actual output value from impl()
-result1.call.loadRecurse == call1           // the call on the result is "deflated" but can re-vivify to the original
+result1.call == ??? // == call1             // the call on the result is "deflated" but can re-vivify to the original
 result1.buildInfo == YOURPACKAGE.BuildInfo  // the specific commitId and buildId of the software (see BuildInfo below)
 result1.buildInfo.commitId                  // the git commit
 result1.buildInfo.buildId                   // the unique buildID of the software (a high-precision timestamp).
@@ -206,38 +226,41 @@ val r3 = s3.resolve
 // ^^ calls 3+4, but skips 5+7 and 10+12, because those both have been done
 ```
 
-Versions and BuildInfo
-----------------------
+Versions
+--------
 
-The version in the function is an "asserted version".  A declaration by the programmer that outputs will be consistent 
-for the same inputs.
+The `currentVersion` declared in the function is an "asserted version".  A promise by the programmer outputs will be consistent for the same inputs.
 
-The call specifies the `version`, with a default argument that sets it to the `currentVersion`.  One might create a call
+The call object stores the `version`, with a default argument that sets it to the `currentVersion`.  One might create a call
 with an older version for purposes of explicitly querying for old data.  The receipient of a call might inspect the
-version of a call.
+version of a call.   By default, only the current version will execute, with legacy versions just for bookkeeping.  If some component needs to have multiple versions active it is possible with a small amount of code.
 
-When software is behaving as intended, the version is sufficient to describe a single iteration of function logic.  
-There will be multiple repository commits, and multiple source code builds, typically, that have the same version 
-number for a component, since other components will be iterating in parallel.
+There will likely be multiple versioned functions in a single repo.  Most git commits that involve a version update for some
+functions will not affect others.  As such, any given version of a function will likely span a range of git commits, and those ranges will overlap the range of other functions. (TODO: explain in a section below.  Right now examples are in test cases.)
 
 In theory, the versions will be updated appropriately.  In practice, errors will occur.
 
 There are three modes of failure:
-- a function that does not really produce the same output for the same inputs repeatably at any commit
-- a function that is refactored at some commit, but a change in results is introduced inadvertently
-- a function that behaves differently for the same commit on differnt builds, due to some external factor in the build 
-process
-
-Each actual output produced tracks the exact git commit and build ID used to produce it.  This comes from SbtBuildInfo.  
-Each project that uses the data-provenance library should use the `buildinfo.sbt` from the example repo to make this 
-data available.  The BuildInfo created must be implicitly available to make a ResultTracker.
+- a function that is not deterministic
+- a function that that had an "impure refactor", which offers different outputs for some inputs
+- a function that behaves differently for the same commit on different builds due to some external factor in the build
 
 The system can detects the three above failure modes retroactively, as the developer "posts evidence" to a future test 
 suite, which casts light on the errors made at previous commits/builds.  (TODO: go into detail)
 
+BuildInfo
+---------
+
+An implicit `BuildInfo` (typically named) `$YOURPACKAGE.BuildInfo` implicitly available to make a `ResultTracker`.  This provides commitId, buildId, and other information to be attached to any new data made by the app.
+
+The `BuildInfo` object used should be created by the `SbtBuildInfo` plugin.  Each project that uses the data-provenance library should use the `buildinfo.sbt` from the example repo to make this data available.
+
+The package name used in the configuration should be in a namespace that is unique for the app/lib.  If an organization namespace is used by a wide variety of apps, make a sub-namespace for each component that is independently built and put the `BuildInfo` there, even if it is the only thing there.
+
 
 Shorter Example
 ---------------
+
 ```scala
 import com.cibo.provenance._
 
