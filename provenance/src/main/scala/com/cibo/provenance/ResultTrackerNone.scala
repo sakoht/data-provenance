@@ -1,6 +1,8 @@
 package com.cibo.provenance
 
 import scala.reflect.ClassTag
+import scala.reflect.runtime.universe
+import scala.reflect.runtime.universe.TypeTag
 
 
 /**
@@ -15,24 +17,24 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
   implicit val bi: BuildInfo = currentAppBuildInfo
 
-  def saveResult(
+  protected[provenance] def saveResultSerializable(
     resultInSaveableForm: FunctionCallResultWithKnownProvenanceSerializable,
     inputResultsAlreadySaved: Vector[FunctionCallResultWithProvenanceSerializable]
   ): FunctionCallResultWithProvenanceDeflated[_] = {
     FunctionCallResultWithProvenanceDeflated(resultInSaveableForm)
   }
 
-  def saveCall[O](v: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O] =
+  def saveCallSerializable[O](v: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O] =
     FunctionCallWithProvenanceDeflated(v)
 
-  def saveOutputValue[T : ClassTag: Codec](obj: T): Digest = {
+  def saveOutputValue[T : Codec](obj: T)(implicit tt: universe.TypeTag[Codec[T]], ct: ClassTag[Codec[T]]): Digest = {
     // also a no-op that just calculates the ID and returns it
-    Util.digestObject(obj)
+    SerialUtil.digestObject(obj)
   }
 
   lazy val saveBuildInfo: Digest = {
     val bi = currentAppBuildInfo
-    val (bytes, digest) = Util.getBytesAndDigest(bi)
+    val (bytes, digest) = SerialUtil.getBytesAndDigest(bi)
     digest
   }
 
@@ -43,30 +45,36 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
     Some(f.run(this))
   }
 
-  def hasValue[T : ClassTag : Codec](obj: T): Boolean = false // never
+  def hasValue[T : Codec](obj: T): Boolean = false // never
 
   def hasValue(digest: Digest): Boolean = false // never
 
-  def loadCallByDigest(
-    functionName: String,
-    functionVersion: Version,
-    digest: Digest
-  ): Option[FunctionCallWithKnownProvenanceSerializableWithInputs] = None // never
-
-  def loadValueOption[O : ClassTag : Codec](digest: Digest): Option[O] = None // never
+  def loadValueOption[O : Codec](digest: Digest): Option[O] = None // never
 
   def loadValueSerializedDataByClassNameAndDigestOption(className: String, digest: Digest): Option[Array[Byte]] = None // never
 
   def loadBuildInfoOption(commitId: String, buildId: String): Option[BuildInfo] = None // never
 
-  def loadCodecByType[T : ClassTag]: Codec[T] =
+  def loadCodecByType[T : Codec](implicit cdcd: Codec[Codec[T]]): Codec[T] =
     throw new UnavailableData("No codec data with this tracker")
 
-  def loadCodecByClassNameAndCodecDigest[T : ClassTag](valueClassName: String, codecDigest: Digest): Codec[T] =
+  def loadCodecByClassNameAndCodecDigest[T : ClassTag](valueClassName: String, codecDigest: Digest)(implicit tt: universe.TypeTag[Codec[T]], ct: ClassTag[Codec[T]]): Codec[T] =
     throw new UnavailableData("No codec data with this tracker")
 
-  def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest): Seq[Codec[T]] =
+  def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest)(implicit tt: universe.TypeTag[Codec[T]], ct: ClassTag[Codec[T]]): Seq[Codec[T]] =
     Seq.empty
+
+  def loadCallById(callId: Digest): Option[FunctionCallWithProvenanceDeflated[_]] = None
+
+  def loadResultById(resultId: Digest): Option[FunctionCallResultWithProvenanceDeflated[_]] = None
+
+  def saveOutputValue[T: Codec](obj: T)(implicit cdcd: Codec[Codec[T]]) = ???
+
+  def loadCodecByType[T: ClassTag : universe.TypeTag](implicit cdcd: Codec[Codec[T]]) = ???
+
+  def loadCodecByClassNameAndCodecDigest[T: ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]) = ???
+
+  def loadCodecsByValueDigest[T: ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]) = ???
 }
 
 

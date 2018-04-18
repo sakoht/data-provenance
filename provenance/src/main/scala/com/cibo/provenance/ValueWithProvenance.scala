@@ -50,11 +50,12 @@ package com.cibo.provenance
 
 import java.io.Serializable
 
-import scala.reflect.ClassTag
+
 import scala.language.implicitConversions
 import scala.language.higherKinds
+import scala.reflect.ClassTag
+import scala.reflect.runtime.universe.TypeTag
 import io.circe._
-import io.circe.generic.auto._
 
 
 sealed trait ValueWithProvenance[O] extends Serializable {
@@ -79,7 +80,7 @@ sealed trait ValueWithProvenance[O] extends Serializable {
   def resolveAndExtractDigest(implicit rt: ResultTracker): Digest = {
     val call = unresolve(rt)
     val result = resolve(rt)
-    val valueDigested = result.outputAsVirtualValue.resolveDigest(call.outputCodec)
+    val valueDigested = result.outputAsVirtualValue.resolveDigest
     valueDigested.digestOption.get
   }
 }
@@ -90,7 +91,7 @@ object ValueWithProvenance {
 
   // Convert any value T to an UnknownProvenance[T] wherever a ValueWithProvenance is expected.
   // This is how "normal" data is passed into FunctionWithProvenance transparently.
-  implicit def convertValueWithNoProvenance[T: ClassTag : Codec, U <: T](value: U): ValueWithProvenance[T] = {
+  implicit def convertValueWithNoProvenance[T: Codec, U <: T](value: U): ValueWithProvenance[T] = {
     UnknownProvenance(value.asInstanceOf[T])
   }
 
@@ -111,24 +112,19 @@ object ValueWithProvenance {
 object FunctionCallWithProvenance {
   import com.cibo.provenance.implicits._
 
-  implicit class OptionalCallExt[A](call: FunctionCallWithProvenance[Option[A]])
+  implicit class OptionCallExt[A](call: FunctionCallWithProvenance[Option[A]])
     (implicit
-      ctsa: ClassTag[Option[A]],
-      cta: ClassTag[A],
-      csa: Codec[Option[A]],
-      ca: Codec[A]
-    ) extends OptionalCall[A](call)(ctsa, cta, csa, ca)
+      cdsa: Codec[Option[A]],
+      cda: Codec[A]
+    ) extends OptionCall[A](call)(cdsa, cda)
 
   implicit class TraversableCallExt[S[_], A](call: FunctionCallWithProvenance[S[A]])
     (implicit
       hok: Traversable[S],
-      cta: ClassTag[A],
-      ctsa: ClassTag[S[A]],
-      ctsi: ClassTag[S[Int]],
-      ca: Codec[A],
-      csa: Codec[S[A]],
-      csi: Codec[S[Int]]
-    ) extends TraversableCall[S, A](call)(hok, cta, ctsa, ctsi, ca, csa, csi)
+      cda: Codec[A],
+      cdsa: Codec[S[A]],
+      cdsi: Codec[S[Int]]
+    ) extends TraversableCall[S, A](call)(hok, cda, cdsa, cdsi)
 
 
   implicit def createDecoder[O]: Decoder[FunctionCallWithProvenance[O]] =
@@ -142,24 +138,19 @@ object FunctionCallWithProvenance {
 object FunctionCallResultWithProvenance {
   import com.cibo.provenance.implicits._
 
-  implicit class OptionalResultExt[A](result: FunctionCallResultWithProvenance[Option[A]])
+  implicit class OptionResultExt[A](result: FunctionCallResultWithProvenance[Option[A]])
     (implicit
-      ctsa: ClassTag[Option[A]],
-      cta: ClassTag[A],
-      csa: Codec[Option[A]],
-      ca: Codec[A]
-    ) extends OptionalResult[A](result: FunctionCallResultWithProvenance[Option[A]])(ctsa, cta, csa, ca)
+      cdsa: Codec[Option[A]],
+      cda: Codec[A]
+    ) extends OptionResult[A](result: FunctionCallResultWithProvenance[Option[A]])(cdsa, cda)
 
   implicit class TraversableResultExt[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
     (implicit
       hok: Traversable[S],
-      cta: ClassTag[A],
-      ctsa: ClassTag[S[A]],
-      ctsi: ClassTag[S[Int]],
-      ca: Codec[A],
-      csa: Codec[S[A]],
-      csi: Codec[S[Int]]
-    ) extends TraversableResult[S, A](result)(hok, cta, ctsa, ctsi, ca, csa, csi)
+      cda: Codec[A],
+      cdsa: Codec[S[A]],
+      cdsi: Codec[S[Int]]
+    ) extends TraversableResult[S, A](result)(hok, cda, cdsa, cdsi)
 }
 
 
@@ -172,12 +163,14 @@ trait Result[O] extends ValueWithProvenance[O] with Serializable
 
 // The regular pair of Call/Result work for normal functions.
 
-abstract class FunctionCallWithProvenance[O : ClassTag : Codec](var vv: ValueWithProvenance[Version]) extends Call[O] with Serializable {
+abstract class FunctionCallWithProvenance[O : Codec](var vv: ValueWithProvenance[Version]) extends Call[O] with Serializable {
   self =>
 
-  def outputClassTag: ClassTag[O] = implicitly[ClassTag[O]]
-
   def outputCodec: Codec[O] = implicitly[Codec[O]]
+
+  def outputClassTag: ClassTag[O] = outputCodec.valueClassTag
+
+  def outputTypeTag: TypeTag[O] = outputCodec.valueTypeTag
 
   // Abstract interface.  These are implemented in each Function{n}CallSignatureWithProvenance subclass.
 
@@ -220,39 +213,13 @@ abstract class FunctionCallWithProvenance[O : ClassTag : Codec](var vv: ValueWit
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     unresolveInputs(rt)
 
-  protected[provenance] def getNormalizedDigest(implicit rt: ResultTracker): Digest =
-    Util.digestObject(unresolve(rt))
-
-  protected[provenance] def getInputGroupDigest(implicit rt: ResultTracker): Digest =
-    Util.digestObject(getInputDigests(rt))
-
-  protected[provenance] def getInputDigests(implicit rt: ResultTracker): List[String] = {
-    inputs.toList.map {
-      input =>
-        val resolvedInput = input.resolve
-        type Z = Any
-        val inputValue: Z = resolvedInput.output
-        implicit val cd: Codec[Z] = resolvedInput.call.outputCodec.asInstanceOf[Codec[Z]]
-        val id = Util.digestObject(inputValue)
-        val inputValueDigest = id.id
-        inputValueDigest
-    }
-  }
-
-  def getInputsDeflated(implicit rt: ResultTracker): Vector[FunctionCallResultWithProvenanceDeflated[_]] = {
-    val inputSeq = inputs.toVector
-    inputSeq.indices.map {
-      i => inputSeq(i).resolve.save
-    }.toVector
-  }
-
   def getInputGroupValuesDigest(implicit rt: ResultTracker): Digest = {
     val digests = inputs.map(_.resolveAndExtractDigest(rt).id).toList
-    Util.digestObject(digests)
+    SerialUtil.digestObject(digests)
   }
 
   def save(implicit rt: ResultTracker): FunctionCallWithProvenanceDeflated[O] =
-    FunctionCallWithProvenanceDeflated(FunctionCallWithProvenanceSerializable.save(this))
+    FunctionCallWithProvenanceSerializable.save(this).wrap[O]
 
   def load(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     this
@@ -270,7 +237,7 @@ abstract class FunctionCallResultWithProvenance[O](
   def outputAsVirtualValue: VirtualValue[O] = pOutputAsVirtualValue
 
   def output(implicit rt: ResultTracker): O =
-    pOutputAsVirtualValue.resolveValue(rt, pCall.outputCodec).valueOption.get
+    pOutputAsVirtualValue.resolveValue(rt).valueOption.get
 
   def outputClassTag: ClassTag[O] = pCall.outputClassTag
 
@@ -325,7 +292,7 @@ abstract class FunctionCallResultWithProvenance[O](
   * @param value  The value with unknown provenance to be added into tracking.
   * @tparam O     The type of hte value
   */
-case class UnknownProvenance[O : ClassTag : Codec](value: O)
+case class UnknownProvenance[O : Codec](value: O)
   extends Function0CallWithProvenance[O](null)(null) with Serializable {
 
   // NOTE: The `null` version and implVersion parameters prevent a bootstrapping problem.
@@ -369,7 +336,7 @@ case class UnknownProvenance[O : ClassTag : Codec](value: O)
 }
 
 
-case class UnknownProvenanceValue[O : ClassTag](
+case class UnknownProvenanceValue[O : Codec](
   override val call: UnknownProvenance[O],
   override val outputAsVirtualValue: VirtualValue[O]
 ) extends Function0CallResultWithProvenance[O](call, outputAsVirtualValue)(BuildInfoNone) with Serializable {
@@ -378,7 +345,7 @@ case class UnknownProvenanceValue[O : ClassTag](
   // The newResult method is never called for an UnknownProvenance[T].
 
   override def save(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] =
-    FunctionCallResultWithKnownProvenanceSerializable.save(this).wrap[O]
+    FunctionCallResultWithUnknownProvenanceSerializable.save(this).wrap[O]
 
   override def toString: String =
     f"raw($outputAsVirtualValue)"
@@ -392,7 +359,9 @@ case class UnknownProvenanceValue[O : ClassTag](
  * and also lets us save an object graph with small, incrementally appended pieces.
  *
  */
-sealed trait ValueWithProvenanceDeflated[O] extends ValueWithProvenance[O] with Serializable
+sealed trait ValueWithProvenanceDeflated[O] extends ValueWithProvenance[O] with Serializable {
+  def id: Digest
+}
 
 
 case class FunctionCallWithProvenanceDeflated[O](data: FunctionCallWithProvenanceSerializable)
@@ -414,6 +383,9 @@ case class FunctionCallWithProvenanceDeflated[O](data: FunctionCallWithProvenanc
 
   def loadRecurse(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     this.load(rt).loadRecurse(rt)
+
+  @transient
+  lazy val id: Digest = data.toDigest
 }
 
 
@@ -440,4 +412,7 @@ case class FunctionCallResultWithProvenanceDeflated[O](data: FunctionCallResultW
 
   def loadRecurse(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
     load.loadRecurse(rt)
+
+  @transient
+  lazy val id: Digest = data.toDigest
 }

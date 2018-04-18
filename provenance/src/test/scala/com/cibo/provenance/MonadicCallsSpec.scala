@@ -1,6 +1,7 @@
 package com.cibo.provenance
 
 import com.cibo.provenance.FunctionCallWithProvenance.TraversableCallExt
+import com.cibo.provenance.implicits.OptionMethods
 import org.scalatest.{FunSpec, Matchers}
 
 /**
@@ -241,11 +242,13 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       n1p.nonEmpty.resolve.output shouldBe false
 
       s1p.get.resolve.output shouldBe "hello"
+
       intercept[Exception] {
         n1p.get.resolve
       }
 
-      val s2p: FunctionCallWithProvenance.OptionalCallExt[String]#MapWithProvenance[String]#Call = s1p.map(AppendSuffix)
+      //val s2p = s1p.map(UnknownProvenance(AppendSuffix))
+      //s2p.resolve.output.get shouldBe "hello-mysuffix"
     }
   }
 }

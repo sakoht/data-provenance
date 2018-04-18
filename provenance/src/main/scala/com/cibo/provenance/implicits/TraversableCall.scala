@@ -8,9 +8,8 @@ package com.cibo.provenance.implicits
   *
   */
 
-import com.cibo.provenance.monadics.{ApplyWithProvenance, IndicesRangeWithProvenance, IndicesTraversableWithProvenance, MapWithProvenance}
+import com.cibo.provenance.monadics._
 import com.cibo.provenance._
-import io.circe._
 
 import scala.language.higherKinds
 import scala.reflect.ClassTag
@@ -18,12 +17,9 @@ import scala.reflect.ClassTag
 
 class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
   implicit hok: Traversable[S],
-  cta: ClassTag[A],
-  ctsa: ClassTag[S[A]],
-  ctsi: ClassTag[S[Int]],
-  oca: Codec[A],
-  ocsa: Codec[S[A]],
-  ocsi: Codec[S[Int]]
+  cda: Codec[A],
+  cdsa: Codec[S[A]],
+  cdsi: Codec[S[Int]]
 ) {
   implicit lazy val ctr: ClassTag[Range] = ClassTag(classOf[Range])
 
@@ -37,21 +33,20 @@ class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
 
   def map[B](f: ValueWithProvenance[Function1WithProvenance[A, B]])
     (implicit
-      ctsb: ClassTag[S[B]],
-      ctb: ClassTag[B],
-      cb: Codec[B],
-      csb: Codec[S[B]]
+      cdsb: Codec[S[B]],
+      cdf: Codec[Function1WithProvenance[A, B]],
+      cdb: Codec[B]
     ): MapWithProvenance[A, S, B]#Call =
       new MapWithProvenance[A, S, B].apply(call, f)
 
   def map[B](f: Function1WithProvenance[A, B])
     (implicit
-      ctsb: ClassTag[S[B]],
-      ctb: ClassTag[B],
-      cb: Codec[B],
-      csb: Codec[S[B]]
-    ): MapWithProvenance[A, S, B]#Call =
-    new MapWithProvenance[A, S, B].apply(call, UnknownProvenance(f.asInstanceOf[Function1WithProvenance[A, B]]))
+      cdsb: Codec[S[B]],
+      cdf: Codec[Function1WithProvenance[A, B]],
+      cdb: Codec[B]
+    ): MapWithProvenance[A, S, B]#Call = {
+      new MapWithProvenance[A, S, B].apply(call, UnknownProvenance.apply(f.asInstanceOf[Function1WithProvenance[A, B]]))
+  }
 
   def scatter(implicit rt: ResultTracker): S[FunctionCallWithProvenance[A]] = {
     val indicesResult: IndicesTraversableWithProvenance[S, A]#Result = IndicesTraversableWithProvenance[S, A].apply(call).resolve

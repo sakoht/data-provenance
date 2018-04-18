@@ -21,12 +21,17 @@ import io.circe.{Decoder, Encoder}
 import scala.reflect.ClassTag
 
 
-class IndicesRangeWithProvenance[S[_], O](
+class IndicesRangeWithProvenance[S[_], A : Codec](
   implicit hok: implicits.Traversable[S],
   oc: Codec[Range]
-) extends Function1WithProvenance[S[O], Range]  {
+) extends Function1WithProvenance[S[A], Range]  {
+
   val currentVersion: Version = NoVersion
-  def impl(s: S[O]): Range = hok.indicesRange(s)
+
+  def impl(s: S[A]): Range = hok.indicesRange(s)
+
+  override lazy val typeParameterTypeNames: Seq[String] =
+    Seq(hok.outerClassTag, implicitly[Codec[A]].valueClassTag).map(ct => ReflectUtil.classToName(ct))
 }
 
 object IndicesRangeWithProvenance {
@@ -41,12 +46,11 @@ object IndicesRangeWithProvenance {
 
   implicit val rangeCodec: Codec[Range] = Codec(rangeEncoder, rangeDecoder)
 
-  def apply[S[_], A](implicit converter: implicits.Traversable[S]) =
+  def apply[S[_], A : Codec](implicit converter: implicits.Traversable[S]) =
     new IndicesRangeWithProvenance[S, A]
 }
 
 object IndicesOfRangeWithProvenance extends Function1WithProvenance[Range, Range]()(
-  ClassTag(classOf[Range]),
   IndicesRangeWithProvenance.rangeCodec
 ) {
   val currentVersion: Version = NoVersion

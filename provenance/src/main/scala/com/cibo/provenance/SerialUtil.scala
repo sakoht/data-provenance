@@ -12,41 +12,10 @@ import com.typesafe.scalalogging.LazyLogging
   *
   */
 
-object Util extends LazyLogging {
-  import io.circe._, io.circe.parser._, io.circe.syntax._
+object SerialUtil extends LazyLogging {
+  import io.circe.parser._, io.circe.syntax._
   import java.io._
   import org.apache.commons.codec.digest.DigestUtils
-  import scala.reflect.ClassTag
-  import scala.util.{Failure, Success, Try}
-
-
-  def classToName[T](clazz: Class[T])(implicit ct: ClassTag[T]) = {
-    val name1 = ct.toString
-    Try(Class.forName(name1)) match {
-      case Success(clazz1) if clazz1 == clazz => name1
-      case Failure(_) =>
-        val name2 = "scala." + name1
-        Try(Class.forName(name2)) match {
-          case Success(clazz2) if clazz2 == clazz => name2
-          case Failure(_) =>
-            throw new RuntimeException(f"Failed to resolve a class name for $clazz")
-        }
-    }
-  }
-
-  def classToName[T](implicit ct: ClassTag[T]) = {
-    val name1 = ct.toString
-    Try(Class.forName(name1)) match {
-      case Success(clazz1) => name1
-      case Failure(_) =>
-        val name2 = "scala." + name1
-        Try(Class.forName(name2)) match {
-          case Success(clazz2) => name2
-          case Failure(_) =>
-            throw new RuntimeException(f"Failed to resolve a class name for $ct")
-        }
-    }
-  }
 
   def getBytesAndDigest[T : Codec](obj: T, checkConsistency: Boolean = true): (Array[Byte], Digest) = {
     val bytes1 = serializeImpl(obj, checkConsistency)
@@ -58,6 +27,10 @@ object Util extends LazyLogging {
     val codec = implicitly[Codec[T]]
     implicit val encoder = codec.encoder
     implicit val decoder = codec.decoder
+
+    if (obj.isInstanceOf[ValueWithProvenanceSerializable] && codec != ValueWithProvenanceSerializable.codec) {
+      println("Odd codec!")
+    }
 
     val json: String = obj.asJson.noSpaces
 
@@ -91,7 +64,7 @@ object Util extends LazyLogging {
     }
   }
 
-  def digestObject[T : ClassTag : Codec](value: T): Digest = {
+  def digestObject[T : Codec](value: T): Digest = {
     value match {
       case _: Array[Byte] =>
         //logger.warn("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
@@ -110,9 +83,9 @@ object Util extends LazyLogging {
       val bytes2 = serializeRawImpl(obj2)
       val digest2 = digestBytes(bytes2)
       if (digest2 != digest1) {
-        val obj3 = Util.deserializeRaw[T](bytes2)
-        val bytes3 = Util.serializeRawImpl(obj3)
-        val digest3 = Util.digestBytes(bytes3)
+        val obj3 = SerialUtil.deserializeRaw[T](bytes2)
+        val bytes3 = SerialUtil.serializeRawImpl(obj3)
+        val digest3 = SerialUtil.digestBytes(bytes3)
         if (digest3 == digest2)
           logger.warn(f"The re-constituted (bytes) version of $obj digests differently $digest1 -> $digest2!  But the reconstituted object saves consistently.")
         else
@@ -141,7 +114,7 @@ object Util extends LazyLogging {
     obj
   }
 
-  def digestObjectRaw[T : ClassTag](value: T): Digest = {
+  def digestObjectRaw[T : Codec](value: T): Digest = {
     value match {
       case _: Array[Byte] =>
         //logger.warn("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
@@ -154,8 +127,8 @@ object Util extends LazyLogging {
   def digestBytes(bytes: Array[Byte]): Digest =
     Digest(DigestUtils.sha1Hex(bytes))
 
-  def clean[T : ClassTag](obj: T): T =
-    Util.deserializeRaw(Util.serializeRawImpl(obj))
+  def clean[T : Codec](obj: T): T =
+    SerialUtil.deserializeRaw(SerialUtil.serializeRawImpl(obj))
 }
 
 

@@ -2,6 +2,7 @@ package com.cibo.provenance
 
 import io.circe.generic.auto._
 import scala.reflect.ClassTag
+import scala.reflect.runtime.universe.TypeTag
 
 /**
   * ValueWithProvenanceSerializable is a companion to the ValueWithProvenance sealed trait hierarchy.
@@ -24,6 +25,15 @@ sealed trait ValueWithProvenanceSerializable {
   def load(implicit rt: ResultTracker): ValueWithProvenance[_]
 
   def wrap[O]: ValueWithProvenanceDeflated[O]
+
+  @transient
+  private def bytesAndDigest: (Array[Byte], Digest) = {
+    SerialUtil.getBytesAndDigest(this)
+  }
+
+  def toBytes: Array[Byte] = bytesAndDigest._1
+
+  def toDigest: Digest = bytesAndDigest._2
 }
 
 
@@ -78,14 +88,17 @@ case class FunctionCallWithUnknownProvenanceSerializable(
     loadWithKnownTypeAndUnknownCodec(clazz)
   }
 
-  def loadWithKnownTypeAndUnknownCodec[T](clazz: Class[T])(implicit rt: ResultTracker): UnknownProvenance[_] = {
+  def loadWithKnownTypeAndUnknownCodec[T](clazz: Class[T])(
+    implicit rt: ResultTracker,
+    cdcd: Codec[Codec[T]]
+  ): UnknownProvenance[_] = {
     implicit val ct: ClassTag[T] = ClassTag(clazz)
-    val rts = rt.asInstanceOf[ResultTrackerSimple]
-    val (value, codec) = rts.loadValueWithCodec[T](valueDigest)
-    UnknownProvenance(value)(ct, codec)
+    val (value, codec) = rt.loadValueWithCodec[T](valueDigest).asInstanceOf[(T, Codec[T])]
+    //implicit val ct: ClassTag[T] = codec.valueClassTag
+    UnknownProvenance(value)(codec)
   }
 
-  def loadWithKnownTypeAndCodec[T : ClassTag : Codec](implicit rt: ResultTracker): UnknownProvenance[_] = {
+  def loadWithKnownTypeAndCodec[T : Codec](implicit rt: ResultTracker): UnknownProvenance[_] = {
     val value: T = rt.loadValue[T](valueDigest)
     UnknownProvenance(value)
   }
@@ -96,8 +109,9 @@ object FunctionCallWithUnknownProvenanceSerializable {
   def save[O](call: UnknownProvenance[O])(implicit rt: ResultTracker): FunctionCallWithUnknownProvenanceSerializable = {
     implicit val outputClassTag: ClassTag[O] = call.outputClassTag
     implicit val outputCodec: Codec[O] = call.outputCodec
+    implicit val outputTypeTag: TypeTag[O] = outputCodec.valueTypeTag
 
-    val outputClassName = Util.classToName(outputClassTag)
+    val outputClassName = ReflectUtil.classToName(outputClassTag)
 
     val rts = rt.asInstanceOf[ResultTrackerSimple]
     val valueDigest: Digest = rts.saveOutputValue(call.value)
@@ -133,12 +147,7 @@ case class FunctionCallWithKnownProvenanceSerializableWithInputs(
 ) extends FunctionCallWithKnownProvenanceSerializable {
 
   @transient
-  private lazy val bytesAndDigest: (Array[Byte], Digest) = Util.getBytesAndDigest(this)
-  def toBytes: Array[Byte] = bytesAndDigest._1
-  def toDigest: Digest = bytesAndDigest._2
-
-  @transient
-  lazy val inputGroupBytesAndDigest: (Array[Byte], Digest) = Util.getBytesAndDigest(inputValueDigests.map(_.id))
+  lazy val inputGroupBytesAndDigest: (Array[Byte], Digest) = SerialUtil.getBytesAndDigest(inputValueDigests.map(_.id))
   def inputGroupBytes: Array[Byte] = inputGroupBytesAndDigest._1
   def inputGroupDigest: Digest = inputGroupBytesAndDigest._2
 
@@ -173,7 +182,7 @@ object FunctionCallWithKnownProvenanceSerializableWithInputs {
   def save[O](call: FunctionCallWithProvenance[O])(implicit rt: ResultTracker): FunctionCallWithKnownProvenanceSerializableWithInputs = {
     implicit val outputClassTag: ClassTag[O] = call.outputClassTag
     implicit val outputCodec: Codec[O] = call.outputCodec
-    val outputClassName = Util.classToName(outputClassTag)
+    val outputClassName = ReflectUtil.classToName(outputClassTag)
 
     val callInSavableForm =
       call.versionValueAlreadyResolved match {
@@ -205,7 +214,7 @@ object FunctionCallWithKnownProvenanceSerializableWithInputs {
           throw new RuntimeException("UnresolvedVersionException(known)")
       }
 
-    rt.saveCall(callInSavableForm)
+    rt.saveCallSerializable(callInSavableForm)
 
     callInSavableForm
   }
@@ -220,12 +229,8 @@ case class FunctionCallWithKnownProvenanceSerializableWithoutInputs(
 ) extends FunctionCallWithKnownProvenanceSerializable {
 
   def expandInputs(rts: ResultTracker): FunctionCallWithKnownProvenanceSerializableWithInputs =
-    rts.loadCallByDigest(functionName, functionVersion, digestOfEquivalentWithInputs) match {
-      case Some(call) =>
-        call
-      case None =>
-        throw new RuntimeException("")
-    }
+    rts.loadCallById(digestOfEquivalentWithInputs).map(_.data)
+      .get.asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
 
   def load(implicit rt: ResultTracker): FunctionCallWithProvenance[_] =
     expandInputs(rt).load
@@ -277,9 +282,11 @@ case class FunctionCallResultWithKnownProvenanceSerializable(
     val call = this.call.load(rt).asInstanceOf[FunctionCallWithProvenance[T]]
     implicit val cd = call.outputCodec
     implicit val ct = call.outputClassTag
+    implicit val tt = cd.valueTypeTag
+    assert(ct == cd.valueClassTag)
     val bi = BuildInfoBrief(commitId, buildId)
     val output: T = rt.loadValue[T](outputDigest)
-    call.newResult(VirtualValue(output)(ct))(bi)
+    call.newResult(VirtualValue(output)(cd))(bi)
   }
 }
 
@@ -290,25 +297,40 @@ object FunctionCallResultWithKnownProvenanceSerializable {
 
     rt.saveBuildInfo
 
-    val callSavedWithInputs: FunctionCallWithKnownProvenanceSerializableWithInputs =
-      FunctionCallWithProvenanceSerializable.save(call)(rt).asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
+    val cs: FunctionCallWithProvenanceDeflated[_] = call.save(rt)
+    val csd: FunctionCallWithProvenanceSerializable = cs.data
+    csd match {
+      case kwi: FunctionCallWithKnownProvenanceSerializableWithInputs =>
+        println("ok")
+      case kwoi: FunctionCallWithKnownProvenanceSerializableWithoutInputs =>
+        println("bad")
+        val s = call.save(rt)
+        s.data
+      case ku: FunctionCallWithUnknownProvenanceSerializable =>
+        println("bad")
+        val s = call.save(rt)
+        s.data
+    }
+    val callSavedWithInputs =
+      csd.asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
 
     val output = result.output
-    implicit val outputClassTag: ClassTag[O] = call.outputClassTag
     implicit val outputCodec: Codec[O] = call.outputCodec
+    implicit val outputClassTag: ClassTag[O] = call.outputClassTag
+    implicit val outputTypeTag = outputCodec.valueTypeTag
     val outputDigest = rt.saveOutputValue(output) //result.resolveAndExtractDigest
 
     val resultInSavableForm =
       FunctionCallResultWithKnownProvenanceSerializable(
         callSavedWithInputs.unexpandInputs,
         callSavedWithInputs.inputGroupDigest,
-        Util.digestObject(result.output(rt)),
+        SerialUtil.digestObject(result.output(rt)),
         result.outputBuildInfo.commitId,
         result.outputBuildInfo.buildId
       )
 
     val in: Vector[FunctionCallResultWithProvenanceSerializable] = callSavedWithInputs.inputResultVector
-    rt.saveResult(resultInSavableForm, in)
+    rt.saveResultSerializable(resultInSavableForm, in)
 
     resultInSavableForm
   }
@@ -322,7 +344,7 @@ case class FunctionCallResultWithUnknownProvenanceSerializable(
   buildId: String
 ) extends FunctionCallResultWithProvenanceSerializable {
 
-  val inputGroupDigest: Digest = Util.digestObject(List[Digest]())
+  val inputGroupDigest: Digest = SerialUtil.digestObject(List[Digest]())
 
   def load(implicit rt: ResultTracker): FunctionCallResultWithProvenance[_] =
     call.load.resolve
@@ -349,3 +371,7 @@ object FunctionCallResultWithUnknownProvenanceSerializable {
   }
 }
 
+case class FunctionWithProvenanceSerializable(
+  functionNameClassName: String,
+  typeParameterClassNames: List[String]
+)

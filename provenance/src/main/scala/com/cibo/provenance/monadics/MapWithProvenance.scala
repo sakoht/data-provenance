@@ -7,27 +7,25 @@ package com.cibo.provenance.monadics
   *
   */
 
-import io.circe._
-
 import scala.language.higherKinds
-import scala.reflect.ClassTag
-import com.cibo.provenance.{ResultTracker, implicits, _}
+import com.cibo.provenance._
+import scala.reflect.runtime.universe._
+import scala.language.existentials
 
 class MapWithProvenance[A, S[_], B](
   implicit hok: implicits.Traversable[S],
-  ctb: ClassTag[B],
-  cta: ClassTag[A],
-  ctsb: ClassTag[S[B]],
-  ctsa: ClassTag[S[A]],
-  ctsi: ClassTag[S[Int]],
-  ob: Codec[B],
-  ca: Codec[A],
-  csb: Codec[S[B]],
-  csa: Codec[S[A]],
-  csi: Codec[S[Int]]
+  cdb: Codec[B],
+  cda: Codec[A],
+  cdsb: Codec[S[B]],
+  cdsa: Codec[S[A]],
+  cdsi: Codec[S[Int]]
 ) extends Function2WithProvenance[S[A], Function1WithProvenance[A, B], S[B]] {
 
   val currentVersion: Version = NoVersion
+
+  override lazy val typeParameterTypeNames: Seq[String] =
+    Seq(cda, cdsa, cdb).map(_.valueClassTag).map(ct => ReflectUtil.classToName(ct))
+
 
   override protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
     // Skip the bulk impl() call and construct the output result from the individual calls.
@@ -39,17 +37,13 @@ class MapWithProvenance[A, S[_], B](
   private def runOnEach(call: Call)(implicit rt: ResultTracker): S[FunctionCallResultWithProvenance[B]] = {
     val aResolved: FunctionCallResultWithProvenance[S[A]] = call.i1.resolve.asInstanceOf[FunctionCallResultWithProvenance[S[A]]]
     val aTraversable =
-      FunctionCallResultWithProvenance.TraversableResultExt[S, A](
-        aResolved
-      )(
-        hok, cta, ctsa, ctsi, ca, csa, csi
-      )
-    val aGranular: S[FunctionCallResultWithProvenance[A]] = aTraversable.scatter
+      FunctionCallResultWithProvenance.TraversableResultExt[S, A](aResolved)(hok, cda, cdsa, cdsi)
+    val aGranular: S[FunctionCallResultWithProvenance[A]] =
+      aTraversable.scatter
 
     val funcResolved: FunctionCallResultWithProvenance[_ <: Function1WithProvenance[A, B]] = call.i2.resolve(rt)
     val func: Function1WithProvenance[A, B] = funcResolved.output
     def a2b(a: FunctionCallResultWithProvenance[A]): FunctionCallResultWithProvenance[B] = func(a).resolve(rt)
-
     val bGranular: S[FunctionCallResultWithProvenance[B]] = hok.map(a2b)(aGranular)
     bGranular
   }
@@ -63,15 +57,21 @@ class MapWithProvenance[A, S[_], B](
 object MapWithProvenance {
   def apply[A, S[_], B](
     implicit hok: implicits.Traversable[S],
-    ctb: ClassTag[B],
-    cta: ClassTag[A],
-    ctsb: ClassTag[S[B]],
-    ctsa: ClassTag[S[A]],
-    ctsi: ClassTag[S[Int]],
-    ob: Codec[B],
-    oa: Codec[A],
-    osb: Codec[S[B]],
-    osa: Codec[S[A]],
-    osi: Codec[S[Int]]
-  ) = new MapWithProvenance[A, S, B]()(hok, ctb, cta, ctsb, ctsa, ctsi, ob, oa, osb, osa, osi)
+    cdb: Codec[B],
+    cda: Codec[A],
+    cdsb: Codec[S[B]],
+    cdsa: Codec[S[A]],
+    cdsi: Codec[S[Int]]
+  ) = new MapWithProvenance[A, S, B]()(hok, cdb, cda, cdsb, cdsa, cdsi)
+
+  def createCodec[A, S[_], B](
+    implicit hok: implicits.Traversable[S],
+    cdb: Codec[B],
+    cda: Codec[A],
+    cdsb: Codec[S[B]],
+    cdsa: Codec[S[A]],
+    cdsi: Codec[S[Int]]
+  ): Codec[MapWithProvenance[A, S, B]] = ???
+
+
 }

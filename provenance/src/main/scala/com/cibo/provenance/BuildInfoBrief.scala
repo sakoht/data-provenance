@@ -18,7 +18,6 @@ case class BuildInfoBrief(commitId: String, override val buildId: String) extend
 
   def codec = BuildInfoBrief.codec
   def toEncoded = codec.encoder.apply(this)
-
 }
 
 

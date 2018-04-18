@@ -24,6 +24,7 @@ trait ResultTracker extends Serializable {
   import org.slf4j.LoggerFactory
 
   import scala.reflect.ClassTag
+  import scala.reflect.runtime.universe.TypeTag
   import scala.util.{Failure, Success, Try}
 
   @transient
@@ -65,11 +66,27 @@ trait ResultTracker extends Serializable {
   // abstract interface
 
   /**
+    * A query interface to load any saved by its ID (digest)
+    * .
+    * param callId   The digest of the serialized call as referenced elsewhere in the system.
+    * return         Some FunctionCallWithProvenance[_] if it exists.
+    */
+  def loadCallById(callId: Digest): Option[FunctionCallWithProvenanceDeflated[_]]
+
+  /**
+    *
+    * @param resultId The digest of the serialized call as referenced elsewhere in the system.
+    * @return         Some FunctionCallResultWithProvenance[_] if it exists.
+    */
+  def loadResultById(resultId: Digest): Option[FunctionCallResultWithProvenanceDeflated[_]]
+
+
+  /**
     * The BuildInfo for the current running application.
     * This is used to construct new results for anything the tracker resolves.
     * It is typically supplied at construction time.
     *
-    * @return
+    * @return Returns the buildInfo
     */
   def currentAppBuildInfo: BuildInfo
 
@@ -81,11 +98,11 @@ trait ResultTracker extends Serializable {
     * The deflated version uses IDs to reference its inputs (also deflated, recursively), and
     * as such is a light-weight pointer into the complete history of the call.
     *
-    * @param callInSavableForm:  The call to save.
+    * @param callInSerializableForm:  The call to save.
     * @tparam O:    The output type of the call and returned deflated call.
     * @return       The deflated call created during saving.
     */
-  def saveCall[O](callInSavableForm: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O]
+  def saveCallSerializable[O](callInSerializableForm: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O]
   
   /**
     * Write out one `FunctionCallResultWithProvenanceSaved`.  
@@ -95,12 +112,12 @@ trait ResultTracker extends Serializable {
     * This is automatically called during resolve(), but can be called independently when 
     * moving results made from one ResultTracker to another.
     *
-    * @param resultInSavableForm:   The result to save after conversion to savable form.
+    * @param resultInSerializableForm:   The result to save after conversion to savable form.
     * @param inputResults:          The inputs, which must themselves be results at this point.
     * @return                       The deflated result.
     */
-  def saveResult(
-    resultInSavableForm: FunctionCallResultWithKnownProvenanceSerializable,
+  protected[provenance] def saveResultSerializable(
+    resultInSerializableForm: FunctionCallResultWithKnownProvenanceSerializable,
     inputResults: Vector[FunctionCallResultWithProvenanceSerializable]
   ): FunctionCallResultWithProvenanceDeflated[_]
 
@@ -113,7 +130,7 @@ trait ResultTracker extends Serializable {
     * @tparam T     The type of data to save.
     * @return       The Digest of the serialized data.  A unique ID usable to re-load later.
     */
-  def saveOutputValue[T : ClassTag : Codec](obj: T): Digest
+  def saveOutputValue[T : Codec](obj: T)(implicit cdcd: Codec[Codec[T]]): Digest
   
   def saveBuildInfo: Digest
 
@@ -132,7 +149,7 @@ trait ResultTracker extends Serializable {
     * @param obj      The object to check for.  It must have a circe encoder/decoder.  It will be digested pre-query.
     * @return         A boolean flag that is true if the value is stored.
     */
-  def hasValue[T : ClassTag : Codec](obj: T): Boolean
+  def hasValue[T : Codec](obj: T): Boolean
 
   /**
     * Check storage for a given input/output value by SHA1 Digest.
@@ -152,37 +169,20 @@ trait ResultTracker extends Serializable {
   def loadResultByCallOption[O](call: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]]
 
   /**
-    * Load the saved representation of a Call if its digest is known.
-    *
-    * When this is initially saved, its digest is used in a wrapper call that does not have inputs,
-    * deflated untyped results and in the input descriptions of calls that reference back to it.
-    *
-    * @param functionName       The class of FunctionWithProvenance for which the call is made.
-    * @param functionVersion    The version of the function represented in the call.
-    * @param digest             The digested value of the serialized call.
-    * @return                   A FunctionCallWithProvenance[O] that is NOT deflated, but still has deflated inputs.
-    */
-  def loadCallByDigest(
-    functionName: String,
-    functionVersion: Version,
-    digest: Digest
-  ): Option[FunctionCallWithKnownProvenanceSerializableWithInputs]
-
-  /**
     * Retrieve one value from storage if the specified digest key is found.
     *
     * @param digest   The digest to query for.
     * @tparam T       The type of data.
     * @return         An Option of O that is Some[O] if the digest ID is found in storage.
     */
-  def loadValueOption[T : ClassTag : Codec](digest: Digest): Option[T]
+  def loadValueOption[T : Codec](digest: Digest): Option[T]
 
   def loadValueOption(className: String, digest: Digest): Option[_] = {
     val clazz = Class.forName(className)
     loadValueOption(clazz, digest)
   }
 
-  protected def loadValueOption[T](clazz: Class[T], digest: Digest): Option[_] = {
+  protected def loadValueOption[T](clazz: Class[T], digest: Digest)(implicit cdcd: Codec[Codec[T]]): Option[_] = {
     implicit val ct: ClassTag[T] = ClassTag(clazz)
     Try {
       val (value, codec) = loadValueWithCodec[T](digest)
@@ -196,7 +196,8 @@ trait ResultTracker extends Serializable {
     }
   }
 
-  def loadValueWithCodec[T : ClassTag](valueDigest: Digest): (T, Codec[T]) = {
+  //def loadValueWithCodec[T : ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): (T, Codec[T]) = {
+  def loadValueWithCodec[T : ClassTag](valueDigest: Digest)(implicit cct: Codec[Codec[T]]): (T, Codec[T]) = {
     val allCodecs: List[Codec[T]] = loadCodecsByValueDigest[T](valueDigest: Digest).toList
     val workingCodecValuePairs = allCodecs.flatMap {
       codec =>
@@ -226,16 +227,16 @@ trait ResultTracker extends Serializable {
     }
   }
 
-  def loadCodecByType[T : ClassTag]: Codec[T]
+  def loadCodecByType[T : ClassTag : TypeTag](implicit cdcd: Codec[Codec[T]]): Codec[T]
 
-  def loadCodecByCodecDigest[T : ClassTag](codecDigest: Digest): Codec[T] = {
-    val valueClassName = Util.classToName[T]
+  def loadCodecByCodecDigest[T : ClassTag](codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T] = {
+    val valueClassName = ReflectUtil.classToName[T]
     loadCodecByClassNameAndCodecDigest[T](valueClassName, codecDigest)
   }
 
-  def loadCodecByClassNameAndCodecDigest[T : ClassTag](valueClassName: String, codecDigest: Digest): Codec[T]
+  def loadCodecByClassNameAndCodecDigest[T : ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T]
 
-  def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest): Seq[Codec[T]]
+  def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Seq[Codec[T]]
 
   def loadBuildInfoOption(commitId: String, buildId: String): Option[BuildInfo]
 
@@ -258,8 +259,13 @@ trait ResultTracker extends Serializable {
     * @tparam O       The type of the output data.
     * @return         An optional array of serialized bytes.
     */
-  def loadValueSerializedDataOption[O : ClassTag : Codec](digest: Digest): Option[Array[Byte]] =
-    loadValueSerializedDataByClassNameAndDigestOption(Util.classToName[O], digest)
+  def loadValueSerializedDataOption[O : Codec](digest: Digest): Option[Array[Byte]] =
+    loadValueSerializedDataByClassNameAndDigestOption(
+      ReflectUtil.classToName[O](
+        implicitly[Codec[O]].valueClassTag
+      ),
+      digest
+    )
 
   /**
     * Retrieve one value from storage if the specified digest key is found.
@@ -269,7 +275,7 @@ trait ResultTracker extends Serializable {
     * @tparam T       The type of data.
     * @return         An Option of T that is Some[T] if the digest ID is found in storage.
     */
-  def loadValue[T : ClassTag : Codec](digest: Digest): T = {
+  def loadValue[T : Codec](digest: Digest): T = {
     //val ct = implicitly[ClassTag[T]]
     //val className = Util.classToName[T]
     //val clazz = Class.forName(className)
@@ -277,7 +283,7 @@ trait ResultTracker extends Serializable {
       case Some(obj) =>
         obj
       case None =>
-        val ct = implicitly[ClassTag[T]]
+        val ct = implicitly[Codec[T]].valueClassTag
         throw new NoSuchElementException(f"Failed to find content for $ct with ID $digest!")
     }
   }

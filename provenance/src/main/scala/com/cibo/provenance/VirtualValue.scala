@@ -3,6 +3,7 @@ package com.cibo.provenance
 import io.circe._
 import scala.language.implicitConversions
 import scala.reflect.ClassTag
+import scala.reflect.runtime.universe.TypeTag
 
 /**
   * Created by ssmith on 10/6/17.
@@ -19,7 +20,7 @@ case class VirtualValue[T](
   valueOption: Option[T],
   digestOption: Option[Digest],
   serializedDataOption: Option[Array[Byte]]
-)(implicit ct: ClassTag[T]) {
+)(implicit ct: Codec[T]) {
 
   lazy val noDataException = new RuntimeException(f"No value, no serialization, and no digest??? $this")
 
@@ -28,14 +29,14 @@ case class VirtualValue[T](
 
   def className: String = ct.runtimeClass.getName
 
-  def resolveValue(implicit rt: ResultTracker, cd: Codec[T]): VirtualValue[T] =
+  def resolveValue(implicit rt: ResultTracker): VirtualValue[T] =
     valueOption match {
       case Some(_) =>
         this
       case None =>
         val value: T = serializedDataOption match {
           case Some(blob) =>
-            Util.deserialize[T](blob)
+            SerialUtil.deserialize[T](blob)
           case None => digestOption match {
             case Some(digest) =>
               rt.loadValueOption[T](digest) match {
@@ -49,14 +50,14 @@ case class VirtualValue[T](
         copy(valueOption = Some(value))
     }
 
-  def resolveSerialization(implicit rt: ResultTracker, cd: Codec[T]): VirtualValue[T] =
+  def resolveSerialization(implicit rt: ResultTracker): VirtualValue[T] =
     serializedDataOption match {
       case Some(_) =>
         this
       case None =>
         val serialization = valueOption match {
           case Some(value) =>
-            Util.getBytesAndDigest(value)._1
+            SerialUtil.getBytesAndDigest(value)._1
           case None =>
             digestOption match {
               case Some(digest) =>
@@ -71,7 +72,7 @@ case class VirtualValue[T](
         copy(serializedDataOption = Some(serialization))
     }
 
-  def resolveDigest(implicit cd: Codec[T]): VirtualValue[T] = digestOption match {
+  def resolveDigest: VirtualValue[T] = digestOption match {
     case Some(_) =>
       this
     case None =>
@@ -81,12 +82,12 @@ case class VirtualValue[T](
         case None =>
           valueOption match {
             case Some(value) =>
-              Util.getBytesAndDigest(value)._1
+              SerialUtil.getBytesAndDigest(value)._1
             case None =>
               throw noDataException
           }
       }
-      val digest = Util.digestBytes(bytes)
+      val digest = SerialUtil.digestBytes(bytes)
       copy(digestOption = Some(digest)) // do not save the serialization as it is heavey and can be remade on the fly
   }
 
@@ -106,16 +107,16 @@ case class VirtualValue[T](
 }
 
 object VirtualValue {
-  def apply[T : ClassTag](obj: T): VirtualValue[T] =
+  def apply[T : Codec](obj: T): VirtualValue[T] =
     VirtualValue(valueOption = Some(obj), digestOption = None, serializedDataOption = None)
 
-  def unapply[T : ClassTag : Codec](v: VirtualValue[T])(implicit rt: ResultTracker): T =
+  def unapply[T : Codec](v: VirtualValue[T])(implicit rt: ResultTracker): T =
     v.resolveValue.valueOption.get
 
-  implicit def toDeflatable[T : ClassTag : Codec](obj: T): VirtualValue[T] =
+  implicit def toDeflatable[T : Codec](obj: T): VirtualValue[T] =
     apply(obj)
 
-  implicit def fromDeflatable[T : ClassTag : Codec](v: VirtualValue[T])(implicit rt: ResultTracker): T =
+  implicit def fromDeflatable[T : Codec](v: VirtualValue[T])(implicit rt: ResultTracker): T =
     unapply(v)
 }
 

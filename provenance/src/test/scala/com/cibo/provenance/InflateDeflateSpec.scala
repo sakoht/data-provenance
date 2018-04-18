@@ -8,52 +8,48 @@ import org.scalatest.{FunSpec, Matchers}
   * Created by ssmith on 10/26/17.
   */
 
-/*
+
 class InflateDeflateSpec extends FunSpec with Matchers {
   val outputBaseDir: String = TestUtils.testOutputBaseDir
 
   describe("Deflation and inflation") {
 
     it("work on simple calls.") {
-      val testDataDir = f"$outputBaseDir/deflate-simple"
-      implicit val bi: BuildInfo = DummyBuildInfo
+      val testDataDir = f"$outputBaseDir/save-simple"
+      implicit val bi: BuildInfo = BuildInfoDummy
       implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
       rt.wipe
 
-      val i1: mult2.Call = mult2(2, 2)
-      val _ = i1.resolve
+      val call1: mult2.Call = mult2(2, 2)
+      val _ = call1.resolve
 
-      val d1 = i1.deflate
-      val i2 = d1.inflate.inflateInputs
-      i2 shouldEqual i1
+      val saved1 = call1.save
+      val call2 = saved1.load
+      call2 shouldEqual call1
     }
 
-    it("allows a call to partially or fully inflate") {
-      val testDataDir = f"$outputBaseDir/deflate-reinflate"
-      implicit val bi: BuildInfo = DummyBuildInfo
+    it("allows a call to partially or fully load") {
+      val testDataDir = f"$outputBaseDir/save-reload"
+      implicit val bi: BuildInfo = BuildInfoDummy
       implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
       rt.wipe
 
-      val inflated1: mult2.Call = mult2(2, 2)
-      val _ = inflated1.resolve
+      val call1: mult2.Call = mult2(2, 2)
+      val _ = call1.resolve
 
-      val deflated1 = inflated1.deflate
-      val inflated2 = deflated1.inflate
+      val deflated1 = call1.save
+      val call2 = deflated1.load
 
-      val deflated1known = deflated1.asInstanceOf[FunctionCallWithKnownProvenanceDeflated[Int]]
-      val inflated3opt = rt.loadCallByDigestOption[Int](
-        deflated1known.functionName,
-        deflated1known.functionVersion,
-        deflated1known.inflatedCallDigest
-      )
-      val inflated3 = inflated3opt.get
-      inflated3 shouldEqual inflated2
-      inflated3.inflateInputs shouldEqual inflated2.inflateInputs
+      val deflated2opt = rt.loadCallById(deflated1.id)
+      val call3 = deflated2opt.get.load
+
+      call3 shouldEqual call2
+      call3.load.loadInputs shouldEqual call2.loadInputs
     }
 
     it("works on nested calls") {
-      val testDataDir = f"$outputBaseDir/deflate-nested"
-      implicit val bi: BuildInfo = DummyBuildInfo
+      val testDataDir = f"$outputBaseDir/save-nested"
+      implicit val bi: BuildInfo = BuildInfoDummy
       implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
       rt.wipe
 
@@ -64,43 +60,44 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       val call: mult2.Call = mult2(c3, 2)
 
       val call2: mult2.Call = mult2(mult2(add2(2,2), add2(5,7)), 2)
-      call2 shouldEqual call.inflateRecurse
+      call2 shouldEqual call.loadRecurse
 
       // Round-trip through deflation/inflation loses some type information.
-      val deflated: FunctionCallWithProvenanceDeflated[Int] = rt.saveCall(call)
-      val reinflated: FunctionCallWithProvenance[Int] = deflated.inflate
+      val deflated: FunctionCallWithProvenanceDeflated[Int] = call.save
+      val reloaded: FunctionCallWithProvenance[Int] = deflated.load
 
-      // But the inflated object is of the correct type, where the code is prepared to recognize it.
-      val reinflatedWithTypeKnown: mult2.Call = reinflated match {
+      // But the loaded object is of the correct type, where the code is prepared to recognize it.
+      val reloadedWithTypeKnown: mult2.Call = reloaded match {
         case known: mult2.Call => known
-        case _ => throw new RuntimeException("Re-inflated object does not match expectred class.")
+        case _ => throw new RuntimeException("Re-loaded object does not match expectred class.")
       }
 
-      val reinflatedDeeply = reinflatedWithTypeKnown.inflateRecurse
-      reinflatedDeeply shouldEqual call2
+      val reloadedDeeply: mult2.Call = reloadedWithTypeKnown.loadRecurse
+      reloadedDeeply shouldEqual call2
     }
 
     it("work on functions") {
-      val testDataDir = f"$outputBaseDir/deflate-functions"
-      implicit val bi: BuildInfo = DummyBuildInfo
+      val testDataDir = f"$outputBaseDir/save-functions"
+      implicit val bi: BuildInfo = BuildInfoDummy
       implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
       rt.wipe
 
-      val inflatedCall1 = UnknownProvenance(mult2)
-      val inflatedResult1 = inflatedCall1.resolve
+      val u1: UnknownProvenance[mult2.type] = UnknownProvenance(mult2)
+      val r1: FunctionCallResultWithProvenance[mult2.type] = u1.resolve
 
-      val deflatedCall1 = inflatedCall1.deflate
-      val inflatedCall2 = deflatedCall1.inflate
-      inflatedCall2 shouldEqual inflatedCall1
+      val savedCall1 = u1.save
+      val loadedCall2 = savedCall1.load
+      loadedCall2 shouldEqual u1
 
-      val deflatedResult1: FunctionCallResultWithProvenanceDeflated[mult2.type] = inflatedResult1.deflate
-      val inflatedResult2: FunctionCallResultWithProvenance[mult2.type] = deflatedResult1.inflate
-      inflatedResult2 shouldEqual inflatedResult1
+      val savedResult1: FunctionCallResultWithProvenanceDeflated[_] = r1.save
+      val savedResult1b = savedResult1.asInstanceOf[FunctionCallResultWithProvenanceDeflated[mult2.type]]
+      val loadedResult2: FunctionCallResultWithProvenance[_] = savedResult1.load
+      loadedResult2 shouldEqual r1
     }
 
     it("work on functions as inputs") {
-      val testDataDir = f"$outputBaseDir/deflate-functions-taking-functions"
-      implicit val bi: BuildInfo = DummyBuildInfo
+      val testDataDir = f"$outputBaseDir/save-functions-taking-functions"
+      implicit val bi: BuildInfo = BuildInfoDummy
       implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
       rt.wipe
 
@@ -108,80 +105,58 @@ class InflateDeflateSpec extends FunSpec with Matchers {
 
       // MapWithProvenance is nasty b/c the function is itself an input.
       // It uses binary encoding (wrapped in Circe JSON).
-      val inflated1: MapWithProvenance[Int, List, Int]#Call = unknownList.map(incrementInt)
-      val inflated1b: MapWithProvenance[Int, List, Int]#Call = unknownList.map(incrementInt)
-      Util.digestObjectRaw(inflated1) shouldEqual Util.digestObjectRaw(inflated1b)
+      val loaded1: MapWithProvenance[Int, List, Int]#Call = unknownList.map(incrementInt)
+      val loaded1b: MapWithProvenance[Int, List, Int]#Call = unknownList.map(incrementInt)
+      loaded1.save shouldEqual loaded1b.save
 
-      val inflated1result = inflated1.resolve
-      inflated1result.output shouldBe List(101, 201, 301)
+      loaded1.functionName shouldEqual
+        "com.cibo.provenance.monadics.MapWithProvenance[scala.Int,scala.collection.immutable.List,scala.Int]"
 
-      val deflated1 = inflated1.deflate
-      val inflated2 = deflated1.inflate
+      val loaded1result = loaded1.resolve
+      loaded1result.output shouldBe List(101, 201, 301)
+
+      val saved1 = loaded1.save
+      val loaded2 = saved1.load
 
       // Note: something causes these to be equal as strings but not pass the eq check.
-      inflated2.unresolve.toString shouldEqual inflated1.unresolve.toString
+      loaded2.unresolve.toString shouldEqual loaded1.unresolve.toString
 
-      rt.hasOutputForCall(inflated2) shouldBe true
+      rt.hasOutputForCall(loaded2) shouldBe true
     }
 
     it("works with functions as output") {
-      val testDataDir = f"$outputBaseDir/deflate-returning-functions"
-      implicit val bi: BuildInfo = DummyBuildInfo
+      val testDataDir = f"$outputBaseDir/save-returning-functions"
+      implicit val bi: BuildInfo = BuildInfoDummy
       implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
       rt.wipe
 
-      val inflated1: fmaker.Call = fmaker()
-      val inflated1result = inflated1.resolve
-      inflated1result.output shouldBe incrementInt
+      val loaded1: fmaker.Call = fmaker()
+      val loaded1result = loaded1.resolve
+      loaded1result.output shouldBe incrementInt
 
-      val deflated1 = inflated1.deflate
-      val inflated2 = deflated1.inflate
+      val saved1 = loaded1.save
+      val loaded2 = saved1.load
 
-      inflated2 shouldEqual inflated1
-    }
-
-    it("works with limited type information") {
-      val testDataDir = f"$outputBaseDir/deflate-reinflate-limited-type"
-      implicit val bi: BuildInfo = DummyBuildInfo
-      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
-      rt.wipe
-
-      val (functionName, functionVersion, digest) =
-        createCallAndSaveCallAndReturnOnlyIds(rt)
-
-      // For this test, the type Int is specified.
-      val deflatedCallTyped: FunctionCallWithProvenanceDeflated[Int] =
-        rt.loadCallByDigestDeflatedOption[Int](
-          functionName,
-          functionVersion,
-          digest
-        ).get
-
-      checkDeflatedCall(digest, deflatedCallTyped)
+      loaded2 shouldEqual loaded1
     }
 
     it("works with no type information") {
-      val testDataDir = f"$outputBaseDir/deflate-reinflate-unknown-type"
-      implicit val bi: BuildInfo = DummyBuildInfo
+      val testDataDir = f"$outputBaseDir/save-reload-unknown-type"
+      implicit val bi: BuildInfo = BuildInfoDummy
       implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
       rt.wipe
 
-      val (functionName, functionVersion, digest) =
-        createCallAndSaveCallAndReturnOnlyIds(rt)
+      val digest = createCallAndSaveCallAndReturnOnlyIds(rt)
 
       // For this test, the type int is NOT specified.
-      val deflatedCallUntyped: FunctionCallWithProvenanceDeflated[_] =
-        rt.loadCallByDigestDeflatedUntypedOption(
-          functionName,
-          functionVersion,
-          digest
-        ).get
+      val savedCallUntyped: FunctionCallWithProvenanceDeflated[_] =
+        rt.loadCallById(digest).get
 
-      checkDeflatedCall(digest, deflatedCallUntyped)
+      checkDeflatedCall(digest, savedCallUntyped)
     }
   }
 
-  def createCallAndSaveCallAndReturnOnlyIds(implicit rt: ResultTrackerSimple): (String, Version, Digest) = {
+  def createCallAndSaveCallAndReturnOnlyIds(implicit rt: ResultTrackerSimple): Digest = {
     val c1 = add2(2, 2)
     val c2 = add2(5, 7)
     val c3 = mult2(c1, c2)
@@ -191,91 +166,73 @@ class InflateDeflateSpec extends FunSpec with Matchers {
     val call2: mult2.Call = mult2(mult2(add2(2, 2), add2(5, 7)), 2)
     call2 shouldEqual call1
 
-    val call = call1
+    val saved: FunctionCallWithProvenanceDeflated[Int] = call2.save
 
-    val d1 = Util.digestObjectRaw(call)
-    call.outputEncoder
-    call.outputDecoder
-    call.outputClassTag
-    val d2 = Util.digestObjectRaw(call)
+    // Repeat saves return only IDs.
+    val saved2 = call2.save
+    saved2 shouldEqual saved
+    saved2.id shouldEqual saved.id
 
-    val deflated = rt.saveCall(call)
-    val deflatedDigest = deflated.toDigest
-    
-    // Note: If there are any lazy vals the second and subsequent saves could be different.
-    val deflated2 = rt.saveCall(call)
-    //deflated2 shouldEqual deflated
-    deflated2.toDigest shouldEqual deflatedDigest
+    val call3: FunctionCallWithProvenance[Int] = saved.load
 
-    // Round-trip through deflation/inflation loses some type information on the surface...
-    val reinflated: FunctionCallWithProvenance[Int] = deflated.inflate
+    // ..but the loaded object is of the correct type, where the code is prepared to recognize it.
+    call3 match {
+      case _: mult2.Call =>
+        // good
+      case other =>
+        throw new RuntimeException(f"Re-loaded object does not match expected specific sub-class! $other")
+    }
 
-    // ..but the inflated object is of the correct type, where the code is prepared to recognize it.
-    val reinflatedWithKnownType: mult2.Call =
-      reinflated match {
-        case known: mult2.Call =>
-          known
-        case other =>
-          throw new RuntimeException(f"Re-inflated object does not match expected specific sub-class! $other")
-      }
-
-    // Ensure that the reinflated object has the exact same digest still.
-    Util.digestObjectRaw(reinflatedWithKnownType) shouldEqual
-      deflated.asInstanceOf[FunctionCallWithKnownProvenanceDeflated[_]].inflatedCallDigest
+    // Ensure that the reloaded object has the exact same digest still.
+    call3 shouldEqual call2
 
     // Re-inflation should be the same regardless of the level of type awareness.
-    val reinflatedDeeply1 = reinflated.inflateRecurse
-    reinflatedDeeply1 shouldEqual call
-    val reinflatedDeeply2 = reinflatedWithKnownType.inflateRecurse
-    reinflatedDeeply2 shouldEqual call
+    val reloadedDeeply1 = call3.loadRecurse
+    reloadedDeeply1 shouldEqual call2
+
+    val reloadedDeeply2 = call3.loadRecurse
+    reloadedDeeply2 shouldEqual call2
 
     // Deflating again should yield a similar thing.
-    //val deflated3 = rt.saveCall(reinflatedDeeply2)
-    //deflated3 shouldEqual deflated
-    //deflated3.toDigest shouldEqual deflatedDigest
+    val saved3 = reloadedDeeply2.save
+    saved3 shouldEqual saved
 
-    // Setting the type should not affect
-    val deflated4 = deflated.asInstanceOf[FunctionCallWithKnownProvenanceDeflated[Int]]
-    deflated4 shouldEqual deflated
-    deflated4.toDigest shouldEqual deflatedDigest
-
-    (deflated4.functionName, deflated4.functionVersion, deflatedDigest)
+    saved3.id
   }
 
   def checkDeflatedCall(
-    deflatedCallDigest: Digest,
-    deflatedCall: FunctionCallWithProvenanceDeflated[_]
+    savedCallDigest: Digest,
+    savedCall: FunctionCallWithProvenanceDeflated[_]
   )(implicit
     rt: ResultTrackerSimple
   ): Unit = {
     // Inflate into a regular call.
     // The type is unknown at compile time, but the object should be complete.
-    val inflatedCall: FunctionCallWithProvenance[_] =
-    deflatedCall.inflate
+    val loadedCall: FunctionCallWithProvenance[_] =
+    savedCall.load
 
     // Verify that the object functions with its full identity.
-    val inflatedDeeply = inflatedCall.inflateRecurse
-    inflatedDeeply shouldEqual mult2(mult2(add2(2, 2), add2(5, 7)), 2)
+    val loadedDeeply = loadedCall.loadRecurse
+    loadedDeeply shouldEqual mult2(mult2(add2(2, 2), add2(5, 7)), 2)
 
     // Ensure it matches the correct subtype in match calls.
-    inflatedCall match {
+    loadedCall match {
       case known: mult2.Call =>
         known
       case _ =>
-        throw new RuntimeException("Re-inflated object does not match expected class.")
+        throw new RuntimeException("Re-loaded object does not match expected class.")
     }
 
     // Ensure we can repeat the deflation and get the same ID.
-    val deflatedAgain = rt.saveCall(inflatedCall)
-    deflatedAgain match {
-      case _: FunctionCallWithUnknownProvenanceDeflated[_] =>
+    val savedAgain = loadedCall.save
+    savedAgain.data match {
+      case _: FunctionCallWithUnknownProvenanceSerializable =>
         throw new RuntimeException("Deflation created an object with unknown provenance?")
-      case known: FunctionCallWithKnownProvenanceDeflated[_] =>
-        known.toDigest shouldBe deflatedCallDigest
+      case known: FunctionCallWithKnownProvenanceSerializable =>
+        known.toDigest shouldBe savedCallDigest
     }
   }
 }
-*/
 
 object theInt extends Function0WithProvenance[Int] {
   val currentVersion: Version = Version("1.0")

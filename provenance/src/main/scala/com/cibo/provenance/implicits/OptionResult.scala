@@ -14,12 +14,10 @@ import io.circe.{Decoder, Encoder}
 import scala.language.existentials
 import scala.reflect.ClassTag
 
-class OptionalResult[A](result: FunctionCallResultWithProvenance[Option[A]])
+class OptionResult[A](result: FunctionCallResultWithProvenance[Option[A]])
   (implicit
-    ctsa: ClassTag[Option[A]],
-    cta: ClassTag[A],
-    csa: Codec[Option[A]],
-    ca: Codec[A]
+    cdsa: Codec[Option[A]],
+    cda: Codec[A]
   ) {
 
   def get(implicit rt: ResultTracker) = result.call.get.resolve
@@ -28,7 +26,7 @@ class OptionalResult[A](result: FunctionCallResultWithProvenance[Option[A]])
 
   def nonEmpty(implicit rt: ResultTracker) = result.call.nonEmpty.resolve
 
-  def map[B : ClassTag : Codec](
+  def map[B : Codec](
     f: ValueWithProvenance[Function1WithProvenance[A, B]]
   )(
     implicit rt: ResultTracker,

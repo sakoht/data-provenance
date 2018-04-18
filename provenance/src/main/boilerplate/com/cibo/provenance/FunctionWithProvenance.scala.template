@@ -14,10 +14,12 @@ import io.circe.{Decoder, Encoder}
 import java.io.Serializable
 
 import com.cibo.provenance.FunctionWithProvenance.{getByName, getByNameAndVersion}
+import com.cibo.provenance.ReflectUtil.{getSymbolName, logger}
 
 import scala.language.existentials
 import scala.language.implicitConversions
 import scala.reflect.ClassTag
+import scala.reflect.runtime.universe.TypeTag
 
 /**
   * Function{N}WithProvenance acts as the basic building block of data tracking in the provenance library.
@@ -39,17 +41,13 @@ import scala.reflect.ClassTag
   *
   */
 @SerialVersionUID(10001L)
-abstract class FunctionWithProvenance[O : ClassTag : Codec] extends Serializable {
+abstract class FunctionWithProvenance[O : Codec] extends Serializable {
   import com.cibo.provenance.exceptions.{UnknownVersionException, UnrunnableVersionException}
-
-  def name: String = getClass.getName.stripSuffix("$")
 
   // The currentVersion must be a single constant value in any given function instance object.
   val currentVersion: Version
-  
-  override def toString = f"$name@$currentVersion"
 
-  def outputClassTag = implicitly[ClassTag[O]]
+  def outputClassTag = outputCodec.valueClassTag
   def outputCodec = implicitly[Codec[O]]
 
   // By default only the current version is loadable and runnable.
@@ -75,20 +73,58 @@ abstract class FunctionWithProvenance[O : ClassTag : Codec] extends Serializable
   }
 
   def deserializeCall(callSerialized: FunctionCallWithProvenanceSerializable)(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
+
+  // Naming:
+
+  /**
+    * This is the name of the function minus any type parameters.
+    */
+  lazy val baseName: String = getClass.getName.stripSuffix("$")
+
+  /**
+    * The names of the types of the type parameters: ie MapWithProvenance[A, S[_], B] might return
+    * ["scala.Int", "scala.collection.immutable.List", "String"].
+    */
+  lazy val typeParameterTypeNames: Seq[String] = {
+    val tp = getClass.getTypeParameters
+    if (tp.isEmpty)
+      Seq.empty
+    else
+    // TODO: If possible figure out how to dig this out.
+    // We have the instance at this point, so it is fine to do at runtime.
+    // f"for ${tp.toList.map(_.getName)}"
+      throw new ReflectionException(
+        f"FunctionWithProvenance $baseName should override `typeParameterTypeNames`!"
+      )
+  }
+
+  /**
+    *
+    */
+  lazy val name: String =
+    if (typeParameterTypeNames.isEmpty)
+      baseName
+    else
+      baseName+ "[" + typeParameterTypeNames.mkString(",") + "]"
+
+  override def toString = f"$name@$currentVersion"
 }
 
 
 object FunctionWithProvenance {
 
-  implicit def codec[T <: FunctionWithProvenance[_]]: Codec[T] = Codec(encoder, decoder)
+  implicit def codec[T <: FunctionWithProvenance[_] : ClassTag : TypeTag]: Codec[T] =
+    Codec(encoder, decoder)
 
-  implicit def encoder[T <: FunctionWithProvenance[_]]: Encoder[T] =
+  implicit def encoder[T <: FunctionWithProvenance[_] : ClassTag : TypeTag]: Encoder[T] =
     Encoder.forProduct2("name", "version") {
       obj =>
+        val ct = implicitly[ClassTag[T]]
+        val tt = implicitly[TypeTag[T]]
         Tuple2(obj.name, obj.currentVersion.id)
     }
 
-  implicit def decoder[T <: FunctionWithProvenance[_]]: Decoder[T] =
+  implicit def decoder[T <: FunctionWithProvenance[_] : ClassTag : TypeTag]: Decoder[T] =
     Decoder.forProduct2("name", "version") {
       (n: String, v: String) =>
         getByNameAndVersion(n.toString, Version(v.toString)).asInstanceOf[T]
@@ -102,9 +138,7 @@ object FunctionWithProvenance {
   }
 
   def getByName(name: String): FunctionWithProvenance[_] = {
-    val clazz = Class.forName(name + "$")
-    val obj = clazz.getField("MODULE$").get(clazz)
-    obj.asInstanceOf[FunctionWithProvenance[_]]
+    ReflectUtil.getFunctionByName(name)
   }
 }
 
@@ -114,7 +148,7 @@ object FunctionWithProvenance {
   *
   * @tparam O:   The output type.
   */
-abstract class Function0WithProvenance[O : ClassTag : Codec] extends FunctionWithProvenance[O] with Serializable {
+abstract class Function0WithProvenance[O : Codec] extends FunctionWithProvenance[O] with Serializable {
   self =>
 
   /**
@@ -213,7 +247,8 @@ abstract class Function0WithProvenance[O : ClassTag : Codec] extends FunctionWit
     extends Function0CallWithProvenance[O](v)(implVersion) {
 
       val function = self
-      val functionName: String = self.getClass.getName.stripSuffix("$")
+
+      val functionName: String = self.name
 
       override def toString: String =
         self.getClass.getSimpleName.stripSuffix("$") + "()" // no Tuple0
@@ -292,8 +327,7 @@ abstract class Function0WithProvenance[O : ClassTag : Codec] extends FunctionWit
   * ]
   */
 abstract class Function1WithProvenance[[#I1#], O](
-  implicit ct: ClassTag[O],
-  oc: Codec[O]
+  implicit oc: Codec[O]
 ) extends FunctionWithProvenance[O] with Serializable {
   self =>
 
@@ -402,7 +436,7 @@ abstract class Function1WithProvenance[[#I1#], O](
 
       val function = self
 
-      val functionName: String = self.getClass.getName.stripSuffix("$")
+      val functionName: String = self.name
 
       override def toString: String =
         self.getClass.getSimpleName.stripSuffix("$") + inputTuple.toString

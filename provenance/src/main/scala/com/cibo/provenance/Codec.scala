@@ -3,6 +3,9 @@ package com.cibo.provenance
 import io.circe._
 import java.io.Serializable
 
+import scala.reflect.ClassTag
+import scala.reflect.runtime.universe.TypeTag
+
 /**
   * A wrapper around a circe Encoder[T] and Decoder[T].
   *
@@ -10,8 +13,11 @@ import java.io.Serializable
   * @param decoder  A Decoder[T] that matches it.
   * @tparam T       The type of data to be encoded/decoded.
   */
-case class Codec[T](encoder: Encoder[T], decoder: Decoder[T]) extends Serializable
-
+case class Codec[T : ClassTag : TypeTag](encoder: Encoder[T], decoder: Decoder[T]) extends Serializable {
+  def valueClassTag = implicitly[ClassTag[T]]
+  def valueTypeTag = implicitly[TypeTag[T]]
+  def fullClassName = ReflectUtil.classToName(valueClassTag)
+}
 
 object Codec {
   import scala.language.implicitConversions
@@ -23,7 +29,7 @@ object Codec {
     * @tparam T The type of data to be encoded/decoded.
     * @return A Codec[T] created from implicits.
     */
-  implicit def createCodec[T : Encoder : Decoder]: Codec[T] =
+  implicit def createCodec[T : Encoder : Decoder : ClassTag : TypeTag]: Codec[T] =
     Codec(implicitly[Encoder[T]], implicitly[Decoder[T]])
 
   /**
@@ -33,64 +39,10 @@ object Codec {
     * @tparam T   The type of data underlying the underlying Codec
     * @return     a Codec[ Codec[T] ]
     */
-  implicit def selfCodec[T]: Codec[Codec[T]] =
+  implicit def selfCodec[T : ClassTag](implicit tt: TypeTag[Codec[T]], ct: ClassTag[Codec[T]]): Codec[Codec[T]] =
     Codec(new BinaryEncoder[Codec[T]], new BinaryDecoder[Codec[T]])
-}
 
+  implicit def toTypeTag[T](codec: Codec[T]): TypeTag[T] = codec.valueTypeTag
 
-/**
-  * This uses the raw Java binary serialization internally, and puts the byte array into
-  * simple JSON.  It handles the provenance monads that have arbitrary complex depth,
-  * with types known at the base class but arbitrary types in subclasses.
-  *
-  * @tparam T: Some type (Serializable)
-  */
-private class BinaryDecoder[T <: Serializable] extends Decoder[T] with Serializable {
-  // NOTE: This is its own class, wrapping a regular circe encoder, because the
-  // real encoder isn't _itelf_ serializable, and some functions (like map), that
-  // take functions inadvertently serialize the encoders themselves.  This makes
-  // any case like that work seamlessly, and reconstruct with fidelity later without
-  // creating a data payload.
-
-  @transient
-  private lazy val dec =  Decoder.forProduct2("bytes", "length")(getObj[T])
-
-  private def getObj[O](bytes: Array[Byte], length: Int): O =
-    Util.deserializeRaw(bytes)
-
-  def apply(c: HCursor) = dec.apply(c)
-}
-
-
-/**
-  * This uses the raw Java binary serialization internally, and puts the byte array into
-  * simple JSON.  It handles the provenance monads that have arbitrary complex depth,
-  * with types known at the base class but arbitrary types in subclasses.
-  *
-  * @tparam T: Some type (serializable)
-  */
-private class BinaryEncoder[T <: Serializable] extends Encoder[T] with Serializable {
-  // NOTE: This is its own class, wrapping a regular circe encoder, because the
-  // real encoder isn't _itelf_ serializable, and some functions (like map), that
-  // take functions inadvertently serialize the encoders themselves.  This makes
-  // any case like that work seamlessly, and reconstruct with fidelity later without
-  // creating a data payload.
-
-  @transient
-  private lazy val enc: ObjectEncoder[T] =
-    Encoder.forProduct2("bytes", "length") {
-      obj =>
-        val bytes: Array[Byte] =
-          try {
-            Util.getBytesAndDigestRaw(obj)._1
-          } catch {
-            case e: Exception =>
-              val ee = e
-              println(f"Error serializing: $ee")
-              throw e
-          }
-        Tuple2(bytes, bytes.length)
-    }
-
-  def apply(a: T): Json = enc.apply(a)
+  implicit def toClassTag[T](codec: Codec[T]): ClassTag[T] = codec.valueClassTag
 }
