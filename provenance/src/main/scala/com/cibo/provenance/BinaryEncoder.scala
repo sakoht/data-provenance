@@ -24,7 +24,7 @@ class BinaryEncoder[T <: Serializable] extends Encoder[T] with Serializable {
       obj =>
         val bytes: Array[Byte] =
           try {
-            SerialUtil.getBytesAndDigestRaw(obj)._1
+            Codec.getBytesAndDigestRaw(obj)._1
           } catch {
             case e: Exception =>
               val ee = e

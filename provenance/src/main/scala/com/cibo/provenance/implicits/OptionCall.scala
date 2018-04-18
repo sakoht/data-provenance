@@ -8,10 +8,7 @@ package com.cibo.provenance.implicits
   */
 
 import com.cibo.provenance._
-import io.circe.{Decoder, Encoder}
-
 import scala.language.existentials
-import scala.reflect.ClassTag
 
 /**
   * A wrapper for a call that returns an Option[A].

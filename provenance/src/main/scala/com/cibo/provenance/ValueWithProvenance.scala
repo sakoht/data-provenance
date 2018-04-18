@@ -168,9 +168,9 @@ abstract class FunctionCallWithProvenance[O : Codec](var vv: ValueWithProvenance
 
   def outputCodec: Codec[O] = implicitly[Codec[O]]
 
-  def outputClassTag: ClassTag[O] = outputCodec.valueClassTag
+  def outputClassTag: ClassTag[O] = outputCodec.getClassTag
 
-  def outputTypeTag: TypeTag[O] = outputCodec.valueTypeTag
+  def outputTypeTag: TypeTag[O] = outputCodec.getTypeTag
 
   // Abstract interface.  These are implemented in each Function{n}CallSignatureWithProvenance subclass.
 
@@ -215,7 +215,7 @@ abstract class FunctionCallWithProvenance[O : Codec](var vv: ValueWithProvenance
 
   def getInputGroupValuesDigest(implicit rt: ResultTracker): Digest = {
     val digests = inputs.map(_.resolveAndExtractDigest(rt).id).toList
-    SerialUtil.digestObject(digests)
+    Codec.digestObject(digests)
   }
 
   def save(implicit rt: ResultTracker): FunctionCallWithProvenanceDeflated[O] =

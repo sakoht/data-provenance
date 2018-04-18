@@ -29,12 +29,12 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
   def saveOutputValue[T : Codec](obj: T)(implicit tt: universe.TypeTag[Codec[T]], ct: ClassTag[Codec[T]]): Digest = {
     // also a no-op that just calculates the ID and returns it
-    SerialUtil.digestObject(obj)
+    Codec.digestObject(obj)
   }
 
   lazy val saveBuildInfo: Digest = {
     val bi = currentAppBuildInfo
-    val (bytes, digest) = SerialUtil.getBytesAndDigest(bi)
+    val (bytes, digest) = Codec.serialize(bi)
     digest
   }
 

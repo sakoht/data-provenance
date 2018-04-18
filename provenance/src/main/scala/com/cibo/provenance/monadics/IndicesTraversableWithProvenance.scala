@@ -15,9 +15,6 @@ package com.cibo.provenance.monadics
 
 import scala.language.higherKinds
 import com.cibo.provenance._
-import io.circe.{Decoder, Encoder}
-
-import scala.reflect.ClassTag
 
 class IndicesTraversableWithProvenance[S[_], O : Codec](
   implicit hok: implicits.Traversable[S],
@@ -29,7 +26,7 @@ class IndicesTraversableWithProvenance[S[_], O : Codec](
   def impl(s: S[O]): S[Int] = hok.indicesTraversable(s)
 
   override lazy val typeParameterTypeNames: Seq[String] =
-    Seq(hok.outerClassTag, implicitly[Codec[O]].valueClassTag).map(ct => ReflectUtil.classToName(ct))
+    Seq(hok.outerClassTag, implicitly[Codec[O]].getClassTag).map(ct => Codec.classTagToSerializableName(ct))
 }
 
 object IndicesTraversableWithProvenance {

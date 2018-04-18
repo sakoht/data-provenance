@@ -2,8 +2,6 @@ package com.cibo.provenance.implicits
 
 import com.cibo.provenance._
 
-import scala.reflect.ClassTag
-
 /**
   * Wrappers around basic method calls for Options.
   */
@@ -11,7 +9,7 @@ object OptionMethods {
   import com.cibo.provenance.ResultTracker
 
   private def codecsToClassName(codecs: Codec[_]*): Seq[String] =
-    codecs.map(_.fullClassName)
+    codecs.map(_.serializableClassName)
 
   class GetWithProvenance[A](implicit cdsa: Codec[Option[A]], cda: Codec[A]) extends Function1WithProvenance[Option[A], A] {
     val currentVersion: Version = NoVersion

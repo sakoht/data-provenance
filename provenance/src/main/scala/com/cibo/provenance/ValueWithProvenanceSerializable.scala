@@ -28,7 +28,7 @@ sealed trait ValueWithProvenanceSerializable {
 
   @transient
   private def bytesAndDigest: (Array[Byte], Digest) = {
-    SerialUtil.getBytesAndDigest(this)
+    Codec.serialize(this)
   }
 
   def toBytes: Array[Byte] = bytesAndDigest._1
@@ -109,9 +109,9 @@ object FunctionCallWithUnknownProvenanceSerializable {
   def save[O](call: UnknownProvenance[O])(implicit rt: ResultTracker): FunctionCallWithUnknownProvenanceSerializable = {
     implicit val outputClassTag: ClassTag[O] = call.outputClassTag
     implicit val outputCodec: Codec[O] = call.outputCodec
-    implicit val outputTypeTag: TypeTag[O] = outputCodec.valueTypeTag
+    implicit val outputTypeTag: TypeTag[O] = outputCodec.getTypeTag
 
-    val outputClassName = ReflectUtil.classToName(outputClassTag)
+    val outputClassName = Codec.classTagToSerializableName(outputClassTag)
 
     val rts = rt.asInstanceOf[ResultTrackerSimple]
     val valueDigest: Digest = rts.saveOutputValue(call.value)
@@ -147,7 +147,7 @@ case class FunctionCallWithKnownProvenanceSerializableWithInputs(
 ) extends FunctionCallWithKnownProvenanceSerializable {
 
   @transient
-  lazy val inputGroupBytesAndDigest: (Array[Byte], Digest) = SerialUtil.getBytesAndDigest(inputValueDigests.map(_.id))
+  lazy val inputGroupBytesAndDigest: (Array[Byte], Digest) = Codec.serialize(inputValueDigests.map(_.id))
   def inputGroupBytes: Array[Byte] = inputGroupBytesAndDigest._1
   def inputGroupDigest: Digest = inputGroupBytesAndDigest._2
 
@@ -182,7 +182,7 @@ object FunctionCallWithKnownProvenanceSerializableWithInputs {
   def save[O](call: FunctionCallWithProvenance[O])(implicit rt: ResultTracker): FunctionCallWithKnownProvenanceSerializableWithInputs = {
     implicit val outputClassTag: ClassTag[O] = call.outputClassTag
     implicit val outputCodec: Codec[O] = call.outputCodec
-    val outputClassName = ReflectUtil.classToName(outputClassTag)
+    val outputClassName = Codec.classTagToSerializableName(outputClassTag)
 
     val callInSavableForm =
       call.versionValueAlreadyResolved match {
@@ -282,8 +282,8 @@ case class FunctionCallResultWithKnownProvenanceSerializable(
     val call = this.call.load(rt).asInstanceOf[FunctionCallWithProvenance[T]]
     implicit val cd = call.outputCodec
     implicit val ct = call.outputClassTag
-    implicit val tt = cd.valueTypeTag
-    assert(ct == cd.valueClassTag)
+    implicit val tt = cd.getTypeTag
+    assert(ct == cd.getClassTag)
     val bi = BuildInfoBrief(commitId, buildId)
     val output: T = rt.loadValue[T](outputDigest)
     call.newResult(VirtualValue(output)(cd))(bi)
@@ -317,14 +317,14 @@ object FunctionCallResultWithKnownProvenanceSerializable {
     val output = result.output
     implicit val outputCodec: Codec[O] = call.outputCodec
     implicit val outputClassTag: ClassTag[O] = call.outputClassTag
-    implicit val outputTypeTag = outputCodec.valueTypeTag
+    implicit val outputTypeTag = outputCodec.getTypeTag
     val outputDigest = rt.saveOutputValue(output) //result.resolveAndExtractDigest
 
     val resultInSavableForm =
       FunctionCallResultWithKnownProvenanceSerializable(
         callSavedWithInputs.unexpandInputs,
         callSavedWithInputs.inputGroupDigest,
-        SerialUtil.digestObject(result.output(rt)),
+        Codec.digestObject(result.output(rt)),
         result.outputBuildInfo.commitId,
         result.outputBuildInfo.buildId
       )
@@ -344,7 +344,7 @@ case class FunctionCallResultWithUnknownProvenanceSerializable(
   buildId: String
 ) extends FunctionCallResultWithProvenanceSerializable {
 
-  val inputGroupDigest: Digest = SerialUtil.digestObject(List[Digest]())
+  val inputGroupDigest: Digest = Codec.digestObject(List[Digest]())
 
   def load(implicit rt: ResultTracker): FunctionCallResultWithProvenance[_] =
     call.load.resolve

@@ -16,10 +16,6 @@ package com.cibo.provenance.monadics
 
 import scala.language.higherKinds
 import com.cibo.provenance._
-import io.circe.{Decoder, Encoder}
-
-import scala.reflect.ClassTag
-
 
 class IndicesRangeWithProvenance[S[_], A : Codec](
   implicit hok: implicits.Traversable[S],
@@ -31,10 +27,11 @@ class IndicesRangeWithProvenance[S[_], A : Codec](
   def impl(s: S[A]): Range = hok.indicesRange(s)
 
   override lazy val typeParameterTypeNames: Seq[String] =
-    Seq(hok.outerClassTag, implicitly[Codec[A]].valueClassTag).map(ct => ReflectUtil.classToName(ct))
+    Seq(hok.outerClassTag, implicitly[Codec[A]].getClassTag).map(ct => Codec.classTagToSerializableName(ct))
 }
 
 object IndicesRangeWithProvenance {
+  import io.circe.{Decoder, Encoder}
 
   implicit val rangeDecoder: Decoder[Range] =
     Decoder.forProduct3("start", "end", "step")(Range.apply)

@@ -8,12 +8,8 @@ package com.cibo.provenance.implicits
   *
   */
 
-import com.cibo.provenance.monadics._
-import com.cibo.provenance._
-
 import scala.language.higherKinds
-import scala.reflect.ClassTag
-
+import com.cibo.provenance._
 
 class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
   implicit hok: Traversable[S],
@@ -21,6 +17,9 @@ class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
   cdsa: Codec[S[A]],
   cdsi: Codec[S[Int]]
 ) {
+  import com.cibo.provenance.monadics._
+  import scala.reflect.ClassTag
+
   implicit lazy val ctr: ClassTag[Range] = ClassTag(classOf[Range])
 
   def apply(n: ValueWithProvenance[Int]): ApplyWithProvenance[S, A]#Call =

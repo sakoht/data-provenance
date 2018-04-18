@@ -22,7 +22,7 @@ class BinaryDecoder[T <: Serializable] extends Decoder[T] with Serializable {
   private lazy val dec =  Decoder.forProduct2("bytes", "length")(getObj[T])
 
   private def getObj[O](bytes: Array[Byte], length: Int): O =
-    SerialUtil.deserializeRaw(bytes)
+    Codec.deserializeRaw(bytes)
 
   def apply(c: HCursor) = dec.apply(c)
 }

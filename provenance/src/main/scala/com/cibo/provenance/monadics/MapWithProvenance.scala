@@ -8,11 +8,11 @@ package com.cibo.provenance.monadics
   */
 
 import scala.language.higherKinds
-import com.cibo.provenance._
-import scala.reflect.runtime.universe._
 import scala.language.existentials
 
-class MapWithProvenance[A, S[_], B](
+import com.cibo.provenance._
+
+class MapWithProvenance[S[_], A, B](
   implicit hok: implicits.Traversable[S],
   cdb: Codec[B],
   cda: Codec[A],
@@ -24,8 +24,7 @@ class MapWithProvenance[A, S[_], B](
   val currentVersion: Version = NoVersion
 
   override lazy val typeParameterTypeNames: Seq[String] =
-    Seq(cda, cdsa, cdb).map(_.valueClassTag).map(ct => ReflectUtil.classToName(ct))
-
+    Seq(cda, cdsa, cdb).map(_.getClassTag).map(ct => Codec.classTagToSerializableName(ct))
 
   override protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
     // Skip the bulk impl() call and construct the output result from the individual calls.
@@ -55,23 +54,13 @@ class MapWithProvenance[A, S[_], B](
 }
 
 object MapWithProvenance {
-  def apply[A, S[_], B](
+  def apply[S[_], A, B](
     implicit hok: implicits.Traversable[S],
     cdb: Codec[B],
     cda: Codec[A],
     cdsb: Codec[S[B]],
     cdsa: Codec[S[A]],
     cdsi: Codec[S[Int]]
-  ) = new MapWithProvenance[A, S, B]()(hok, cdb, cda, cdsb, cdsa, cdsi)
-
-  def createCodec[A, S[_], B](
-    implicit hok: implicits.Traversable[S],
-    cdb: Codec[B],
-    cda: Codec[A],
-    cdsb: Codec[S[B]],
-    cdsa: Codec[S[A]],
-    cdsi: Codec[S[Int]]
-  ): Codec[MapWithProvenance[A, S, B]] = ???
-
+  ) = new MapWithProvenance[S, A, B]()(hok, cdb, cda, cdsb, cdsa, cdsi)
 
 }

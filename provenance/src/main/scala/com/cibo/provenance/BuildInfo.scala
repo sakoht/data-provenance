@@ -51,7 +51,7 @@ trait BuildInfo extends Serializable {
 
   @transient
   lazy val toBytesAndDigest: (Array[Byte], Digest) =
-    SerialUtil.getBytesAndDigest(this)(BuildInfo.codec)
+    Codec.serialize(this)(BuildInfo.codec)
 
   def toBytes = toBytesAndDigest._1
 

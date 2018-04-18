@@ -230,7 +230,7 @@ trait ResultTracker extends Serializable {
   def loadCodecByType[T : ClassTag : TypeTag](implicit cdcd: Codec[Codec[T]]): Codec[T]
 
   def loadCodecByCodecDigest[T : ClassTag](codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T] = {
-    val valueClassName = ReflectUtil.classToName[T]
+    val valueClassName = Codec.classTagToSerializableName[T]
     loadCodecByClassNameAndCodecDigest[T](valueClassName, codecDigest)
   }
 
@@ -261,8 +261,8 @@ trait ResultTracker extends Serializable {
     */
   def loadValueSerializedDataOption[O : Codec](digest: Digest): Option[Array[Byte]] =
     loadValueSerializedDataByClassNameAndDigestOption(
-      ReflectUtil.classToName[O](
-        implicitly[Codec[O]].valueClassTag
+      Codec.classTagToSerializableName[O](
+        implicitly[Codec[O]].getClassTag
       ),
       digest
     )
@@ -283,7 +283,7 @@ trait ResultTracker extends Serializable {
       case Some(obj) =>
         obj
       case None =>
-        val ct = implicitly[Codec[T]].valueClassTag
+        val ct = implicitly[Codec[T]].getClassTag
         throw new NoSuchElementException(f"Failed to find content for $ct with ID $digest!")
     }
   }

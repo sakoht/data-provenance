@@ -9,10 +9,7 @@ package com.cibo.provenance.implicits
   */
 
 import com.cibo.provenance._
-import io.circe.{Decoder, Encoder}
-
 import scala.language.existentials
-import scala.reflect.ClassTag
 
 class OptionResult[A](result: FunctionCallResultWithProvenance[Option[A]])
   (implicit

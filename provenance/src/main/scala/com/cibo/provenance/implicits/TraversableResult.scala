@@ -8,12 +8,9 @@ package com.cibo.provenance.implicits
   *
   */
 
-import com.cibo.provenance.monadics._
-import com.cibo.provenance.{ResultTracker, _}
-import io.circe.{Decoder, Encoder}
-
 import scala.language.higherKinds
-import scala.reflect.ClassTag
+
+import com.cibo.provenance._
 
 class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
   (implicit
@@ -22,6 +19,8 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
     cdsa: Codec[S[A]],
     cdsi: Codec[S[Int]]
   ) {
+    import com.cibo.provenance.monadics._
+    import scala.reflect.ClassTag
 
     implicit lazy val ctr: ClassTag[Range] = ClassTag(classOf[Range])
 
@@ -31,17 +30,6 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
     def indices: IndicesTraversableWithProvenance[S, A]#Call =
       IndicesTraversableWithProvenance[S, A].apply(result)
 
-    /*
-    def map[B, F <: Function1WithProvenance[A, B] : Codec](f: ValueWithProvenance[F])
-      (implicit
-        ctsb: ClassTag[S[B]],
-        ctb: ClassTag[B],
-        cb: Codec[B],
-        csb: Codec[S[B]]
-      ): MapWithProvenance[A, S, B]#Call =
-        new MapWithProvenance[A, S, B].apply(result, f)
-    */
-
     def map[B, F <: Function1WithProvenance[A, B] : Codec](f: ValueWithProvenance[F])
       (implicit
         ctsb: ClassTag[S[B]],
@@ -50,7 +38,6 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
         csb: Codec[S[B]]
       ): MapWithProvenance[A, S, B]#Call =
       new MapWithProvenance[A, S, B].apply(result, f)
-
 
     def scatter(implicit rt: ResultTracker): S[FunctionCallResultWithProvenance[A]] = {
       val call1: FunctionCallWithProvenance[S[A]] = result.call

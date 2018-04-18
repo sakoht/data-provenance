@@ -73,7 +73,7 @@ class ResultTrackerSimple(
   def loadCallById(callId: Digest): Option[FunctionCallWithProvenanceDeflated[_]] =
     loadBytesOption(s"calls/${callId.id}").map {
       bytes =>
-        SerialUtil.deserialize(bytes)(ValueWithProvenanceSerializable.codec)
+        Codec.deserialize(bytes)(ValueWithProvenanceSerializable.codec)
           .asInstanceOf[FunctionCallWithProvenanceSerializable]
           .wrap
     }
@@ -81,7 +81,7 @@ class ResultTrackerSimple(
   def loadResultById(resultId: Digest): Option[FunctionCallResultWithProvenanceDeflated[_]] =
     loadBytesOption(s"results/${resultId.id}").map {
       bytes =>
-        SerialUtil.deserialize(bytes)(ValueWithProvenanceSerializable.codec)
+        Codec.deserialize(bytes)(ValueWithProvenanceSerializable.codec)
           .asInstanceOf[FunctionCallResultWithProvenanceSerializable]
           .wrap
     }
@@ -100,7 +100,7 @@ class ResultTrackerSimple(
   @transient
   lazy val saveBuildInfo: Digest = {
     val bi = currentAppBuildInfo
-    val (bytes, digest) = SerialUtil.getBytesAndDigest(bi)
+    val (bytes, digest) = Codec.serialize(bi)
     saveBytes(s"commits/${bi.commitId}/builds/${bi.buildId}/${digest.id}", bytes)
     digest
   }
@@ -150,7 +150,7 @@ class ResultTrackerSimple(
     val callId: String = resultSerializable.call.digestOfEquivalentWithInputs.id
 
     val (resultBytes, resultDigest) =
-      SerialUtil.getBytesAndDigest(
+      Codec.serialize(
         resultSerializable.asInstanceOf[ValueWithProvenanceSerializable]
       )(vwpCodec)
 
@@ -294,7 +294,7 @@ class ResultTrackerSimple(
     //val outputClassTag = implicitly[ClassTag[T]]
     //val outputClass: Class[_ <: T] = obj.getClass
     //val ct3 = ClassTag(outputClass)
-    val (bytes, digest) = SerialUtil.getBytesAndDigest(obj, checkForInconsistentSerialization(obj))
+    val (bytes, digest) = Codec.serialize(obj, checkForInconsistentSerialization(obj))
     //val outputClassName = Util.classToName[T]
     saveCodec[T](digest)
     val path = f"data/${digest.id}"
@@ -306,11 +306,11 @@ class ResultTrackerSimple(
   def loadCodecByClassNameAndCodecDigest[T: ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]) = {
   //def loadCodecByClassNameAndCodecDigest[T: ClassTag](valueClassName: String,codecDigest: Digest)(implicittt: TypeTag[Codec[T]],ct: ClassTag[Codec[T]]): Codec[T] = {
     val bytes = loadBytes(f"codecs/$valueClassName/${codecDigest.id}")
-    SerialUtil.deserialize[Codec[T]](bytes)
+    Codec.deserialize[Codec[T]](bytes)
   }
 
   def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Seq[Codec[T]] = {
-    val valueClassName = ReflectUtil.classToName[T]
+    val valueClassName = Codec.classTagToSerializableName[T]
     getListingRecursive(f"data-codecs/${valueDigest.id}/$valueClassName").map {
        codecId =>
         Try(
@@ -325,16 +325,16 @@ class ResultTrackerSimple(
   }
 
   def loadCodecByType[T: ClassTag : TypeTag](implicit cdcd: Codec[Codec[T]]): Codec[T] = {
-    val valueClassName = ReflectUtil.classToName[T]
+    val valueClassName = Codec.classTagToSerializableName[T]
     getListingRecursive(f"codecs/$valueClassName").flatMap {
       path =>
         val bytes = loadBytes(path)
-        Try(SerialUtil.deserialize[Codec[T]](bytes)).toOption
+        Try(Codec.deserialize[Codec[T]](bytes)).toOption
     }.head
   }
 
   def hasValue[T : Codec](obj: T): Boolean =
-    hasValue(SerialUtil.digestObject(obj))
+    hasValue(Codec.digestObject(obj))
 
   def hasValue(digest: Digest): Boolean =
     pathExists(f"data/${digest.id}")
@@ -358,7 +358,7 @@ class ResultTrackerSimple(
             loadValue[O](outputId)(call.outputCodec)
         }
 
-        val outputId2 = SerialUtil.digestObject(output)
+        val outputId2 = Codec.digestObject(output)
         if (outputId2 != outputId) {
           throw new SerializationInconsistencyException(f"Output value saved as $outputId reloads with a digest of $outputId2: $output")
         }
@@ -372,7 +372,7 @@ class ResultTrackerSimple(
   def loadValueOption[T : Codec](digest: Digest): Option[T] =
     loadValueSerializedDataOption[T](digest).map {
       bytes =>
-        SerialUtil.deserialize[T](bytes)
+        Codec.deserialize[T](bytes)
     }
 
   def loadValueSerializedDataByClassNameAndDigestOption(className: String, digest: Digest): Option[Array[Byte]] =
@@ -384,7 +384,7 @@ class ResultTrackerSimple(
     suffixes match {
       case suffix :: Nil =>
         val bytes = loadBytes(f"$basePrefix/$suffix")
-        val build = SerialUtil.deserialize[BuildInfo](bytes)
+        val build = Codec.deserialize[BuildInfo](bytes)
         Some(build)
       case Nil =>
         None
@@ -520,7 +520,7 @@ class ResultTrackerSimple(
       .buildWith[Codec[_], Digest]
 
   private def saveCodec[T : Codec](outputDigest: Digest)(implicit cd: Codec[Codec[T]]): Digest = {
-    val outputClassName = ReflectUtil.classToName[T](implicitly[Codec[T]].valueClassTag)
+    val outputClassName = Codec.classTagToSerializableName[T](implicitly[Codec[T]].getClassTag)
     val codec = implicitly[Codec[T]]
     val codecDigest = Option(codecCache.getIfPresent(codec)) match {
       case None =>
@@ -539,9 +539,9 @@ class ResultTrackerSimple(
   )(implicit cdcd: Codec[Codec[T]]): Digest = {
 
     val codec: Codec[T] = implicitly[Codec[T]]
-    implicit val ct: ClassTag[T] = codec.valueClassTag
+    implicit val ct: ClassTag[T] = codec.getClassTag
     val (codecBytes, codecDigest) =
-      SerialUtil.getBytesAndDigest(codec, checkForInconsistentSerialization(codec))
+      Codec.serialize(codec, checkForInconsistentSerialization(codec))
     saveBytes(f"codecs/$outputClassName/${codecDigest.id}", codecBytes)
     codecDigest
   }
@@ -691,7 +691,7 @@ class ResultTrackerSimple(
 
   protected def loadObject[T : Codec](path: String): T = {
     val bytes = loadBytes(path)
-    SerialUtil.deserialize[T](bytes)
+    Codec.deserialize[T](bytes)
   }
 
   protected def saveObject[T : ClassTag: Codec](path: String, obj: T): String =
@@ -699,13 +699,13 @@ class ResultTrackerSimple(
       case _ : Array[Byte] =>
         throw new FailedSaveException("Attempt to save pre-serialized data?")
       case _ =>
-        val (bytes, digest) = SerialUtil.getBytesAndDigest(obj, checkForInconsistentSerialization(obj))
+        val (bytes, digest) = Codec.serialize(obj, checkForInconsistentSerialization(obj))
         saveBytes(path, bytes)
         digest.id
     }
   
   @transient
-  private lazy val emptyBytesAndDigest = SerialUtil.getBytesAndDigest("")
+  private lazy val emptyBytesAndDigest = Codec.serialize("")
   protected def emptyBytes: Array[Byte] = emptyBytesAndDigest._1
   protected def emptyDigest: Digest = emptyBytesAndDigest._2
   

@@ -36,7 +36,7 @@ case class VirtualValue[T](
       case None =>
         val value: T = serializedDataOption match {
           case Some(blob) =>
-            SerialUtil.deserialize[T](blob)
+            Codec.deserialize[T](blob)
           case None => digestOption match {
             case Some(digest) =>
               rt.loadValueOption[T](digest) match {
@@ -57,7 +57,7 @@ case class VirtualValue[T](
       case None =>
         val serialization = valueOption match {
           case Some(value) =>
-            SerialUtil.getBytesAndDigest(value)._1
+            Codec.serialize(value)._1
           case None =>
             digestOption match {
               case Some(digest) =>
@@ -82,12 +82,12 @@ case class VirtualValue[T](
         case None =>
           valueOption match {
             case Some(value) =>
-              SerialUtil.getBytesAndDigest(value)._1
+              Codec.serialize(value)._1
             case None =>
               throw noDataException
           }
       }
-      val digest = SerialUtil.digestBytes(bytes)
+      val digest = Codec.digestBytes(bytes)
       copy(digestOption = Some(digest)) // do not save the serialization as it is heavey and can be remade on the fly
   }
 

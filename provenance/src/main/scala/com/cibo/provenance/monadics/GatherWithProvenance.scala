@@ -30,20 +30,15 @@ class GatherWithProvenance[E, O <: Seq[E] : Codec, I <: Seq[ValueWithProvenance[
       val wrap = UnknownProvenance(in)
       apply(wrap, UnknownProvenance(currentVersion))
   }
-
-  override lazy val typeParameterTypeNames: Seq[String] =
-    ???
-
-
 }
 
 
 object GatherWithProvenance {
-  // Return the GatherWithProvenance[T] for a given T, where T is some element type in a sequence.
+  // Generate a new GatherWithProvenance[T] for a given T, where T is some element type in a sequence.
   def apply[E](implicit e1: Codec[Seq[E]], e2: Codec[Seq[ValueWithProvenance[E]]]) =
     new GatherWithProvenance[E, Seq[E], Seq[ValueWithProvenance[E]]]
 
-  // Actually call the above on a given Seq.
+  // Call the above on a given Seq.
   def gather[E, O <: Seq[E] : Codec](seq: O)(implicit e2: Codec[Seq[ValueWithProvenance[E]]]) = {
     //implicit val ct2 = implicitly[ClassTag[O]].asInstanceOf[ClassTag[Seq[E]]]
     implicit val cd2 = implicitly[Codec[O]].asInstanceOf[Codec[Seq[E]]]

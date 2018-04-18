@@ -105,8 +105,8 @@ class InflateDeflateSpec extends FunSpec with Matchers {
 
       // MapWithProvenance is nasty b/c the function is itself an input.
       // It uses binary encoding (wrapped in Circe JSON).
-      val loaded1: MapWithProvenance[Int, List, Int]#Call = unknownList.map(incrementInt)
-      val loaded1b: MapWithProvenance[Int, List, Int]#Call = unknownList.map(incrementInt)
+      val loaded1 = unknownList.map(incrementInt)
+      val loaded1b = unknownList.map(incrementInt)
       loaded1.save shouldEqual loaded1b.save
 
       loaded1.functionName shouldEqual

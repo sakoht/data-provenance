@@ -29,7 +29,6 @@ package com.cibo.provenance.implicits
 
 import scala.language.higherKinds
 import scala.reflect.ClassTag
-import scala.reflect.runtime.universe.TypeTag
 
 trait Traversable[S[_]] extends Serializable {
   def map[A, B](f: A => B)(lok: S[A]): S[B]
@@ -41,11 +40,10 @@ trait Traversable[S[_]] extends Serializable {
   def toVector[A](lok: S[A]): Vector[A]
   def outerClassTag[A : ClassTag]: ClassTag[_]
   def innerClassTag[A : ClassTag]: ClassTag[_]
-  def outerTypeTag[A : TypeTag]: TypeTag[_] = ???
-  def innerTypeTag[A : TypeTag]: TypeTag[_] = ???
 }
 
 object Traversable {
+
   implicit object SeqMethods extends Traversable[Seq] with Serializable {
     def map[A, B](f: A => B)(lok: Seq[A]): Seq[B] = lok.map(f)
     def apply[A](idx: Int)(lok: Seq[A]): A = lok.apply(idx)
@@ -54,11 +52,10 @@ object Traversable {
     def toSeq[A](lok: Seq[A]): Seq[A] = lok
     def toList[A](lok: Seq[A]): List[A] = lok.toList
     def toVector[A](lok: Seq[A]): Vector[A] = lok.toVector
-    //def toArray[A](lok: Seq[A]): Array[A] = lok.toArray
     def outerClassTag[A : ClassTag]: ClassTag[Seq[A]] = implicitly[ClassTag[Seq[A]]]
     def innerClassTag[A : ClassTag]: ClassTag[A] = implicitly[ClassTag[A]]
-
   }
+
   implicit object ListMethods extends Traversable[List] with Serializable {
     def map[A, B](f: A => B)(lok: List[A]): List[B] = lok.map(f)
     def apply[A](idx: Int)(lok: List[A]): A = lok.apply(idx)
@@ -67,13 +64,10 @@ object Traversable {
     def toSeq[A](lok: List[A]): Seq[A] = lok
     def toList[A](lok: List[A]): List[A] = lok
     def toVector[A](lok: List[A]): Vector[A] = lok.toVector
-    //def toArray[A](lok: List[A]): Array[A] = lok.toArray
     def outerClassTag[A : ClassTag]: ClassTag[List[A]] = implicitly[ClassTag[List[A]]]
     def innerClassTag[A : ClassTag]: ClassTag[A] = implicitly[ClassTag[A]]
-    override def outerTypeTag[A : TypeTag]: TypeTag[_] = implicitly[TypeTag[A]]
-    override def innerTypeTag[A : TypeTag]: TypeTag[_] = implicitly[TypeTag[A]]
-
   }
+
   implicit object VectorMethods extends Traversable[Vector] with Serializable {
     def map[A, B](f: A => B)(lok: Vector[A]): Vector[B] = lok.map(f)
     def apply[A](idx: Int)(lok: Vector[A]): A = lok.apply(idx)
@@ -82,21 +76,7 @@ object Traversable {
     def toSeq[A](lok: Vector[A]): Seq[A] = lok
     def toList[A](lok: Vector[A]): List[A] = lok.toList
     def toVector[A](lok: Vector[A]): Vector[A] = lok
-    //def toArray[A](lok: Vector[A]): Array[A] = lok.toArray
     def outerClassTag[A : ClassTag]: ClassTag[Vector[A]] = implicitly[ClassTag[Vector[A]]]
     def innerClassTag[A : ClassTag]: ClassTag[A] = implicitly[ClassTag[A]]
   }
-
-  /*
-  implicit object ArrayMethods extends Mappable[Array] with Applicable[Array] {
-    def map[A, B](f: A => B)(va: Array[A]): Array[B] = va.map(f)
-    def apply[A](idx: Int)(va: Array[A]): A = va.apply(idx)
-    def indices[A](lok: Array[A]): Range = lok.indices
-    def indicesWithSameTraversable[A](lok: Seq[A]): Seq[Int] = lok.indices.toArray
-    def toSeq[A](lok: Array[A]): Seq[A] = lok.toSeq
-    def toList[A](lok: Array[A]): List[A] = lok.toList
-    def toVector[A](lok: Array[A]): Vector[A] = lok.toVector
-    //def toArray[A](lok: Array[A]): Array[A] = lok
-  }
-  */
 }

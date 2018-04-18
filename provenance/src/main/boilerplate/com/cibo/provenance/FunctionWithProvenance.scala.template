@@ -13,12 +13,10 @@ package com.cibo.provenance
 import io.circe.{Decoder, Encoder}
 import java.io.Serializable
 
-import com.cibo.provenance.FunctionWithProvenance.{getByName, getByNameAndVersion}
-import com.cibo.provenance.ReflectUtil.{getSymbolName, logger}
-
 import scala.language.existentials
 import scala.language.implicitConversions
 import scala.reflect.ClassTag
+import scala.reflect.runtime.currentMirror
 import scala.reflect.runtime.universe.TypeTag
 
 /**
@@ -47,7 +45,7 @@ abstract class FunctionWithProvenance[O : Codec] extends Serializable {
   // The currentVersion must be a single constant value in any given function instance object.
   val currentVersion: Version
 
-  def outputClassTag = outputCodec.valueClassTag
+  def outputClassTag = outputCodec.getClassTag
   def outputCodec = implicitly[Codec[O]]
 
   // By default only the current version is loadable and runnable.
@@ -108,6 +106,8 @@ abstract class FunctionWithProvenance[O : Codec] extends Serializable {
       baseName+ "[" + typeParameterTypeNames.mkString(",") + "]"
 
   override def toString = f"$name@$currentVersion"
+
+  class ReflectionException(msg: String) extends RuntimeException(msg)
 }
 
 
@@ -137,9 +137,8 @@ object FunctionWithProvenance {
     f
   }
 
-  def getByName(name: String): FunctionWithProvenance[_] = {
-    ReflectUtil.getFunctionByName(name)
-  }
+  def getByName(name: String): FunctionWithProvenance[_] =
+    Codec.functionFromSerializableName(name)
 }
 
 
