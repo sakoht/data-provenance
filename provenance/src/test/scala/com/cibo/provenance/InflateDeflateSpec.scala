@@ -103,25 +103,51 @@ class InflateDeflateSpec extends FunSpec with Matchers {
 
       val unknownList = UnknownProvenance(List(100, 200, 300))
 
-      // MapWithProvenance is nasty b/c the function is itself an input.
-      // It uses binary encoding (wrapped in Circe JSON).
-      val loaded1 = unknownList.map(incrementInt)
-      val loaded1b = unknownList.map(incrementInt)
-      loaded1.save shouldEqual loaded1b.save
+      // MapWithProvenance is challenging b/c the function is itself an input,
+      // and, further, it has type parameters.
+      val inc1 = unknownList.map(incrementInt)
 
-      loaded1.functionName shouldEqual
+      // Ensure it can translate its entire type signature into text.
+      inc1.functionName shouldEqual
         "com.cibo.provenance.monadics.MapWithProvenance[scala.collection.immutable.List,scala.Int,scala.Int]"
 
-      val loaded1result = loaded1.resolve
-      loaded1result.output shouldBe List(101, 201, 301)
+      // Save the call directly.  This usually happens "under the hood" when resolving.
+      val saved1 = inc1.save
+      saved1.data match {
+        case data: FunctionCallWithKnownProvenanceSerializableWithInputs =>
+        case other => throw new RuntimeException("")
+      }
 
-      val saved1 = loaded1.save
-      val loaded2 = saved1.load
+      // Creating a duplicate should create an identical blob of saved call data.
+      val inc2 = unknownList.map(incrementInt)
+      val saved2 = inc2.save
+      saved2 shouldEqual saved1
+
+      // Reload the saved call.
+      val inc3 = saved1.load
+
+      // Nothing has run.
+      rt.hasOutputForCall(inc1) shouldBe false
+      rt.hasOutputForCall(inc2) shouldBe false
+      rt.hasOutputForCall(inc3) shouldBe false
+
+      // Resolve.
+      val result1 = inc1.resolve
+      result1.output shouldBe List(101, 201, 301)
+
+      // All instances know they have a result.
+      rt.hasOutputForCall(inc1) shouldBe true
+      rt.hasOutputForCall(inc2) shouldBe true
+      rt.hasOutputForCall(inc3) shouldBe true
+
+      // These are no-ops.
+      val result2 = inc2.resolve
+      result2.output == result1.output
+      val result3 = inc3.resolve
+      result3.output == result1.output
 
       // Note: something causes these to be equal as strings but not pass the eq check.
-      loaded2.unresolve.toString shouldEqual loaded1.unresolve.toString
-
-      rt.hasOutputForCall(loaded2) shouldBe true
+      inc3.unresolve.toString shouldEqual inc1.unresolve.toString
     }
 
     it("works with functions as output") {
