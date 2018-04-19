@@ -110,7 +110,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       loaded1.save shouldEqual loaded1b.save
 
       loaded1.functionName shouldEqual
-        "com.cibo.provenance.monadics.MapWithProvenance[scala.Int,scala.collection.immutable.List,scala.Int]"
+        "com.cibo.provenance.monadics.MapWithProvenance[scala.collection.immutable.List,scala.Int,scala.Int]"
 
       val loaded1result = loaded1.resolve
       loaded1result.output shouldBe List(101, 201, 301)

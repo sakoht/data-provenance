@@ -35,16 +35,16 @@ class TraversableCall[S[_], A](call: FunctionCallWithProvenance[S[A]])(
       cdsb: Codec[S[B]],
       cdf: Codec[Function1WithProvenance[A, B]],
       cdb: Codec[B]
-    ): MapWithProvenance[A, S, B]#Call =
-      new MapWithProvenance[A, S, B].apply(call, f)
+    ): MapWithProvenance[S, A, B]#Call =
+      new MapWithProvenance[S, A, B].apply(call, f)
 
   def map[B](f: Function1WithProvenance[A, B])
     (implicit
       cdsb: Codec[S[B]],
       cdf: Codec[Function1WithProvenance[A, B]],
       cdb: Codec[B]
-    ): MapWithProvenance[A, S, B]#Call = {
-      new MapWithProvenance[A, S, B].apply(call, UnknownProvenance.apply(f.asInstanceOf[Function1WithProvenance[A, B]]))
+    ): MapWithProvenance[S, A, B]#Call = {
+      new MapWithProvenance[S, A, B].apply(call, UnknownProvenance.apply(f.asInstanceOf[Function1WithProvenance[A, B]]))
   }
 
   def scatter(implicit rt: ResultTracker): S[FunctionCallWithProvenance[A]] = {

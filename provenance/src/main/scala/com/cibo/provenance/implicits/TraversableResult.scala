@@ -36,8 +36,8 @@ class TraversableResult[S[_], A](result: FunctionCallResultWithProvenance[S[A]])
         ctb: ClassTag[B],
         cb: Codec[B],
         csb: Codec[S[B]]
-      ): MapWithProvenance[A, S, B]#Call =
-      new MapWithProvenance[A, S, B].apply(result, f)
+      ): MapWithProvenance[S, A, B]#Call =
+      new MapWithProvenance[S, A, B].apply(result, f)
 
     def scatter(implicit rt: ResultTracker): S[FunctionCallResultWithProvenance[A]] = {
       val call1: FunctionCallWithProvenance[S[A]] = result.call

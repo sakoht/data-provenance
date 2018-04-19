@@ -263,6 +263,7 @@ Shorter Example
 ```scala
 import com.cibo.provenance._
 
+
 object myMkString extends Function2WithProvenance[Int, Double, String] {
   val currentVersion = Version("0.1")
   def impl(i: Int, d: Double): String = i.toString + ":" + d.toString
@@ -274,8 +275,8 @@ object myStrLen extends Function1WithProvenance[String, Int] {
 }
 
 object myApp1 extends App {
-  implicit val bi: BuildInfo = com.cibo.provenance.DummyBuildInfo // use com.mycompany.myapp.BuildInfo
-  implicit val rt: ResultTracker = ResultTrackerSimple("s3://...")
+  implicit val bi: BuildInfo = com.cibo.provenance.BuildInfoDummy // use com.mycompany.myapp.BuildInfo
+  implicit val rt: ResultTracker = ResultTrackerSimple(args(0))   //"s3://mybucket/myroot")
 
   import io.circe.generic.auto._
 

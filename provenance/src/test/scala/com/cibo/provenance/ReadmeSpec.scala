@@ -1,6 +1,7 @@
 package com.cibo.provenance
 
 
+import com.cibo.io.s3.SyncablePath
 import org.scalatest.{FunSpec, Matchers}
 
 class ReadmeSpec extends FunSpec with Matchers {
@@ -45,7 +46,16 @@ object myStrLen extends Function1WithProvenance[String, Int] {
 
 object myApp1 extends App {
   implicit val bi: BuildInfo = com.cibo.provenance.BuildInfoDummy // use com.mycompany.myapp.BuildInfo
-  implicit val rt: ResultTracker = ResultTrackerSimple(args(0))   //"s3://mybucket/myroot")
+
+  // This is what is in the README.
+  //implicit val rt: ResultTracker = ResultTrackerSimple(args(0))   //"s3://mybucket/myroot")
+
+  // This is an alternate actually in the test suite.
+  val testOutputBaseDir: String = TestUtils.testOutputBaseDir
+  val testSubdir = "readme-long"
+  val testDataDir = f"$testOutputBaseDir/$testSubdir"
+  implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+  rt.wipe
 
   import io.circe.generic.auto._
 
