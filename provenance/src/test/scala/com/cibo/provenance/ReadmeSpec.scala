@@ -6,12 +6,14 @@ import org.scalatest.{FunSpec, Matchers}
 
 class ReadmeSpec extends FunSpec with Matchers {
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir
+  implicit val buildInfo: BuildInfo = BuildInfoDummy
 
   describe("the short example in the README") {
     it("runs") {
       val testSubdir = f"readme-short"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
 
       myApp1.main(Array[String](testDataDir))
 
@@ -23,7 +25,8 @@ class ReadmeSpec extends FunSpec with Matchers {
     it("runs") {
       val testSubdir = f"readme-long"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
 
       myApp2.main(Array[String](testDataDir))
 
