@@ -27,7 +27,7 @@ object TestUtils extends LazyLogging with Matchers {
     f"s3://com-cibo-user/" + subdir
 
   // NOTE: Switch to the remote version to manually test on S3. ;)
-  val testOutputBaseDir = localTestOutputBaseDir
+  val testOutputBaseDir = localTestOutputBaseDir //localTestOutputBaseDir
 
   def diffOutputSubdir(subdir: String) = {
     val version =
@@ -81,7 +81,7 @@ object TestUtils extends LazyLogging with Matchers {
 
     } catch {
       case e: Exception =>
-        // For any failure, replae the test content.  This will show up in git status, and it can be committed or not.
+        // For any failure, replace the test content.  This will show up in git status, and it can be committed or not.
         expectedManifestFile.getParentFile.mkdirs()
         logger.error(f"Writing $expectedManifestFile to put in source control.  Reverse this if the change is not intentional.")
         Files.write(Paths.get(expectedManifestFile.getAbsolutePath), newManifestBytes)

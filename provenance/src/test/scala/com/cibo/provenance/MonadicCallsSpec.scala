@@ -127,8 +127,8 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       val call1: FunctionCallWithProvenance[Vector[Int]] = UnknownProvenance(Vector(11, 22, 33))
       val result1: FunctionCallResultWithProvenance[Vector[Int]] = call1.resolve
 
-      val call2a: MapWithProvenance[Int, Vector, Int]#Call = call1.map(MyIncrement)
-      val call2b: MapWithProvenance[Int, Vector, Int]#Call = result1.map(MyIncrement)
+      val call2a: MapWithProvenance[Vector, Int, Int]#Call = call1.map(MyIncrement)
+      val call2b: MapWithProvenance[Vector, Int, Int]#Call = result1.map(MyIncrement)
       call2a.unresolve.toString shouldBe "MapWithProvenance(raw(Vector(11, 22, 33)),raw(com.cibo.provenance.MyIncrement@v0.0))"
       call2b.unresolve.toString shouldBe "MapWithProvenance(raw(Vector(11, 22, 33)),raw(com.cibo.provenance.MyIncrement@v0.0))"
 
@@ -151,7 +151,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
 
       MyIncrement.runCount = 0
 
-      val myResult2: MapWithProvenance[Int, Seq, Int]#Call = myResult1.map(MyIncrement)
+      val myResult2: MapWithProvenance[Seq, Int, Int]#Call = myResult1.map(MyIncrement)
       MakeDummyOutputList.runCount shouldBe 1
       MyIncrement.runCount shouldBe 0
 
