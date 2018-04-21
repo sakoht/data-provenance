@@ -12,10 +12,7 @@ import com.cibo.provenance._
 import scala.language.existentials
 
 class OptionResult[A](result: FunctionCallResultWithProvenance[Option[A]])
-  (implicit
-    cdsa: Codec[Option[A]],
-    cda: Codec[A]
-  ) {
+  (implicit cdsa: Codec[Option[A]], cda: Codec[A]) {
 
   def get(implicit rt: ResultTracker) = result.call.get.resolve
 
@@ -23,11 +20,12 @@ class OptionResult[A](result: FunctionCallResultWithProvenance[Option[A]])
 
   def nonEmpty(implicit rt: ResultTracker) = result.call.nonEmpty.resolve
 
-  def map[B : Codec](
-    f: ValueWithProvenance[Function1WithProvenance[A, B]]
-  )(
+  def map[B : Codec, F <: Function1WithProvenance[A, B]](f: F)(
     implicit rt: ResultTracker,
-    ocb: Codec[Option[B]]
-  ) =
+    cdb: Codec[Option[B]],
+    cdf: Codec[F]
+  ) = {
+    implicit val cdf2: Codec[Function1WithProvenance[A,B]] = cdf.asInstanceOf[Codec[Function1WithProvenance[A,B]]]
     result.call.map(f).resolve
+  }
 }

@@ -1,7 +1,6 @@
 package com.cibo.provenance
 
 import com.cibo.provenance.FunctionCallWithProvenance.TraversableCallExt
-import com.cibo.provenance.implicits.OptionMethods
 import org.scalatest.{FunSpec, Matchers}
 
 /**
@@ -54,12 +53,10 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       val s: FunctionCallWithProvenance[Seq[Int]] = UnknownProvenance(Seq(11, 22, 33))
       val l: FunctionCallWithProvenance[List[Int]] = UnknownProvenance(List(11, 22, 33))
       val v: FunctionCallWithProvenance[Vector[Int]] = UnknownProvenance(Vector(11, 22, 33))
-      //val a: FunctionCallWithProvenance[Array[Int]] = UnknownProvenance(Array(11, 22, 33))
 
       s.resolve.output shouldBe Seq(11, 22, 33)
       l.resolve.output shouldBe List(11, 22, 33)
       v.resolve.output shouldBe Vector(11, 22, 33)
-      //a.resolve.output shouldBe Array(11, 22, 33)
 
       // Note: this only tests whether the methods are recognized by the compiler.
       // Other tests go into detail about results.
@@ -81,13 +78,6 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       v.map(MyIncrement)
       v(2)
       v.scatter
-
-      // Unusual behavior w/ Array.  Fix.
-      //a.apply(2)
-      //a.indices
-      //a.map(MyIncrement)
-      //a(2)
-      //a.scatter
     }
 
     it("should never run when selecting an element with apply(), and only run once after resolving some element") {
@@ -247,8 +237,8 @@ class MonadicCallsSpec extends FunSpec with Matchers {
         n1p.get.resolve
       }
 
-      //val s2p = s1p.map(UnknownProvenance(AppendSuffix))
-      //s2p.resolve.output.get shouldBe "hello-mysuffix"
+      val s2p = s1p.map(AppendSuffix)
+      s2p.resolve.output.get shouldBe "hello-mysuffix"
     }
   }
 }

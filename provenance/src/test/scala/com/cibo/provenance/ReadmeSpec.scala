@@ -16,8 +16,6 @@ class ReadmeSpec extends FunSpec with Matchers {
       rt.wipe
 
       myApp1.main(Array[String](testDataDir))
-
-      TestUtils.diffOutputSubdir(testSubdir)
     }
   }
 
@@ -29,8 +27,6 @@ class ReadmeSpec extends FunSpec with Matchers {
       rt.wipe
 
       myApp2.main(Array[String](testDataDir))
-
-      TestUtils.diffOutputSubdir(testSubdir)
     }
   }
 }

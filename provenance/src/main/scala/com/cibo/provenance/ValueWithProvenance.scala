@@ -125,13 +125,6 @@ object FunctionCallWithProvenance {
       cdsa: Codec[S[A]],
       cdsi: Codec[S[Int]]
     ) extends TraversableCall[S, A](call)(hok, cda, cdsa, cdsi)
-
-
-  implicit def createDecoder[O]: Decoder[FunctionCallWithProvenance[O]] =
-    ??? //new BinaryDecoder[FunctionCallWithProvenance[O]]
-
-  implicit def createEncoder[O]: Encoder[FunctionCallWithProvenance[O]] =
-    ??? //new BinaryEncoder[FunctionCallWithProvenance[O]]
 }
 
 

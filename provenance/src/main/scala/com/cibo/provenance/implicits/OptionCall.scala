@@ -8,6 +8,7 @@ package com.cibo.provenance.implicits
   */
 
 import com.cibo.provenance._
+
 import scala.language.existentials
 
 /**
@@ -28,6 +29,24 @@ class OptionCall[A](call: FunctionCallWithProvenance[Option[A]])(implicit cdsa: 
 
   def nonEmpty = new NonEmptyWithProvenance[A].apply(call)
 
-  def map[B : Codec](f: ValueWithProvenance[Function1WithProvenance[A, B]])(implicit bc: Codec[Option[B]]) =
+  //def map[B : Codec](f: ValueWithProvenance[Function1WithProvenance[A, B]])(implicit bc: Codec[Option[B]]) =
+  //  new MapWithProvenance[A, B].apply(call, f)
+
+  def map[B](f: ValueWithProvenance[Function1WithProvenance[A, B]])
+    (implicit
+      cdsb: Codec[Option[B]],
+      cdf: Codec[Function1WithProvenance[A, B]],
+      cdb: Codec[B]
+    ): MapWithProvenance[A, B]#Call = {
     new MapWithProvenance[A, B].apply(call, f)
+  }
+
+  def map[B](f: Function1WithProvenance[A, B])
+    (implicit
+      cdsb: Codec[Option[B]],
+      cdf: Codec[Function1WithProvenance[A, B]],
+      cdb: Codec[B]
+    ): MapWithProvenance[A, B]#Call = {
+    new MapWithProvenance[A, B].apply(call, UnknownProvenance.apply(f.asInstanceOf[Function1WithProvenance[A, B]]))
+  }
 }
