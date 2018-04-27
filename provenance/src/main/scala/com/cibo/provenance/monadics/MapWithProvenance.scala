@@ -63,5 +63,4 @@ object MapWithProvenance {
     cdsa: Codec[S[A]],
     cdsi: Codec[S[Int]]
   ) = new MapWithProvenance[S, A, B]()(hok, cdb, cda, cdsb, cdsa, cdsi)
-
 }

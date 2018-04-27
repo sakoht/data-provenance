@@ -110,7 +110,7 @@ object Codec extends LazyLogging {
         if (!name.contains("[")) {
           throw new RuntimeException(
             f"Error loading FunctionWithProvenance $name: " +
-              f"It must either be is not a singleton or embed type parameters!"
+              f"should either be a singleton or a class with type parameters in the name and no args to construct!"
           )
         }
         val tree = toolbox.parse("new " + name)
