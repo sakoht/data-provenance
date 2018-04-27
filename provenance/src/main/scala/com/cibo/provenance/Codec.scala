@@ -106,7 +106,9 @@ object Codec extends LazyLogging {
       obj.asInstanceOf[FunctionWithProvenance[_]]
     } catch {
       case e: Exception if e.isInstanceOf[java.lang.ClassCastException] | e.isInstanceOf[java.lang.ClassNotFoundException] =>
-        // We fall back to using the compiler itself only
+        // We fall back to using the compiler itself only when re-vivifying a function object as data,
+        // _and_ the function is itself parameterized.  Normal workflow activity never goes here, only
+        // introspection.
         if (!name.contains("[")) {
           throw new RuntimeException(
             f"Error loading FunctionWithProvenance $name: " +
