@@ -10,7 +10,6 @@
 package com.cibo.provenance.example1
 
 import com.cibo.provenance._
-import com.cibo.provenance.tracker.ResultTrackerSimple
 import com.typesafe.scalalogging.LazyLogging
 import org.slf4j.LoggerFactory
 

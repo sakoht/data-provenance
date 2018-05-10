@@ -1,6 +1,6 @@
 package com.cibo.provenance
 
-import com.cibo.provenance.tracker.ResultTrackerNone
+import com.cibo.provenance.exceptions.{InvalidVersionException, UnknownVersionException, UnrunnableVersionException}
 import org.scalatest.{FunSpec, Matchers}
 
 /**
@@ -11,28 +11,28 @@ import org.scalatest.{FunSpec, Matchers}
 
 class MultipleVersionsAtATimeSpec extends FunSpec with Matchers {
 
-  implicit val buildInfo: BuildInfo = DummyBuildInfo
+  implicit val buildInfo: BuildInfo = BuildInfoDummy
   implicit val storage: ResultTrackerNone = ResultTrackerNone()
 
   describe("Functions with provenance support one 'currentVersion' by default") {
 
-    object myFuncWithOneVersion extends Function2WithProvenance[String, Double, Int] {
+    object myFuncWithOneVersion extends Function2WithProvenance[Double, Int, String] {
       val currentVersion: Version = Version("1.0")
       def impl(d: Double, n: Int): String = d.toString + "," + n.toString
     }
 
     it("should use the current version by default, track it, and run correctly.") {
       val s1 = myFuncWithOneVersion(1.23, 3)
-      s1.getVersionValue shouldEqual Version("1.0")
+      s1.versionValue shouldEqual Version("1.0")
 
       val r1 = s1.run
       r1.output shouldEqual "1.23,3"
-      r1.provenance.getVersionValue shouldEqual Version("1.0")
+      r1.call.versionValue shouldEqual Version("1.0")
     }
 
     it("should construct with other version values, but throw an exception if something besides the currentVersion is run.") {
       val s1 = myFuncWithOneVersion(1.23, 3, Version("9.99"))
-      s1.getVersionValue shouldEqual Version("9.99")
+      s1.versionValue shouldEqual Version("9.99")
 
       intercept[InvalidVersionException[_]] { s1.run }
     }
@@ -40,7 +40,7 @@ class MultipleVersionsAtATimeSpec extends FunSpec with Matchers {
 
   describe("Functions with provenance should support loading older versions that do not run any longer.") {
 
-    object myFuncWithOldVersions extends Function2WithProvenance[String, Double, Int] {
+    object myFuncWithOldVersions extends Function2WithProvenance[Double, Int, String] {
       val currentVersion: Version = Version("1.0")
       override lazy val loadableVersions: Seq[Version] = Seq("1.0", "0.9", "0.8").map(v => Version(v))
 
@@ -51,7 +51,7 @@ class MultipleVersionsAtATimeSpec extends FunSpec with Matchers {
       myFuncWithOldVersions.loadableVersions.foreach {
         version =>
           val s1 = myFuncWithOldVersions(1.23, 3, version)
-          s1.getVersionValue shouldEqual version
+          s1.versionValue shouldEqual version
       }
     }
 
@@ -75,7 +75,7 @@ class MultipleVersionsAtATimeSpec extends FunSpec with Matchers {
 
   describe("Functions with provenance should let the developer explicitly support running alternate in the same code base.") {
 
-    object myFuncWithOldVersions extends Function2WithProvenance[String, Double, Int] {
+    object myFuncWithOldVersions extends Function2WithProvenance[Double, Int, String] {
       val currentVersion: Version = Version("1.3")
       override lazy val loadableVersions: Seq[Version] = Seq("1.0", "1.1", "1.2", "1.3").map(n => Version(n))
       override lazy val runnableVersions: Seq[Version] = Seq("1.1", "1.2", "1.3").map(n => Version(n))

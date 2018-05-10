@@ -11,7 +11,7 @@ buildInfoPackage := "com.cibo.provenance.example1"
 buildInfoObject := "BuildInfo"
 
 libraryDependencies ++= Seq(
-    "com.cibo" %% "provenance" % "0.1-SNAPSHOT" withSources(),
+    "com.cibo" %% "provenance" % "0.2-SNAPSHOT" withSources(),
 )
 
 // This presumes the project uses git for source control.
@@ -37,7 +37,7 @@ buildInfoKeys := Seq[BuildInfoKey](
 buildInfoOptions ++= Seq(
   BuildInfoOption.ToJson,
   BuildInfoOption.BuildTime,
-  BuildInfoOption.Traits("com.cibo.provenance.GitBuildInfo")
+  BuildInfoOption.Traits("com.cibo.provenance.BuildInfoGit")
 )
 
 enablePlugins(BuildInfoPlugin)

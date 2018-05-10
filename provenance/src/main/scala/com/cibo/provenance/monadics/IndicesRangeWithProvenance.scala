@@ -13,19 +13,43 @@ package com.cibo.provenance.monadics
   *
   */
 
-import scala.language.higherKinds
-import com.cibo.provenance.{implicits, _}
 
-class IndicesRangeWithProvenance[S[_], O](implicit hok: implicits.Traversable[S]) extends Function1WithProvenance[Range, S[O]]  {
+import scala.language.higherKinds
+import com.cibo.provenance._
+
+class IndicesRangeWithProvenance[S[_], A : Codec](
+  implicit hok: implicits.Traversable[S],
+  oc: Codec[Range]
+) extends Function1WithProvenance[S[A], Range]  {
+
   val currentVersion: Version = NoVersion
-  def impl(s: S[O]): Range = hok.indicesRange(s)
+
+  def impl(s: S[A]): Range = hok.indicesRange(s)
+
+  override lazy val typeParameterTypeNames: Seq[String] =
+    Seq(hok.outerClassTag, implicitly[Codec[A]].getClassTag).map(ct => Codec.classTagToSerializableName(ct))
 }
 
 object IndicesRangeWithProvenance {
-  def apply[S[_], A](implicit converter: implicits.Traversable[S]) = new IndicesRangeWithProvenance[S, A]
+  import io.circe.{Decoder, Encoder}
+
+  implicit val rangeDecoder: Decoder[Range] =
+    Decoder.forProduct3("start", "end", "step")(Range.apply)
+
+  implicit val rangeEncoder: Encoder[Range] =
+    Encoder.forProduct3("start", "end", "step") {
+      obj => Tuple3(obj.start, obj.end, obj.step)
+    }
+
+  implicit val rangeCodec: Codec[Range] = Codec(rangeEncoder, rangeDecoder)
+
+  def apply[S[_], A : Codec](implicit converter: implicits.Traversable[S]) =
+    new IndicesRangeWithProvenance[S, A]
 }
 
-object IndicesOfRangeWithProvenance extends Function1WithProvenance[Range, Range] {
+object IndicesOfRangeWithProvenance extends Function1WithProvenance[Range, Range]()(
+  IndicesRangeWithProvenance.rangeCodec
+) {
   val currentVersion: Version = NoVersion
   def impl(range: Range): Range = range.indices
 }

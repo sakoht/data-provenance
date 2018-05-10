@@ -14,13 +14,22 @@ package com.cibo.provenance.monadics
   */
 
 import scala.language.higherKinds
-import com.cibo.provenance.{Function1WithProvenance, NoVersion, Version, implicits}
+import com.cibo.provenance._
 
-class IndicesTraversableWithProvenance[S[_], O](implicit hok: implicits.Traversable[S]) extends Function1WithProvenance[S[Int], S[O]]  {
+class IndicesTraversableWithProvenance[S[_], O : Codec](
+  implicit hok: implicits.Traversable[S],
+  cdsi: Codec[S[Int]]
+) extends Function1WithProvenance[S[O], S[Int]]  {
+
   val currentVersion: Version = NoVersion
+
   def impl(s: S[O]): S[Int] = hok.indicesTraversable(s)
+
+  override lazy val typeParameterTypeNames: Seq[String] =
+    Seq(hok.outerClassTag, implicitly[Codec[O]].getClassTag).map(ct => Codec.classTagToSerializableName(ct))
 }
 
 object IndicesTraversableWithProvenance {
-  def apply[S[_], A](implicit converter: implicits.Traversable[S]) = new IndicesTraversableWithProvenance[S, A]
+  def apply[S[_], A : Codec](implicit hok: implicits.Traversable[S], cdsi: Codec[S[Int]]) =
+    new IndicesTraversableWithProvenance[S, A]
 }

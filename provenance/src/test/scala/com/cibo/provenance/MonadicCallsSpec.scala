@@ -9,25 +9,22 @@ import org.scalatest.{FunSpec, Matchers}
 
 
 class MonadicCallsSpec extends FunSpec with Matchers {
-  import java.io.File
-  import org.apache.commons.io.FileUtils
-
   import com.cibo.io.s3.SyncablePath
-  import com.cibo.provenance.tracker._
   import com.cibo.provenance.monadics._
 
   val outputBaseDir: String = TestUtils.testOutputBaseDir
-  implicit val buildInfo: BuildInfo = DummyBuildInfo
+  implicit val buildInfo: BuildInfo = BuildInfoDummy
 
   describe("Calls and results that return a Traversable") {
 
     it("handle granularity shifts") {
       val subDir = "monadic-calls"
       val testDataDir = f"$outputBaseDir/$subDir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))
+      
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
 
-      val a = MakeDummyOutputList() // (11, 22, 33, 44)
+      val a: MakeDummyOutputList.Call = MakeDummyOutputList() // (11, 22, 33, 44)
       val b = a.map(MyIncrement)    // (12, 23, 34, 45)
       val c = b.map(MyIncrement)    // (13, 24, 35, 46)
       val d = c.map(MyIncrement)    // (14, 25, 36, 47)
@@ -56,12 +53,10 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       val s: FunctionCallWithProvenance[Seq[Int]] = UnknownProvenance(Seq(11, 22, 33))
       val l: FunctionCallWithProvenance[List[Int]] = UnknownProvenance(List(11, 22, 33))
       val v: FunctionCallWithProvenance[Vector[Int]] = UnknownProvenance(Vector(11, 22, 33))
-      //val a: FunctionCallWithProvenance[Array[Int]] = UnknownProvenance(Array(11, 22, 33))
 
       s.resolve.output shouldBe Seq(11, 22, 33)
       l.resolve.output shouldBe List(11, 22, 33)
       v.resolve.output shouldBe Vector(11, 22, 33)
-      //a.resolve.output shouldBe Array(11, 22, 33)
 
       // Note: this only tests whether the methods are recognized by the compiler.
       // Other tests go into detail about results.
@@ -83,20 +78,15 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       v.map(MyIncrement)
       v(2)
       v.scatter
-
-      // Unusual behavior w/ Array.  Fix.
-      //a.apply(2)
-      //a.indices
-      //a.map(MyIncrement)
-      //a(2)
-      //a.scatter
     }
 
     it("should never run when selecting an element with apply(), and only run once after resolving some element") {
       val subDir = "mappable-calls-are-dry"
       val testDataDir = f"$outputBaseDir/$subDir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))
+
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
+
       MakeDummyOutputList.runCount = 0
 
       val myCall: FunctionCallWithProvenance[Seq[Int]] = MakeDummyOutputList()
@@ -127,8 +117,8 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       val call1: FunctionCallWithProvenance[Vector[Int]] = UnknownProvenance(Vector(11, 22, 33))
       val result1: FunctionCallResultWithProvenance[Vector[Int]] = call1.resolve
 
-      val call2a: MapWithProvenance[Int, Int, Vector]#Call = call1.map(MyIncrement)
-      val call2b: MapWithProvenance[Int, Int, Vector]#Call = result1.map(MyIncrement)
+      val call2a: MapWithProvenance[Vector, Int, Int]#Call = call1.map(MyIncrement)
+      val call2b: MapWithProvenance[Vector, Int, Int]#Call = result1.map(MyIncrement)
       call2a.unresolve.toString shouldBe "MapWithProvenance(raw(Vector(11, 22, 33)),raw(com.cibo.provenance.MyIncrement@v0.0))"
       call2b.unresolve.toString shouldBe "MapWithProvenance(raw(Vector(11, 22, 33)),raw(com.cibo.provenance.MyIncrement@v0.0))"
 
@@ -141,8 +131,9 @@ class MonadicCallsSpec extends FunSpec with Matchers {
     it("maps efficiently") {
       val subDir = "mappable-results-map"
       val testDataDir = f"$outputBaseDir/$subDir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
+
       MakeDummyOutputList.runCount = 0
 
       val myResult1: MakeDummyOutputList.Result = MakeDummyOutputList().resolve
@@ -150,7 +141,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
 
       MyIncrement.runCount = 0
 
-      val myResult2: MapWithProvenance[Int, Int, Seq]#Call = myResult1.map(MyIncrement)
+      val myResult2: MapWithProvenance[Seq, Int, Int]#Call = myResult1.map(MyIncrement)
       MakeDummyOutputList.runCount shouldBe 1
       MyIncrement.runCount shouldBe 0
 
@@ -195,8 +186,8 @@ class MonadicCallsSpec extends FunSpec with Matchers {
     it("handles `scatter` with efficient pass-through to the underling implementation") {
       val subDir = "mappable-results-scatter"
       val testDataDir = f"$outputBaseDir/$subDir"
-      FileUtils.deleteDirectory(new File(testDataDir))
-      implicit val rt: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
 
       MakeDummyOutputList.runCount = 0
 
@@ -241,18 +232,23 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       n1p.nonEmpty.resolve.output shouldBe false
 
       s1p.get.resolve.output shouldBe "hello"
+
       intercept[Exception] {
         n1p.get.resolve
       }
 
-      val s2p: FunctionCallWithProvenance.OptionalCallExt[String]#MapWithProvenance[String]#Call = s1p.map(AppendSuffix)
+      val s2p = s1p.map(AppendSuffix)
+      s2p.resolve.output.get shouldBe "hello-mysuffix"
     }
   }
 }
 
 object MakeDummyOutputList extends Function0WithProvenance[Seq[Int]] {
   val currentVersion = Version("0.0")
+
+  @transient
   var runCount: Int = 0 // warning: var
+
   def impl = {
     runCount += 1
     Seq(11, 22, 33, 44)
@@ -261,14 +257,17 @@ object MakeDummyOutputList extends Function0WithProvenance[Seq[Int]] {
 
 object MyIncrement extends Function1WithProvenance[Int, Int] {
   val currentVersion = Version("0.0")
+
+  @transient
   var runCount: Int = 0 // warning: var
+
   def impl(x: Int) = {
     runCount += 1
     x + 1
   }
 }
 
-object CountList extends Function1WithProvenance[Int, Seq[Int]] {
+object CountList extends Function1WithProvenance[Seq[Int], Int] {
   val currentVersion: Version = Version("0.1")
   def impl(in: Seq[Int]) = {
     println(in)
@@ -276,7 +275,7 @@ object CountList extends Function1WithProvenance[Int, Seq[Int]] {
   }
 }
 
-object SumValues extends Function1WithProvenance[Int, Seq[Int]] {
+object SumValues extends Function1WithProvenance[Seq[Int], Int] {
   val currentVersion: Version = Version("0.1")
   def impl(in: Seq[Int]) = in.sum
 }

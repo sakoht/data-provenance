@@ -1,0 +1,116 @@
+package com.cibo.provenance
+
+import scala.language.implicitConversions
+import scala.reflect.ClassTag
+import scala.reflect.runtime.universe.TypeTag
+import io.circe._
+
+/**
+  * Created by ssmith on 9/12/17.
+  *
+  * Note: The base class FunctionCallWithProvenance[O] is defined in VirtualValue.scala.
+  * Since VirtualValue[T] is a sealed trait, all subclasses must be in that file.
+  *
+  * This template file implements the 22 sub-classes Function{0..21} of call.
+  */
+
+/**
+  * This is a parameter-type specific subclass of FunctionCallWithProvenance[O].
+  *
+  * It is an intermediate class above `Function1WithProvenance.Call`, which is
+  * in turn used by application-defined subclases of `Function1WithProvenance`.
+  * These intermediates are only directly referenced by internal classes.
+  * Applications should reference `MyFunction.Call` for full precision.
+  *
+  * @tparam O           The type of the output.
+  *
+  * @param v:           The version of the Function0WithProvenance[O] being called.
+  * @param implVersion: A lambda that contains the actual execution logic (cross-version).
+  */
+abstract class Function0CallWithProvenance[O : Codec](v: ValueWithProvenance[Version])(implVersion: (Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
+
+  def inputs: Seq[ValueWithProvenance[_]] = Seq.empty
+
+  // NOTE: Function0 has no inputTuple method, since there is no Tuple0.
+
+  // NOTE: In most cases these methods are overridden by FunctionNWithProvenance.Call to return
+  // the same object, but with a more specific known type.
+
+  def resolveInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+    nocopy(duplicate(v.resolve), this)
+
+  def unresolveInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+    nocopy(duplicate(v.unresolve), this)
+
+  def loadInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+    nocopy(duplicate(v.load), this)
+
+  def loadRecurse(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+    nocopy(duplicate(v.loadRecurse), this)
+
+  def saveInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
+    nocopy(duplicate(v.load), this)
+
+  /*
+  def run(implicit rt: ResultTracker): Function0CallResultWithProvenance[O] = {
+    val o: O = implVersion(versionValue)
+    new Function0CallResultWithProvenance(this, VirtualValue(o))(rt.currentAppBuildInfo)
+  }
+  */
+
+  def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): FunctionCallResultWithProvenance[O]
+
+  // NOTE: This is implemented as Product.copy in the case-class subclasses.
+  def duplicate(v: ValueWithProvenance[Version] = v): Function0CallWithProvenance[O]
+}
+
+[1..21#
+/**
+  * This is a parameter-type specific subclass of FunctionCallWithProvenance[O].
+  *
+  * It is an intermediate class above `Function1WithProvenance.Call`, which is
+  * in turn used by application-defined subclases of `Function1WithProvenance`.
+  * These intermediates are only directly referenced by internal classes.
+  * Applications should reference MyFunction.Call for full precision.
+  *
+  * @tparam O:          The type of the output.
+  * [#@tparam I1:         The type of input 1.#
+  * ]
+  *
+  * @param v:           The version of the Function1WithProvenance[O] being called.
+  * @param implVersion: A lambda that contains the actual execution logic, cross-version.
+  */
+abstract class Function1CallWithProvenance[[#I1#], O : Codec]([#i1: ValueWithProvenance[_ <: I1]#], v: ValueWithProvenance[Version])(implVersion: ([#I1#], Version) => O) extends FunctionCallWithProvenance[O](v) with Serializable {
+
+  def inputs: Seq[ValueWithProvenance[_]] = Seq([#i1#])
+
+  def inputTuple: Tuple1[[#ValueWithProvenance[_ <: I1]#]] = Tuple1([#i1#])
+
+  // NOTE: In most cases these methods are overridden by FunctionNWithProvenance.Call to return
+  // the same object, but with a more specific known type.
+
+  def resolveInputs(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
+    nocopy(duplicate([#i1.resolve#], v.resolve), this)
+
+  def unresolveInputs(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
+    nocopy(duplicate([#i1.unresolve#], v.unresolve), this)
+
+  def loadInputs(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
+    nocopy(duplicate([#i1.load#], v.load), this)
+
+  def loadRecurse(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
+    nocopy(duplicate([#i1.loadRecurse#], v.load.loadRecurse), this)
+
+  def saveInputs(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
+    nocopy(duplicate([#i1.save#], v.load), this)
+
+  def run(implicit rt: ResultTracker): Function1CallResultWithProvenance[[#I1#], O]
+
+  def newResult(value: VirtualValue[O])(implicit bi: BuildInfo): Function1CallResultWithProvenance[[#I1#], O]
+
+  // NOTE: This is implemented as Product.copy in the case-class subclasses.
+  def duplicate([#i1: ValueWithProvenance[_ <: I1]#] = i1, v: ValueWithProvenance[Version] = v): Function1CallWithProvenance[[#I1#], O]
+}#
+
+]
+

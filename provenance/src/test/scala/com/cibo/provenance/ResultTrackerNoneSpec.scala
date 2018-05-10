@@ -1,10 +1,5 @@
-  package com.cibo.provenance
+package com.cibo.provenance
 
-import java.io.File
-
-import com.cibo.io.s3.SyncablePath
-import com.cibo.provenance.tracker.{ResultTrackerNone, ResultTrackerSimple}
-import org.apache.commons.io.FileUtils
 import org.scalatest.{FunSpec, Matchers}
 
 /**
@@ -15,7 +10,7 @@ class ResultTrackerNoneSpec extends FunSpec with Matchers {
 
   describe("The null ResultTracker") {
 
-    implicit val buildInfo: BuildInfo = DummyBuildInfo
+    implicit val buildInfo: BuildInfo = BuildInfoDummy
     implicit val noTracking: ResultTrackerNone = ResultTrackerNone()
 
     it("causes functions re-run every time to produce results.") {
@@ -36,7 +31,6 @@ class ResultTrackerNoneSpec extends FunSpec with Matchers {
 
       val c3 = AddTwoInts(c1, c2)
       val r3 = c3.run
-      r3.call shouldBe c3
       val cnt3 = AddTwoInts.runCount
       cnt3 shouldBe 5 // re-runs s1 and s2, then runs s3
 

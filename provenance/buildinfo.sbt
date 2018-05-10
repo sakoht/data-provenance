@@ -24,7 +24,7 @@ buildInfoOptions ++=
   Seq(
     BuildInfoOption.ToJson,
     BuildInfoOption.BuildTime,
-    BuildInfoOption.Traits("com.cibo.provenance.GitBuildInfo")
+    BuildInfoOption.Traits("com.cibo.provenance.BuildInfoGit")
   )
 
 enablePlugins(BuildInfoPlugin)

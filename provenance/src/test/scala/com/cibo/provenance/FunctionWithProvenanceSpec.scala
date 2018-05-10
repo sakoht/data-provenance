@@ -1,9 +1,7 @@
 package com.cibo.provenance
 
-import com.cibo.provenance.tracker.{ResultTracker, ResultTrackerNone}
 import org.scalatest.{FunSpec, Matchers}
 import org.slf4j.{Logger, LoggerFactory}
-
 
 /**
   * Created by ssmith on 5/11/17.
@@ -20,7 +18,7 @@ object MultiplyInts extends Function2WithProvenance[Int, Int, Int] {
   def impl(a: Int, b: Int): Int = a * b
 }
 
-object myFunc extends Function2WithProvenance[String, Double, Int] {
+object myFunc extends Function2WithProvenance[Double, Int, String] {
   val currentVersion: Version = Version("3.5")
   def impl(d: Double, n: Int): String = (1 to n).map(_ => d.toString).mkString(",")
 }
@@ -31,7 +29,7 @@ class FunctionWithProvenanceSpec extends FunSpec with Matchers {
 
   // Use a dummy result tracker that stores nothing, re-runs everything.
   // Set the implicit BuildInfo to the DummyBuildInfo which uses a fake git commit and build ID.
-  implicit val rt: ResultTracker = ResultTrackerNone()(currentBuildInfo = DummyBuildInfo)
+  implicit val rt: ResultTracker = ResultTrackerNone()(currentAppBuildInfo = BuildInfoDummy)
 
   describe("functions with provenance") {
     it("should work with raw/primitive inputs") {
@@ -40,7 +38,7 @@ class FunctionWithProvenanceSpec extends FunSpec with Matchers {
 
       result.output shouldEqual "1.23,1.23,1.23"
 
-      result.provenance shouldEqual sig
+      result.call shouldEqual sig.resolveInputs
 
       assert(sig.isInstanceOf[myFunc.Call])
       assert(result.isInstanceOf[myFunc.Result])
@@ -53,33 +51,33 @@ class FunctionWithProvenanceSpec extends FunSpec with Matchers {
       val f1 = AddInts(1, 2)
       val r1 = f1.run
       r1.output shouldEqual 3
-      r1.provenance shouldEqual f1
+      r1.call shouldEqual f1.resolveInputs
 
       r1.toString shouldEqual "(3 <- AddInts(raw(1),raw(2)))"
 
       val f2 = MultiplyInts(2, r1)
       val r2 = f2.run
       r2.output shouldEqual 6
-      r2.provenance shouldEqual f2
+      r2.call shouldEqual f2.resolveInputs
 
       r2.toString shouldEqual "(6 <- MultiplyInts(raw(2),(3 <- AddInts(raw(1),raw(2)))))"
       
-      r2.provenance.inputTuple._1 shouldEqual UnknownProvenance(2)
-      r2.provenance.inputTuple._2 shouldEqual r1
+      r2.call.inputTuple._1 shouldEqual UnknownProvenance(2).resolve
+      r2.call.inputTuple._2 shouldEqual r1
 
-      r2.provenance.inputTuple._1.resolve.output shouldEqual 2
-      r2.provenance.inputTuple._1.resolve.provenance shouldEqual UnknownProvenance(2)
+      r2.call.inputTuple._1.resolve.output shouldEqual 2
+      r2.call.inputTuple._1.resolve.call shouldEqual UnknownProvenance(2)
 
-      r2.provenance.inputTuple._2.resolve.output shouldEqual 3
-      r2.provenance.inputTuple._2.resolve.provenance shouldEqual f1
+      r2.call.inputTuple._2.resolve.output shouldEqual 3
+      r2.call.inputTuple._2.resolve.call shouldEqual f1.resolveInputs
 
-      r2.provenance.inputTuple._2.resolve.provenance shouldEqual f1
+      r2.call.inputTuple._2.resolve.call shouldEqual f1.resolveInputs
 
       val f3 = AddInts(r1, r2)
       val r3 = f3.run
       r3.output shouldEqual 9
-      r3.provenance.inputTuple._1 shouldEqual r1
-      r3.provenance.inputTuple._2 shouldEqual r2
+      r3.call.inputTuple._1 shouldEqual r1
+      r3.call.inputTuple._2 shouldEqual r2
 
       r3.toString shouldEqual "(9 <- AddInts((3 <- AddInts(raw(1),raw(2))),(6 <- MultiplyInts(raw(2),(3 <- AddInts(raw(1),raw(2)))))))"
     }
@@ -94,11 +92,11 @@ class FunctionWithProvenanceSpec extends FunSpec with Matchers {
 
       val r3 = f3.run
       r3.output shouldEqual 15
-      r3.provenance shouldEqual f3
-      r3.provenance.inputTuple._1 shouldEqual f1
-      r3.provenance.inputTuple._2 shouldEqual f2
+      r3.call shouldEqual f3.resolveInputs
+      r3.call.inputTuple._1 shouldEqual f1.resolve
+      r3.call.inputTuple._2 shouldEqual f2.resolve
 
-      r3.toString shouldEqual "(15 <- AddInts(AddInts(raw(1),raw(2)),MultiplyInts(raw(3),raw(4))))"
+      r3.toString shouldEqual "(15 <- AddInts((3 <- AddInts(raw(1),raw(2))),(12 <- MultiplyInts(raw(3),raw(4)))))"
     }
   }
 }

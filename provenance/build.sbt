@@ -18,4 +18,9 @@ Defaults.itSettings
 fork in IntegrationTest := true
 testOptions in IntegrationTest ++= Seq(Tests.Argument("-oDF"))
 
-scalaVersion in ThisBuild := "2.12.4"
+// Some source templates under src/main/boilerplate.
+// The output goes to target/scala-2.12/src_managed.
+// NOTE: This means this project requires sbt to compile initially.
+// You can re-compile in IntelliJ afterward if none of the templates change.
+enablePlugins(spray.boilerplate.BoilerplatePlugin)
+
