@@ -637,7 +637,7 @@ The core three classes each get expanded into 22 subclasses, each with specific 
 type signatures:
 - `Function{0..21}WithProvenance[I1, I2, ..., O]`
 - `Function{0..21}CallWithProvenance[I1, I2, ..., O]`
-- `Function{0..21}CallWithProvenance[I1, I2, ..., O]`
+- `Function{0..21}CallResultWithProvenance[I1, I2, ..., O]`
 
 ### Final Specific Classes
 
