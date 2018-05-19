@@ -22,8 +22,9 @@ import scala.reflect.runtime.universe.TypeTag
 /**
   * Function{N}WithProvenance acts as the basic building block of data tracking in the provenance library.
   *
-  * @tparam: O The output type of the function.
-  * @tparam: I1..I21 The input types of the function, applicable to the function arity.
+  * @tparam O:      The output type of the function.
+  *
+  * Type params I1..I21 in subclasses go with the input types of the function, applicable to the function arity.
   *
   * Implement the internal function body as:
   *   def impl(i1: I1, i2, I2, ...): O = ???
