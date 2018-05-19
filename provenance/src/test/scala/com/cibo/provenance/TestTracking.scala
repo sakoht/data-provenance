@@ -18,13 +18,13 @@ trait TestTracking extends ResultTrackerSimple {
     if (basePath.isRemote) {
       sys.env.get("USER") match {
         case Some(user) =>
-          if (!basePath.path.contains("-" + user))
-            throw new RuntimeException(f"Refusing to delete a test a directory that does not contain the current user's name: $user")
+          if (!basePath.path.contains(user))
+            throw new RuntimeException(f"Refusing to delete a test a directory that does not contain the current user's name: $user not in ${basePath.path}")
           com.cibo.io.Shell.run(s"aws s3 rm --recursive ${basePath.path}")
         case None =>
           throw new RuntimeException(
             "Failed to determine the current user." +
-            f"Refusing to delete a test a directory that does not contain the current user's name!"
+            f"Refusing to delete a test a directory that does not contain the current user's name!: ${basePath.path}"
           )
       }
     } else {
