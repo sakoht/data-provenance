@@ -12,11 +12,11 @@ The data provenance library lets an app/library wrap a functions in a way that d
 
 The developer starts with a system that contains deterministic funcitons for key processes.  By wrapping them in a `FunctionWithProvenance`, these capabilities are added:
 - save output consistently
-- save inputs and linking them to the outputs in the context of some function/version
-- proscribe a complete workflow dependency graph and interrogating it in a separate process from which any of it is run
-- examine any output and traversing the workflow chain that led to it
+- save inputs and link them to the outputs in the context of some a given function and version
+- prescribe a complete workflow dependency graph, savable and interrogatable from other processes, before, during or after completion
+- examine any output and traverse the workflow chain that led to it
 - track each output throroughly, including commit and build info from the software library
-- "shortcut" past running the same code on the same inputs when an output has been created at the given function version
+- "shortcut" past running the same code on the same inputs for the same function at the same declared version
 - mix deterministic, tracked data with less tracked data in clean ways
 - testing in a way that can retroactively correct for logic flaws
 
