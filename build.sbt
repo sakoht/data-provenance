@@ -2,7 +2,7 @@ organization := "com.cibo"
 name         := "provenance-all"
 licenses     += ("BSD Simplified", url("https://opensource.org/licenses/BSD-3-Clause"))
 
-crossScalaVersions := Seq("2.12.4", "2.11.11")
+crossScalaVersions := Seq("2.12.6", "2.11.12")
 scalaVersion := crossScalaVersions.value.head
 
 // NOTE: Each sub-project should be independently buildable w/o this parent build.sbt file.
@@ -11,7 +11,7 @@ scalaVersion := crossScalaVersions.value.head
 
 lazy val provenance_all = (project in file(".")).aggregate(provenance, example1)
 
-lazy val provenance = project.in(file("provenance"))
+lazy val provenance = project.in(file("libprov"))
 lazy val example1 = project.in(file("example1")).dependsOn(provenance)
 
 

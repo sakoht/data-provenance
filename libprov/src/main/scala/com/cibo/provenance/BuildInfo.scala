@@ -65,7 +65,7 @@ object BuildInfo {
   // A custom encoding uses the "vcs" field to differentiate subclasses.
   // This is not a sealed trait so it cannot happen automatically w/ circe macros.
 
-  private val encoder: Decoder[BuildInfo] = Decoder.instance(
+  private val decoder: Decoder[BuildInfo] = Decoder.instance(
     c => {
       c.downField("vcs").as[String] match {
         case Right(value) =>
@@ -82,11 +82,11 @@ object BuildInfo {
     }
   )
 
-  private val decoder: Encoder[BuildInfo] =
+  private val encoder: Encoder[BuildInfo] =
     Encoder.instance { _.toEncoded }
 
   implicit def codec: Codec[BuildInfo] =
-    Codec(decoder, encoder)
+    Codec(encoder, decoder)
 }
 
 

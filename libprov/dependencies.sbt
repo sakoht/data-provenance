@@ -1,7 +1,7 @@
 val circeVersion = "0.9.1"
 
 libraryDependencies ++= Seq(
-  "com.cibo"                   %% "shared"                      % "0.17",
+  "com.cibo"                   %% "shared"                      % "0.22",
   "org.scala-lang"             % "scala-compiler"               % scalaVersion.value,
 
   "io.circe"                   %% "circe-core"                  % circeVersion,
