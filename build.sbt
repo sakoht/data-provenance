@@ -11,7 +11,7 @@ scalaVersion := crossScalaVersions.value.head
 
 lazy val provenance_all = (project in file(".")).aggregate(provenance, example1)
 
-lazy val provenance = project.in(file("provenance"))
+lazy val provenance = project.in(file("libprov"))
 lazy val example1 = project.in(file("example1")).dependsOn(provenance)
 
 
