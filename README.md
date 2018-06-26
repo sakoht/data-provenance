@@ -228,18 +228,29 @@ val r3 = s3.resolve
 Versions
 --------
 
-The `currentVersion` declared in the function is an "asserted version".  A promise by the programmer outputs will be consistent for the same inputs.
+The `currentVersion` in a `FunctionWithProvenance` is how we declaratively differentiate between pure refactoring and intentional changes
+in results.  The implicit contract for a FunctionWithProvenance is that the system can trust that the same inputs will produce the same
+output for the same version value.  When this is untrue, the version number should bumped along with the change to `impl`, 
+or changes to the components it calls.
 
-The call object stores the `version`, with a default argument that sets it to the `currentVersion`.  One might create a call
-with an older version for purposes of explicitly querying for old data.  The receipient of a call might inspect the
-version of a call.   By default, only the current version will execute, with legacy versions just for bookkeeping.  If some component needs to have multiple versions active it is possible with a small amount of code.
+In practice, there will be mistakes.  A pure refactor will actually introduce a minor variation, or a component deep in the call
+stack will be updated without something it uses having its version bumped.  When this happens, the data fabric can "self-heal".
+This will possibly lead to the flagging of data from certain commits as invalid, and may lead to downstream steps in a series of
+calls being re-run.  The intent is of the system is to make the best decision it can make at any point, without presuming it
+will not later discover a flaw.
 
-There will likely be multiple versioned functions in a single repo.  Most git commits that involve a version update for some
-functions will not affect others.  As such, any given version of a function will likely span a range of git commits, and those ranges will overlap the range of other functions. (TODO: explain in a section below.  Right now examples are in test cases.)
+The call object stores the `version`, with a default argument that sets it to the `currentVersion`.  One might, however, create a call
+with an older version specified intentionallly.  Possibly for purposes of explicitly querying for old data.
 
-In theory, the versions will be updated appropriately.  In practice, errors will occur.
+By default, only the current version will execute, with legacy versions just for bookkeeping.  If some component needs to have multiple
+versions active, however, it is possible with a small amount of code.
 
-There are three modes of failure:
+This versioning is intended to be more granular than the version of the whole library/application with regard to code scope,
+but also to vary less frequently for a given component across git commits and release.  Most git commits that involve a version update for some
+functions will not affect others.  As such, any given version of a function will likely span a range of git commits, and those
+ranges will overlap the range of other functions. (TODO: explain in a section below.  Right now examples are in test cases.)
+
+There are three modes of failure when writing an `impl` and assigning/updating the `currentVersion`:
 - a function that is not deterministic
 - a function that that had an "impure refactor", which offers different outputs for some inputs
 - a function that behaves differently for the same commit on different builds due to some external factor in the build
