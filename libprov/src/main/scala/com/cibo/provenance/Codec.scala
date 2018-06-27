@@ -16,10 +16,14 @@ import scala.reflect.runtime.universe.TypeTag
   * @param decoder  A Decoder[T] that matches it.
   * @tparam T       The type of data to be encoded/decoded.
   */
-case class Codec[T : ClassTag : TypeTag](encoder: Encoder[T], decoder: Decoder[T]) extends Serializable {
-  def getClassTag = implicitly[ClassTag[T]]
-  def getTypeTag = implicitly[TypeTag[T]]
-  def serializableClassName = Codec.classTagToSerializableName(getClassTag)
+case class Codec[T](
+  encoder: Encoder[T],
+  decoder: Decoder[T]
+)(implicit
+  classTag: ClassTag[T],
+  typeTag: TypeTag[T]
+) extends Serializable {
+  def serializableClassName: String = Codec.classTagToSerializableName(classTag)
 }
 
 /**
@@ -108,7 +112,7 @@ object Codec extends LazyLogging {
     * @tparam T
     * @return
     */
-  implicit def toTypeTag[T](codec: Codec[T]): TypeTag[T] = codec.getTypeTag
+  implicit def toTypeTag[T](codec: Codec[T]): TypeTag[T] = codec.typeTag
 
   /**
     * Implicitly convert a Codec[T] into a ClassTag[T].
@@ -117,7 +121,7 @@ object Codec extends LazyLogging {
     * @tparam T
     * @return
     */
-  implicit def toClassTag[T](codec: Codec[T]): ClassTag[T] = codec.getClassTag
+  implicit def toClassTag[T](codec: Codec[T]): ClassTag[T] = codec.classTag
 
   /**
     * Convert a ClassTag[T] into the name to be used for serialization.

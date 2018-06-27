@@ -27,7 +27,7 @@ class IndicesRangeWithProvenance[S[_], A : Codec](
   def impl(s: S[A]): Range = hok.indicesRange(s)
 
   override lazy val typeParameterTypeNames: Seq[String] =
-    Seq(hok.outerClassTag, implicitly[Codec[A]].getClassTag).map(ct => Codec.classTagToSerializableName(ct))
+    Seq(hok.outerClassTag, implicitly[Codec[A]].classTag).map(ct => Codec.classTagToSerializableName(ct))
 }
 
 object IndicesRangeWithProvenance {

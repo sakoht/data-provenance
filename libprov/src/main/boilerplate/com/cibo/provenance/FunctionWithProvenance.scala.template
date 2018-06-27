@@ -46,7 +46,7 @@ abstract class FunctionWithProvenance[O : Codec] extends Serializable {
   // The currentVersion must be a single constant value in any given function instance object.
   val currentVersion: Version
 
-  def outputClassTag = outputCodec.getClassTag
+  def outputClassTag = outputCodec.classTag
   def outputCodec = implicitly[Codec[O]]
 
   // By default only the current version is loadable and runnable.

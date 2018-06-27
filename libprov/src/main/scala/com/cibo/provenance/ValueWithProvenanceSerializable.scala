@@ -109,7 +109,7 @@ object FunctionCallWithUnknownProvenanceSerializable {
   def save[O](call: UnknownProvenance[O])(implicit rt: ResultTracker): FunctionCallWithUnknownProvenanceSerializable = {
     implicit val outputClassTag: ClassTag[O] = call.outputClassTag
     implicit val outputCodec: Codec[O] = call.outputCodec
-    implicit val outputTypeTag: TypeTag[O] = outputCodec.getTypeTag
+    implicit val outputTypeTag: TypeTag[O] = outputCodec.typeTag
 
     val outputClassName = Codec.classTagToSerializableName(outputClassTag)
 
@@ -282,8 +282,8 @@ case class FunctionCallResultWithKnownProvenanceSerializable(
     val call = this.call.load(rt).asInstanceOf[FunctionCallWithProvenance[T]]
     implicit val cd = call.outputCodec
     implicit val ct = call.outputClassTag
-    implicit val tt = cd.getTypeTag
-    assert(ct == cd.getClassTag)
+    implicit val tt = cd.typeTag
+    assert(ct == cd.classTag)
     val bi = BuildInfoBrief(commitId, buildId)
     val output: T = rt.loadValue[T](outputDigest)
     call.newResult(VirtualValue(output)(cd))(bi)
@@ -317,7 +317,7 @@ object FunctionCallResultWithKnownProvenanceSerializable {
     val output = result.output
     implicit val outputCodec: Codec[O] = call.outputCodec
     implicit val outputClassTag: ClassTag[O] = call.outputClassTag
-    implicit val outputTypeTag = outputCodec.getTypeTag
+    implicit val outputTypeTag = outputCodec.typeTag
     val outputDigest = rt.saveOutputValue(output) //result.resolveAndExtractDigest
 
     val resultInSavableForm =

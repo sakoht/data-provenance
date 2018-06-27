@@ -26,7 +26,7 @@ class IndicesTraversableWithProvenance[S[_], O : Codec](
   def impl(s: S[O]): S[Int] = hok.indicesTraversable(s)
 
   override lazy val typeParameterTypeNames: Seq[String] =
-    Seq(hok.outerClassTag, implicitly[Codec[O]].getClassTag).map(ct => Codec.classTagToSerializableName(ct))
+    Seq(hok.outerClassTag, implicitly[Codec[O]].classTag).map(ct => Codec.classTagToSerializableName(ct))
 }
 
 object IndicesTraversableWithProvenance {

@@ -520,7 +520,7 @@ class ResultTrackerSimple(
       .buildWith[Codec[_], Digest]
 
   private def saveCodec[T : Codec](outputDigest: Digest)(implicit cd: Codec[Codec[T]]): Digest = {
-    val outputClassName = Codec.classTagToSerializableName[T](implicitly[Codec[T]].getClassTag)
+    val outputClassName = Codec.classTagToSerializableName[T](implicitly[Codec[T]].classTag)
     val codec = implicitly[Codec[T]]
     val codecDigest = Option(codecCache.getIfPresent(codec)) match {
       case None =>
@@ -539,7 +539,7 @@ class ResultTrackerSimple(
   )(implicit cdcd: Codec[Codec[T]]): Digest = {
 
     val codec: Codec[T] = implicitly[Codec[T]]
-    implicit val ct: ClassTag[T] = codec.getClassTag
+    implicit val ct: ClassTag[T] = codec.classTag
     val (codecBytes, codecDigest) =
       Codec.serialize(codec, checkForInconsistentSerialization(codec))
     saveBytes(f"codecs/$outputClassName/${codecDigest.id}", codecBytes)

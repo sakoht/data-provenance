@@ -161,9 +161,9 @@ abstract class FunctionCallWithProvenance[O : Codec](var vv: ValueWithProvenance
 
   def outputCodec: Codec[O] = implicitly[Codec[O]]
 
-  def outputClassTag: ClassTag[O] = outputCodec.getClassTag
+  def outputClassTag: ClassTag[O] = outputCodec.classTag
 
-  def outputTypeTag: TypeTag[O] = outputCodec.getTypeTag
+  def outputTypeTag: TypeTag[O] = outputCodec.typeTag
 
   // Abstract interface.  These are implemented in each Function{n}CallSignatureWithProvenance subclass.
 

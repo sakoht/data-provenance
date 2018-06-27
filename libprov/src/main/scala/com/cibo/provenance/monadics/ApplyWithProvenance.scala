@@ -21,7 +21,7 @@ class ApplyWithProvenance[S[_], O : Codec](implicit hok: implicits.Traversable[S
   override lazy val typeParameterTypeNames: Seq[String] =
     Seq(
       Codec.classTagToSerializableName(hok.outerClassTag),
-      Codec.classTagToSerializableName(implicitly[Codec[O]].getClassTag)
+      Codec.classTagToSerializableName(implicitly[Codec[O]].classTag)
     )
 }
 

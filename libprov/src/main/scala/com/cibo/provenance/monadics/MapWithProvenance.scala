@@ -24,7 +24,7 @@ class MapWithProvenance[S[_], A, B](
   val currentVersion: Version = NoVersion
 
   override lazy val typeParameterTypeNames: Seq[String] = {
-    Seq(cdsa, cda, cdb).map(_.getClassTag).map(ct => Codec.classTagToSerializableName(ct))
+    Seq(cdsa, cda, cdb).map(_.classTag).map(ct => Codec.classTagToSerializableName(ct))
   }
 
   override protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
