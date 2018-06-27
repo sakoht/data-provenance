@@ -11,7 +11,7 @@ buildInfoPackage := "com.cibo.provenance.example1"
 buildInfoObject := "BuildInfo"
 
 libraryDependencies ++= Seq(
-    "com.cibo" %% "provenance" % "0.3-SNAPSHOT" withSources(),
+    "com.cibo" %% "provenance" % "0.4" withSources(),
 )
 
 // This presumes the project uses git for source control.
