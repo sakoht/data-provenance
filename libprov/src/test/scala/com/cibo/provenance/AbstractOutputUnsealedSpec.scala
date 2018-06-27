@@ -5,6 +5,17 @@ import io.circe.{Decoder, Encoder}
 import com.cibo.io.s3.SyncablePath
 import org.scalatest.{FunSpec, Matchers}
 
+/*
+ * When output is abstract, but the abstract type is a sealed trait,
+ * the circe automatically supports serialization, so things just work.
+ *
+ * This tests the opposite scenario, where the function output is an abstract
+ * type (a trait, in this case), with a potentially open-ended number of subclasses.
+ *
+ * This uses a codec that expects a singe key in the JSON to store/reveal the subclass
+ * name.  It further expects that each subclasss to have a companion class with
+ * an encoder and decoder available.
+ */
 class AbstractOutputUnsealedSpec extends FunSpec with Matchers {
 
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir
@@ -24,7 +35,7 @@ class AbstractOutputUnsealedSpec extends FunSpec with Matchers {
           case _: Cat2 => "cat"
           case _ => "other"
         }
-        ) shouldBe "cat"
+      ) shouldBe "cat"
 
       val p2 = pickAPet2("Yippydog")
       (
@@ -33,7 +44,7 @@ class AbstractOutputUnsealedSpec extends FunSpec with Matchers {
           case _: Cat2 => "cat"
           case _ => "other"
         }
-        ) shouldBe "dog"
+      ) shouldBe "dog"
 
       TestUtils.diffOutputSubdir(testSubdir)
     }

@@ -3,6 +3,12 @@ package com.cibo.provenance
 import com.cibo.io.s3.SyncablePath
 import org.scalatest.{FunSpec, Matchers}
 
+/*
+ * When output is abstract, but the abstract type is a sealed trait,
+ * the circe automatically supports serialization, so things just work.
+ *
+ * Note the companion test for the unsealed abstract output for comparison.
+ */
 class AbstractOutputSealedSpec extends FunSpec with Matchers {
 
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir

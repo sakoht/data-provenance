@@ -16,13 +16,9 @@ import scala.reflect.runtime.universe.TypeTag
   * @param decoder  A Decoder[T] that matches it.
   * @tparam T       The type of data to be encoded/decoded.
   */
-case class Codec[T](
-  encoder: Encoder[T],
-  decoder: Decoder[T]
-)(implicit
-  classTag: ClassTag[T],
-  typeTag: TypeTag[T]
-) extends Serializable {
+case class Codec[T : ClassTag : TypeTag](encoder: Encoder[T], decoder: Decoder[T]) extends Serializable {
+  def classTag: ClassTag[T] = implicitly[ClassTag[T]]
+  def typeTag: TypeTag[T] = implicitly[TypeTag[T]]
   def serializableClassName: String = Codec.classTagToSerializableName(classTag)
 }
 
@@ -62,28 +58,36 @@ object Codec extends LazyLogging {
     * during deserialization if the named class does not have a companion object with
     * the required methods.
     *
-    * @param key  The JSON object key that holds the subclass (defaults to "_subclass".)
+    * @param key                    The JSON object key that holds the subclass (defaults to "_subclass".)
+    * @param valueStringToClassName A function to turn the key value into a class name during decode.
+    * @param classNameToValueString A function to turn the class name into a string.
     * @tparam T   The base class/trait.
     * @return     A Codec[T]
     */
-  def createAbstractCodec[T : ClassTag : TypeTag](key: String = "_subclass"): Codec[T] = {
+  def createAbstractCodec[T : ClassTag : TypeTag](
+    key: String = "_subclass",
+    valueStringToClassName: (String) => String = (className: String) => className,
+    classNameToValueString: (String) => String = (className: String) => className
+  ): Codec[T] = {
     type COMPANION = { def encoder: Encoder[T]; def decoder: Decoder[T] }
 
     val encoder = Encoder.instance {
       o: T =>
-        val typeName = o.getClass.getName.stripSuffix("$")
-        val companionObject: COMPANION = objFromSerializableName[COMPANION](typeName)
+        val className = o.getClass.getName.stripSuffix("$")
+        val valueString = classNameToValueString(className)
+        val companionObject: COMPANION = objFromSerializableName[COMPANION](className)
         val encoder = companionObject.encoder
         encoder.apply(o).mapObject(
-          o1 => o1.add(key, Json.fromString(o.getClass.getName.stripSuffix("$")))
+          o1 => o1.add(key, Json.fromString(valueString))
         )
     }
 
     val decoder = Decoder.instance(
       cursor => {
         cursor.downField(key).as[String] match {
-          case Right(typeName) =>
-            val companionObject: COMPANION  = objFromSerializableName[COMPANION](typeName)
+          case Right(valueString) =>
+            val className = valueStringToClassName(valueString)
+            val companionObject: COMPANION  = objFromSerializableName[COMPANION](className)
             cursor.as(companionObject.decoder)
           case Left(err) =>
             throw err
