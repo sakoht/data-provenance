@@ -139,7 +139,7 @@ object FunctionWithProvenance {
   }
 
   def getByName(name: String): FunctionWithProvenance[_] =
-    Codec.functionFromSerializableName(name)
+    Codec.objectFromSerializableName[FunctionWithProvenance[_]](name)
 }
 
 

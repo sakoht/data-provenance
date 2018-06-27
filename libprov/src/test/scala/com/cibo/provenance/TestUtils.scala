@@ -56,8 +56,8 @@ object TestUtils extends LazyLogging with Matchers {
     val expectedDataRoot =
       if (new File(rootSubdir).exists)
         rootSubdir
-      else if (new File(f"provenance/$rootSubdir").exists)
-        f"provenance/$rootSubdir"
+      else if (new File(f"libprov/$rootSubdir").exists)
+        f"libprov/$rootSubdir"
       else
         throw new RuntimeException(f"Failed to find $rootSubdir under the current directory or provenance subdir!")
 

@@ -48,6 +48,49 @@ object Codec extends LazyLogging {
     Codec(implicitly[Encoder[T]], implicitly[Decoder[T]])
 
   /**
+    * Normally you can only auto-derive a codec for an abstract class if it is a sealed
+    * trait, since deserialization cannot be aware of an open-ended collection of subtypes.
+    *
+    * Create a Codec[T] for any abstract class/trait, presuming all subclasses
+    * have a companion object that can return an encoder and decoder.
+    *
+    * NOTE: Because this cannot be verified at compile time a runtime exception will occur
+    * during deserialization if the named class does not have a companion object with
+    * the required methods.
+    *
+    * @param key  The JSON object key that holds the subclass (defaults to "_subclass".)
+    * @tparam T   The base class/trait.
+    * @return     A Codec[T]
+    */
+  def createAbstractCodec[T : ClassTag : TypeTag](key: String = "_subclass"): Codec[T] = {
+    type COMPANION = { def encoder: Encoder[T]; def decoder: Decoder[T] }
+
+    val encoder = Encoder.instance {
+      o: T =>
+        val typeName = o.getClass.getName.stripSuffix("$")
+        val companionObject: COMPANION = objFromSerializableName[COMPANION](typeName)
+        val encoder = companionObject.encoder
+        encoder.apply(o).mapObject(
+          o1 => o1.add(key, Json.fromString(o.getClass.getName.stripSuffix("$")))
+        )
+    }
+
+    val decoder = Decoder.instance(
+      cursor => {
+        cursor.downField(key).as[String] match {
+          case Right(typeName) =>
+            val companionObject: COMPANION  = objFromSerializableName[COMPANION](typeName)
+            cursor.as(companionObject.decoder)
+          case Left(err) =>
+            throw err
+        }
+      }
+    )
+
+    Codec(encoder, decoder)
+  }
+
+  /**
     * Implicitly create a Codec[ Codec[T] ] so we can serialize/deserialize Codecs.
     * This allows us to fully round-trip data across processes.
     * Note that the Codecs do not themselves serialize reproducibly.
@@ -119,6 +162,35 @@ object Codec extends LazyLogging {
         val fwp = toolbox.compile(tree).apply()
         fwp.asInstanceOf[FunctionWithProvenance[_]]
     }
+  }
+
+  def objectFromSerializableName[T](name: String): T = {
+    try {
+      // This will work if the function is a singleton.
+      val clazz = Class.forName(name + "$")
+      val obj = clazz.getField("MODULE$").get(clazz)
+       obj.asInstanceOf[T]
+    } catch {
+      case e: Exception if e.isInstanceOf[java.lang.ClassCastException] | e.isInstanceOf[java.lang.ClassNotFoundException] =>
+        // We fall back to using the compiler itself only when re-vivifying a function object as data,
+        // _and_ the function is itself parameterized.  Normal workflow activity never goes here, only
+        // introspection.
+        if (!name.contains("[")) {
+          throw new RuntimeException(
+            f"Error loading obj $name: " +
+              f"should either be a singleton or a class with type parameters in the name and no args to construct!"
+          )
+        }
+        val tree = toolbox.parse("new " + name)
+        val obj = toolbox.compile(tree).apply()
+        obj.asInstanceOf[T]
+    }
+  }
+
+  def objFromSerializableName[T](name: String): T = {
+    val clazz = Class.forName(name + "$")
+    val obj = clazz.getField("MODULE$").get(clazz)
+    obj.asInstanceOf[T]
   }
 
   /**
