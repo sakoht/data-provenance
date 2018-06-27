@@ -41,7 +41,7 @@ lazy val buildInfoSettings: Seq[Setting[_]] = Seq(
     Seq(
       BuildInfoOption.ToJson,
       BuildInfoOption.BuildTime,
-      BuildInfoOption.Traits("com.cibo.provenance.GitBuildInfo")
+      BuildInfoOption.Traits("com.cibo.provenance.BuildInfoGit")
       // For non-git repos, switch to "com.cibo.provenance.BuildInfo", and set commitId explicitly.
     )
 )
