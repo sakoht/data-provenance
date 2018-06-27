@@ -70,7 +70,7 @@ The above Scala `Function2` takes two inputs, and has three parameterized types:
 Adding Provenance
 -----------------
 
-To add data-provenance we modify the long version of a function declaration:
+To add provenance tracking, we modify the long version of a function declaration:
 - `Function2WithProvenance` replaces `Function2`
 - `def impl` replaces `def apply`
 - `val currentVersion: Version = Version("x.x")` is added
@@ -228,27 +228,26 @@ val r3 = s3.resolve
 Versions
 --------
 
-The `currentVersion` in a `FunctionWithProvenance` is how we declaratively differentiate between pure refactoring and intentional changes
-in results.  The implicit contract for a FunctionWithProvenance is that the system can trust that the same inputs will produce the same
-output for the same version value.  When this is untrue, the version number should bumped along with the change to `impl`, 
-or changes to the components it calls.
+The `currentVersion` in a `FunctionWithProvenance` is how we declaratively differentiate between pure refactoring and intentional changes in results.  The implicit contract for a `FunctionWithProvenance` is that the system can trust that 
+the same inputs will produce the sameoutput for the same version value.  When this is untrue, the version number should be
+bumped along in the same commit (or one of the commits in the same merge) that changes the `impl`.
 
-In practice, there will be mistakes.  A pure refactor will actually introduce a minor variation, or a component deep in the call
-stack will be updated without something it uses having its version bumped.  When this happens, the data fabric can "self-heal".
-This will possibly lead to the flagging of data from certain commits as invalid, and may lead to downstream steps in a series of
-calls being re-run.  The intent is of the system is to make the best decision it can make at any point, without presuming it
-will not later discover a flaw.
+In practice, there will be mistakes.  A pure refactor will actually introduce a minor variation, or a component deep in the
+call stack will be updated without something it uses having its version bumped.  When this happens, the data fabric can 
+"self-heal". This will possibly lead to the flagging of data from certain commits as invalid, and may lead to downstream steps in a series of calls being re-run.  The intent is of the system is to make the best decision it can make at any point, without
+presuming it will not later discover a flaw.
 
-The call object stores the `version`, with a default argument that sets it to the `currentVersion`.  One might, however, create a call
-with an older version specified intentionallly.  Possibly for purposes of explicitly querying for old data.
+The call object stores the `version`, with a default argument that sets it to the `currentVersion`.  One might, however,
+create a call with an older version specified intentionallly.  Possibly for purposes of explicitly querying for old data.
 
-By default, only the current version will execute, with legacy versions just for bookkeeping.  If some component needs to have multiple
-versions active, however, it is possible with a small amount of code.
+By default, only the current version will execute, with legacy versions just for bookkeeping.  If some component needs to have 
+multiple versions active, however, it is possible with a small amount of code.
 
 This versioning is intended to be more granular than the version of the whole library/application with regard to code scope,
-but also to vary less frequently for a given component across git commits and release.  Most git commits that involve a version update for some
-functions will not affect others.  As such, any given version of a function will likely span a range of git commits, and those
-ranges will overlap the range of other functions. (TODO: explain in a section below.  Right now examples are in test cases.)
+but also to vary less frequently for a given component across git commits and release.  Most git commits that involve a
+version update for some functions will not affect others.  As such, any given version of a function will likely span a range 
+of git commits, and those ranges will overlap the range of other functions. (TODO: explain in a section below.  Right now 
+examples are in test cases.)
 
 There are three modes of failure when writing an `impl` and assigning/updating the `currentVersion`:
 - a function that is not deterministic
@@ -783,12 +782,12 @@ When a function vanishes, the same logic used for externally generated results a
 
 Best Practices
 --------------
-1. Don't go too granular.  Wrap units of work in provenance tracking where they would take noticeable time to repeat, and where a small amount of I/O is worth it to circumvent repetition, record status, etc.
+1. Don't go too granular.  Wrap units of work in provenance tracking where they would take noticeable time to repeat, and where a small amount of I/O is worth it to circumvent repetition, record status, etc.  An initial pipeline often has just one step or two to four steps.  Add tracking granularity where it really helps.
 2. Be granular enough.  If the first part of your pipeline rarely changes and the second part changes often, be sure they are at wrapped in at least two different functions with provenance.  And if you go too broad _every_ change will iterate the master version.  Which defeats the purpose.
-3. Pick a new function name when you change signatures dramatically.  You are safe to just iterate the version when the interface remains stable, or the new interface is a superset of the old, with automatic defaults.
+3. Pick a new function name when you change signatures dramatically.  But ou are safe to just iterate the version when the interface remains stable, or the new interface is a superset of the old, with automatic defaults.
 4. If you want default parameters, make additional overrides to `apply()`.
 5. If you want to track non-deterministic functions, make the last parameter an `Instant`, and set it to `Instant.now` on each run.  You will re-run the function, but when you happen to get identical outputs, the rest of the pipeline will complete like dominos.  This is perfect for downloaders.
-6. If you use random number generation, generate the seed outside the call, and pass the seed into the call.  This lets the call become deterministic.  Even better: calculate a seed based on other inputs, if you can.  This will let you get "consistent random" results.
+6. If you use random number generation, either generate the seed outside the call, and pass the seed into the call.  This lets the call become deterministic.  Even better: calculate a seed based on other inputs, if you can.  This will let you get "consistent random" results.
 
 Project Setup:
 --------------
