@@ -23,7 +23,7 @@ lazy val buildInfoSettings: Seq[Setting[_]] = Seq(
   buildInfoPackage := ???,   // Set this to match a package distinct to the project.
   buildInfoObject := "BuildInfo",
   libraryDependencies ++= Seq(
-    "com.cibo" %% "provenance" % "0.1-SNAPSHOT" withSources(),
+    "com.cibo" %% "provenance" % "0.5" withSources(),
   ),
   buildInfoKeys := Seq[BuildInfoKey](
     name, version, scalaVersion, sbtVersion,

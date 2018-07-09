@@ -21,7 +21,7 @@ buildInfoPackage := ???
 buildInfoObject := "BuildInfo"
 
 libraryDependencies ++= Seq(
-    "com.cibo" %% "provenance" % "0.1-SNAPSHOT" withSources(),
+    "com.cibo" %% "provenance" % "0.5" withSources(),
 )
 
 buildInfoKeys := Seq[BuildInfoKey](

@@ -1,6 +1,6 @@
 
 libraryDependencies ++= Seq(
-  "com.cibo"                          %% "provenance"               % "0.4",
+  "com.cibo"                          %% "provenance"               % "0.5",
 
   "com.github.scopt"                  %% "scopt"                    % "3.7.0",
   "com.typesafe"                      %  "config"                   % "1.3.1",
