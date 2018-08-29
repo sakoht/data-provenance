@@ -300,34 +300,23 @@ object FunctionCallResultWithKnownProvenanceSerializable {
 
     rt.saveBuildInfo
 
-    val cs: FunctionCallWithProvenanceDeflated[_] = call.save(rt)
-    val csd: FunctionCallWithProvenanceSerializable = cs.data
-    csd match {
-      case kwi: FunctionCallWithKnownProvenanceSerializableWithInputs =>
-        println("ok")
-      case kwoi: FunctionCallWithKnownProvenanceSerializableWithoutInputs =>
-        println("bad")
-        val s = call.save(rt)
-        s.data
-      case ku: FunctionCallWithUnknownProvenanceSerializable =>
-        println("bad")
-        val s = call.save(rt)
-        s.data
-    }
+    val callSaved: FunctionCallWithProvenanceDeflated[_] = call.save(rt)
     val callSavedWithInputs =
-      csd.asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
+      callSaved.data.asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
 
     val output = result.output
     implicit val outputCodec: Codec[O] = call.outputCodec
     implicit val outputClassTag: ClassTag[O] = call.outputClassTag
     implicit val outputTypeTag = outputCodec.typeTag
-    val outputDigest = rt.saveOutputValue(output) //result.resolveAndExtractDigest
+    val outputDigest = rt.saveOutputValue(output)
+    val outputDigest2 = Codec.digestObject(result.output(rt))
+    require(outputDigest == outputDigest2, f"$outputDigest != $outputDigest2!")
 
     val resultInSavableForm =
       FunctionCallResultWithKnownProvenanceSerializable(
         callSavedWithInputs.unexpandInputs,
         callSavedWithInputs.inputGroupDigest,
-        Codec.digestObject(result.output(rt)),
+        outputDigest,
         result.outputBuildInfo.commitId,
         result.outputBuildInfo.buildId
       )
