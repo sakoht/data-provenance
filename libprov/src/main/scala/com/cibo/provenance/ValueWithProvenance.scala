@@ -97,37 +97,23 @@ object ValueWithProvenance {
     UnknownProvenance(value.asInstanceOf[T])
   }
 
-  implicit def repackageList[E](
-    inputs: List[ValueWithProvenance[E]]
-  )(implicit ce: Codec[E],
-    cse: Codec[List[E]]
-  ): ValueWithProvenance[List[E]] = {
-    implicit val hok: Traversable[List] = implicits.Traversable.ListMethods
-    GatherWithProvenance(inputs)
-  }
-
-  implicit def repackageVector[E](
-    inputs: Vector[ValueWithProvenance[E]]
-  )(implicit ce: Codec[E],
-    cse: Codec[Vector[E]]
-  ): ValueWithProvenance[Vector[E]] = {
-    implicit val hok: Traversable[Vector] = implicits.Traversable.VectorMethods
-    GatherWithProvenance(inputs)
-  }
-
-  /*
-  implicit def convertSeqWithProvenance[A](seq: Seq[ValueWithProvenance[A]])
+  // Wherever an input Traversable is supplied and all members have provenance tracking,
+  // turn it "inside out", giving the whole Traversable provenance tracking,
+  // and using those members as inputs.  This wedges in a GatherWithProvenance call.
+  // It works with any Seq supported by Traversable.
+  implicit def convertTraversableWithMembersWithProvenance[S[_], E](seq: S[ValueWithProvenance[E]])
     (implicit
       rt: ResultTracker,
-      ct: ClassTag[Seq[A]],
-      cd: Codec[Seq[A]],
-      cd2: Codec[Seq[ValueWithProvenance[A]]]
-    ): GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call = {
-    val gatherer: GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]] = GatherWithProvenance[A]
-    val call: gatherer.Call = gatherer(seq)
+      hok: Traversable[S],
+      ct: ClassTag[E],
+      cd: Codec[E],
+      cts: ClassTag[S[E]],
+      cds: Codec[S[E]],
+    ): GatherWithProvenance[S, E]#Call = {
+    val gatherer: GatherWithProvenance[S, E] = GatherWithProvenance[S, E]
+    val call = gatherer(seq)
     call
   }
-  */
 }
 
 
