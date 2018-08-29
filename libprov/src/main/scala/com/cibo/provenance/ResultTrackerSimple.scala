@@ -48,7 +48,7 @@ class ResultTrackerSimple(
   val basePath: SyncablePath,
   val writable: Boolean = true,
   val underlyingTracker: Option[ResultTrackerSimple] = None
-)(implicit val currentAppBuildInfo: BuildInfo, ec: ExecutionContext = ExecutionContext.global) extends ResultTracker {
+)(implicit val currentAppBuildInfo: BuildInfo, @transient ec: ExecutionContext = ExecutionContext.global) extends ResultTracker {
 
   import com.amazonaws.services.s3.model.PutObjectResult
   import com.cibo.cache.GCache
