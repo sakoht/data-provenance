@@ -209,9 +209,11 @@ object FunctionCallWithKnownProvenanceSerializableWithInputs {
             }
           )
         case None =>
-          // While this call cannot be saved directly, any downstream call will be allowed to wrap it.
-          // (This exception is intercepted in the block above of the downstream call.)
-          throw new RuntimeException("UnresolvedVersionException(known)")
+          // While this call cannot be saved directly, any call that uses it as an input
+          // will simply store a "fatter" value.
+          // This exception is intercepted when a "downstream" call that uses this as an input
+          // tries to save its inputs, allowing it to respond accordingly.
+          throw new UnresolvedVersionException(call)
       }
 
     rt.saveCallSerializable(callInSavableForm)
@@ -220,6 +222,7 @@ object FunctionCallWithKnownProvenanceSerializableWithInputs {
   }
 }
 
+class UnresolvedVersionException(call: Call[_]) extends RuntimeException()
 
 case class FunctionCallWithKnownProvenanceSerializableWithoutInputs(
   functionName: String,
