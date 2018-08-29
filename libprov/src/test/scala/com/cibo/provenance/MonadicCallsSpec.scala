@@ -1,7 +1,10 @@
 package com.cibo.provenance
 
+import com.cibo.provenance
 import com.cibo.provenance.FunctionCallWithProvenance.TraversableCallExt
 import org.scalatest.{FunSpec, Matchers}
+
+import scala.collection.immutable
 
 /**
   * Created by ssmith on 11/07/17.
@@ -47,14 +50,14 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       TestUtils.diffOutputSubdir(subDir)
     }
 
-    it("adds methods `map`, `apply`, `indices` and `scatter` that are recognized by the compiler for `Seq`, `Vector` and `List`") {
+    it("adds methods `map`, `apply`, `indices` and `scatter` that are recognized by the compiler for `List`, `Vector` and `List`") {
       implicit val rt: ResultTracker = ResultTrackerNone()
 
-      val s: FunctionCallWithProvenance[Seq[Int]] = UnknownProvenance(Seq(11, 22, 33))
+      val s: FunctionCallWithProvenance[List[Int]] = UnknownProvenance(List(11, 22, 33))
       val l: FunctionCallWithProvenance[List[Int]] = UnknownProvenance(List(11, 22, 33))
       val v: FunctionCallWithProvenance[Vector[Int]] = UnknownProvenance(Vector(11, 22, 33))
 
-      s.resolve.output shouldBe Seq(11, 22, 33)
+      s.resolve.output shouldBe List(11, 22, 33)
       l.resolve.output shouldBe List(11, 22, 33)
       v.resolve.output shouldBe Vector(11, 22, 33)
 
@@ -89,13 +92,13 @@ class MonadicCallsSpec extends FunSpec with Matchers {
 
       MakeDummyOutputList.runCount = 0
 
-      val myCall: FunctionCallWithProvenance[Seq[Int]] = MakeDummyOutputList()
+      val myCall: FunctionCallWithProvenance[List[Int]] = MakeDummyOutputList()
       MakeDummyOutputList.runCount shouldBe 0
 
-      val i0: ApplyWithProvenance[Seq, Int]#Call = myCall(0)
-      val i1: ApplyWithProvenance[Seq, Int]#Call = myCall(1)
-      val i2: ApplyWithProvenance[Seq, Int]#Call = myCall(2)
-      val i3: ApplyWithProvenance[Seq, Int]#Call = myCall(3)
+      val i0: ApplyWithProvenance[List, Int]#Call = myCall(0)
+      val i1: ApplyWithProvenance[List, Int]#Call = myCall(1)
+      val i2: ApplyWithProvenance[List, Int]#Call = myCall(2)
+      val i3: ApplyWithProvenance[List, Int]#Call = myCall(3)
 
       // Still hasn't run...
       MakeDummyOutputList.runCount shouldBe 0
@@ -141,7 +144,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
 
       MyIncrement.runCount = 0
 
-      val myResult2: MapWithProvenance[Seq, Int, Int]#Call = myResult1.map(MyIncrement)
+      val myResult2: MapWithProvenance[List, Int, Int]#Call = myResult1.map(MyIncrement)
       MakeDummyOutputList.runCount shouldBe 1
       MyIncrement.runCount shouldBe 0
 
@@ -215,6 +218,59 @@ class MonadicCallsSpec extends FunSpec with Matchers {
     }
   }
 
+  describe("gathering of Traversables") {
+
+    it("works implicitly, and keeps history") {
+      val subDir = "gather"
+      val testDataDir = f"$outputBaseDir/$subDir"
+      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      rt.wipe
+
+      // Make a list with a variety of tracked objects, all returning an Int.
+      // Each has different classes, different states, and different history depth.
+      val lst1 = List[ValueWithProvenance[Int]](
+        UnknownProvenance[Int](123),
+        UnknownProvenance[Int](456).resolve,
+        MyIncrement(100),
+        MyIncrement(MyIncrement(200)).resolve
+      )
+
+      // The code wants a ValueWithProvenance[List[Int]]
+      // But we are giving it a List[ValueWithProvenance[Int]], each with independent history.
+      // This should implicitly convert to the correct shape.
+      val sum = SumValues(lst1)
+
+      // Be sure it worked.
+      sum.resolve.output shouldEqual 882
+
+      // Dig through the history and be sure we can reach the depths...
+
+      // Be sure the original history is individually trackable.
+      val inputForSum = sum.i1.asInstanceOf[GatherWithProvenance[List, Int]#Call]
+      val gatheredInputs = inputForSum.gatheredInputs.asInstanceOf[List[ValueWithProvenance[Int]]]
+
+      // the last value in the list is a MyIncrement.Result
+      val lastInput: ValueWithProvenance[Int] = gatheredInputs.last
+      lastInput.asInstanceOf[FunctionCallResultWithProvenance[Int]]
+      lastInput.asInstanceOf[MyIncrement.Result]
+
+      // the nested MyIncrement input was a MyIncrement.Call, but it was replaced with a result.
+      val lastInputInput: ValueWithProvenance[_] = lastInput.resolve.call.inputs.head
+      lastInputInput.asInstanceOf[ValueWithProvenance[Int]]
+      lastInputInput.asInstanceOf[MyIncrement.Result]
+
+      // the input to that is a constant 200
+      val lastInputInputInput: ValueWithProvenance[_] = lastInputInput.resolve.call.inputs.head
+      lastInputInputInput.asInstanceOf[ValueWithProvenance[Int]]
+      lastInputInputInput.asInstanceOf[UnknownProvenanceValue[Int]]
+
+      // Be sure everything can reveal its intermediate values
+      lastInputInputInput.resolve.output shouldBe 200           // UnknownProvenance(200)
+      lastInputInput.resolve.output shouldBe 201                // MyIncrement(UnknownProvenance(200))
+      lastInput.resolve.output shouldBe 202                     // MyIncrement(MyIncrement(UnknownProvenance(200)))
+    }
+  }
+
   describe("Options") {
     it("work") {
       implicit val rt = ResultTrackerNone()
@@ -243,7 +299,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
   }
 }
 
-object MakeDummyOutputList extends Function0WithProvenance[Seq[Int]] {
+object MakeDummyOutputList extends Function0WithProvenance[List[Int]] {
   val currentVersion = Version("0.0")
 
   @transient
@@ -251,7 +307,7 @@ object MakeDummyOutputList extends Function0WithProvenance[Seq[Int]] {
 
   def impl = {
     runCount += 1
-    Seq(11, 22, 33, 44)
+    List(11, 22, 33, 44)
   }
 }
 
@@ -267,17 +323,17 @@ object MyIncrement extends Function1WithProvenance[Int, Int] {
   }
 }
 
-object CountList extends Function1WithProvenance[Seq[Int], Int] {
+object CountList extends Function1WithProvenance[List[Int], Int] {
   val currentVersion: Version = Version("0.1")
-  def impl(in: Seq[Int]) = {
+  def impl(in: List[Int]) = {
     println(in)
     in.size
   }
 }
 
-object SumValues extends Function1WithProvenance[Seq[Int], Int] {
+object SumValues extends Function1WithProvenance[List[Int], Int] {
   val currentVersion: Version = Version("0.1")
-  def impl(in: Seq[Int]) = in.sum
+  def impl(in: List[Int]) = in.sum
 }
 
 object AppendSuffix extends Function1WithProvenance[String, String] {

@@ -50,6 +50,8 @@ package com.cibo.provenance
 
 import java.io.Serializable
 
+import com.cibo.provenance.implicits.Traversable
+import com.cibo.provenance.monadics.GatherWithProvenance
 
 import scala.language.implicitConversions
 import scala.language.higherKinds
@@ -95,6 +97,25 @@ object ValueWithProvenance {
     UnknownProvenance(value.asInstanceOf[T])
   }
 
+  implicit def repackageList[E](
+    inputs: List[ValueWithProvenance[E]]
+  )(implicit ce: Codec[E],
+    cse: Codec[List[E]]
+  ): ValueWithProvenance[List[E]] = {
+    implicit val hok: Traversable[List] = implicits.Traversable.ListMethods
+    GatherWithProvenance(inputs)
+  }
+
+  implicit def repackageVector[E](
+    inputs: Vector[ValueWithProvenance[E]]
+  )(implicit ce: Codec[E],
+    cse: Codec[Vector[E]]
+  ): ValueWithProvenance[Vector[E]] = {
+    implicit val hok: Traversable[Vector] = implicits.Traversable.VectorMethods
+    GatherWithProvenance(inputs)
+  }
+
+  /*
   implicit def convertSeqWithProvenance[A](seq: Seq[ValueWithProvenance[A]])
     (implicit
       rt: ResultTracker,
@@ -106,6 +127,7 @@ object ValueWithProvenance {
     val call: gatherer.Call = gatherer(seq)
     call
   }
+  */
 }
 
 

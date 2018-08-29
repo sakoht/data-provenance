@@ -40,6 +40,7 @@ trait Traversable[S[_]] extends Serializable {
   def toVector[A](lok: S[A]): Vector[A]
   def outerClassTag[A : ClassTag]: ClassTag[_]
   def innerClassTag[A : ClassTag]: ClassTag[_]
+  def create[A](from: Seq[A]): S[A]
 }
 
 object Traversable {
@@ -54,6 +55,7 @@ object Traversable {
     def toVector[A](lok: Seq[A]): Vector[A] = lok.toVector
     def outerClassTag[A : ClassTag]: ClassTag[Seq[A]] = implicitly[ClassTag[Seq[A]]]
     def innerClassTag[A : ClassTag]: ClassTag[A] = implicitly[ClassTag[A]]
+    def create[A](lok: Seq[A]): Seq[A] = lok
   }
 
   implicit object ListMethods extends Traversable[List] with Serializable {
@@ -66,6 +68,7 @@ object Traversable {
     def toVector[A](lok: List[A]): Vector[A] = lok.toVector
     def outerClassTag[A : ClassTag]: ClassTag[List[A]] = implicitly[ClassTag[List[A]]]
     def innerClassTag[A : ClassTag]: ClassTag[A] = implicitly[ClassTag[A]]
+    def create[A](lok: Seq[A]): List[A] = lok.toList
   }
 
   implicit object VectorMethods extends Traversable[Vector] with Serializable {
@@ -78,5 +81,6 @@ object Traversable {
     def toVector[A](lok: Vector[A]): Vector[A] = lok
     def outerClassTag[A : ClassTag]: ClassTag[Vector[A]] = implicitly[ClassTag[Vector[A]]]
     def innerClassTag[A : ClassTag]: ClassTag[A] = implicitly[ClassTag[A]]
+    def create[A](lok: Seq[A]): Vector[A] = lok.toVector
   }
 }
