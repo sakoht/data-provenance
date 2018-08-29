@@ -309,8 +309,6 @@ object FunctionCallResultWithKnownProvenanceSerializable {
     implicit val outputClassTag: ClassTag[O] = call.outputClassTag
     implicit val outputTypeTag = outputCodec.typeTag
     val outputDigest = rt.saveOutputValue(output)
-    val outputDigest2 = Codec.digestObject(result.output(rt))
-    require(outputDigest == outputDigest2, f"$outputDigest != $outputDigest2!")
 
     val resultInSavableForm =
       FunctionCallResultWithKnownProvenanceSerializable(
