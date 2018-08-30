@@ -1,37 +1,20 @@
-// This configures SbtBuildInfo for the current project for provenance tracking.
-// It presumes a single-module root project.  See the other examples for multi-module.
-
-// Setup:
-// - put this file into the root of your project, next-to build.sbt, possibly named buildinfo.sbt
-// - put this into your project/plugins.sbt: `addSbtPlugin("com.eed3si9n" %  "sbt-buildinfo" % "0.7.0")``
-// - edit the `buildInfoPackage` to refer to a package owned exclusively by your project
+import scala.sys.process._
 
 buildInfoPackage := "com.cibo.provenance.example1" 
-
 buildInfoObject := "BuildInfo"
 
-libraryDependencies ++= Seq(
-    "com.cibo" %% "provenance" % "0.5" withSources(),
-)
-
-// This presumes the project uses git for source control.
-// The sbt git plugins do not work w/ sbt 1.0 yet.  This suffices.
-import scala.sys.process._
-val gitBranch: String          = ("git status" #| "head -n 1").!!.replace("On branch ", "").stripSuffix("\n")
-val gitCommitAuthor: String    = "git log -1 --pretty=%aN".!!.stripSuffix("\n")
-val gitCommitDate: String      = "git log -1 --pretty=%aI".!!.stripSuffix("\n")
-val gitDescribe: String        = "git log -1 --pretty=%B".!!.stripSuffix("\n")
-val gitHeadRev: String         = "git rev-parse HEAD".!!.stripSuffix("\n")
-val gitRepoClean: String       = if ("git status".!!.split("\n").length == 3) "true" else "false"
-
 buildInfoKeys := Seq[BuildInfoKey](
-    name, version, scalaVersion, sbtVersion,
-    BuildInfoKey("gitBranch", gitBranch),
-    BuildInfoKey("gitRepoClean", gitRepoClean),
-    BuildInfoKey("gitHeadRev", gitHeadRev),
-    BuildInfoKey("gitCommitAuthor", gitCommitAuthor),
-    BuildInfoKey("gitCommitDate", gitCommitDate),
-    BuildInfoKey("gitDescribe", gitDescribe)
+  name,
+  version,
+  scalaVersion,
+  sbtVersion,
+  "gitBranch"             -> git.gitCurrentBranch.value,
+  "gitUncommittedChanges"  -> git.gitUncommittedChanges.value,
+  "gitHash"               -> git.gitHeadCommit.value.get,
+  "gitMessage"            -> git.gitHeadMessage.value.get,
+  "gitCommitAuthor"       -> "git log -1 --pretty=%aN".!!.stripSuffix("\n"),
+  "gitCommitDate"         -> git.gitHeadCommitDate.value.get,
+  "gitHashShort"          -> git.gitHeadCommit.value.get.substring(0,8),
 )
 
 buildInfoOptions ++= Seq(

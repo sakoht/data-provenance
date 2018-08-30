@@ -23,11 +23,12 @@ object BuildInfoDummy extends BuildInfoGit {
   lazy val startTime: Instant = Instant.parse("1955-11-12T22:04:00.000Z") // we don't need roads
 
   def gitBranch: String = "DUMMY-BRANCH"
-  def gitRepoClean: String = "true"
-  def gitHeadRev: String = "DUMMY-COMMIT"
+  def gitUncommittedChanges: Boolean = false
+  def gitHash: String = "DUMMY-COMMIT"
+  def gitHashShort: String = "DUMMYCOM"
   def gitCommitAuthor: String = "DUMMY-AUTHOR"
   def gitCommitDate: String = "1919-01-01T00:01:02.000Z"
-  def gitDescribe: String = "DUMMY-DESCRIBE"
+  def gitMessage: String = "DUMMY-DESCRIBE"
 
   lazy val builtAtString: String = startTime.toString
   lazy val builtAtMillis: Long = startTime.toEpochMilli
