@@ -3,7 +3,7 @@ package com.cibo.provenance
 import com.cibo.io.s3.SyncablePath
 import com.google.common.cache.Cache
 
-import scala.reflect.runtime.universe
+import scala.concurrent.ExecutionContext
 
 /**
   * Created by ssmith on 5/16/17.
@@ -48,7 +48,8 @@ class ResultTrackerSimple(
   val basePath: SyncablePath,
   val writable: Boolean = true,
   val underlyingTracker: Option[ResultTrackerSimple] = None
-)(implicit val currentAppBuildInfo: BuildInfo) extends ResultTracker {
+)(implicit val currentAppBuildInfo: BuildInfo,
+  @transient val ec: ExecutionContext = ExecutionContext.global) extends ResultTracker {
 
   import com.amazonaws.services.s3.model.PutObjectResult
   import com.cibo.cache.GCache

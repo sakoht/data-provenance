@@ -50,6 +50,8 @@ package com.cibo.provenance
 
 import java.io.Serializable
 
+import com.cibo.provenance.implicits.Traversable
+import com.cibo.provenance.monadics.GatherWithProvenance
 
 import scala.language.implicitConversions
 import scala.language.higherKinds
@@ -95,15 +97,21 @@ object ValueWithProvenance {
     UnknownProvenance(value.asInstanceOf[T])
   }
 
-  implicit def convertSeqWithProvenance[A](seq: Seq[ValueWithProvenance[A]])
+  // Wherever an input Traversable is supplied and all members have provenance tracking,
+  // turn it "inside out", giving the whole Traversable provenance tracking,
+  // and using those members as inputs.  This wedges in a GatherWithProvenance call.
+  // It works with any Seq supported by Traversable.
+  implicit def convertTraversableWithMembersWithProvenance[S[_], E](seq: S[ValueWithProvenance[E]])
     (implicit
       rt: ResultTracker,
-      ct: ClassTag[Seq[A]],
-      cd: Codec[Seq[A]],
-      cd2: Codec[Seq[ValueWithProvenance[A]]]
-    ): GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]]#Call = {
-    val gatherer: GatherWithProvenance[A, Seq[A], Seq[ValueWithProvenance[A]]] = GatherWithProvenance[A]
-    val call: gatherer.Call = gatherer(seq)
+      hok: Traversable[S],
+      ct: ClassTag[E],
+      cd: Codec[E],
+      cts: ClassTag[S[E]],
+      cds: Codec[S[E]]
+    ): GatherWithProvenance[S, E]#Call = {
+    val gatherer: GatherWithProvenance[S, E] = GatherWithProvenance[S, E]
+    val call = gatherer(seq)
     call
   }
 }

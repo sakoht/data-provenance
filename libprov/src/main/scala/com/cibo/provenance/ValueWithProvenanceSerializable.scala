@@ -209,9 +209,11 @@ object FunctionCallWithKnownProvenanceSerializableWithInputs {
             }
           )
         case None =>
-          // While this call cannot be saved directly, any downstream call will be allowed to wrap it.
-          // (This exception is intercepted in the block above of the downstream call.)
-          throw new RuntimeException("UnresolvedVersionException(known)")
+          // While this call cannot be saved directly, any call that uses it as an input
+          // will simply store a "fatter" value.
+          // This exception is intercepted when a "downstream" call that uses this as an input
+          // tries to save its inputs, allowing it to respond accordingly.
+          throw new UnresolvedVersionException(call)
       }
 
     rt.saveCallSerializable(callInSavableForm)
@@ -220,6 +222,7 @@ object FunctionCallWithKnownProvenanceSerializableWithInputs {
   }
 }
 
+class UnresolvedVersionException(call: Call[_]) extends RuntimeException()
 
 case class FunctionCallWithKnownProvenanceSerializableWithoutInputs(
   functionName: String,
@@ -297,34 +300,21 @@ object FunctionCallResultWithKnownProvenanceSerializable {
 
     rt.saveBuildInfo
 
-    val cs: FunctionCallWithProvenanceDeflated[_] = call.save(rt)
-    val csd: FunctionCallWithProvenanceSerializable = cs.data
-    csd match {
-      case kwi: FunctionCallWithKnownProvenanceSerializableWithInputs =>
-        println("ok")
-      case kwoi: FunctionCallWithKnownProvenanceSerializableWithoutInputs =>
-        println("bad")
-        val s = call.save(rt)
-        s.data
-      case ku: FunctionCallWithUnknownProvenanceSerializable =>
-        println("bad")
-        val s = call.save(rt)
-        s.data
-    }
+    val callSaved: FunctionCallWithProvenanceDeflated[_] = call.save(rt)
     val callSavedWithInputs =
-      csd.asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
+      callSaved.data.asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
 
     val output = result.output
     implicit val outputCodec: Codec[O] = call.outputCodec
     implicit val outputClassTag: ClassTag[O] = call.outputClassTag
     implicit val outputTypeTag = outputCodec.typeTag
-    val outputDigest = rt.saveOutputValue(output) //result.resolveAndExtractDigest
+    val outputDigest = rt.saveOutputValue(output)
 
     val resultInSavableForm =
       FunctionCallResultWithKnownProvenanceSerializable(
         callSavedWithInputs.unexpandInputs,
         callSavedWithInputs.inputGroupDigest,
-        Codec.digestObject(result.output(rt)),
+        outputDigest,
         result.outputBuildInfo.commitId,
         result.outputBuildInfo.buildId
       )
