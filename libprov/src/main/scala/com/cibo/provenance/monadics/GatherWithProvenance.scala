@@ -3,9 +3,17 @@ package com.cibo.provenance.monadics
 /**
   * Created by ssmith on 11/06/17.
   *
-  *  Transform `S[ ValueWithProvenance[T] ]` into `ValueWithProvenance[ S[T] ]`,
-  *  and preserve history of each underlying value.
+  * This is one of the builtin infrastructural FunctionWithProvenance classes.
   *
+  * It transforms `S[ ValueWithProvenance[T] ]` into `ValueWithProvenance[S[T]\]`,
+  * and preserve history of each underlying value, where S[_] is a highter-kind Trackable.
+  *
+  * This is usually never used directly by an app.  It is brought in by an implicit
+  * conversion, and lets the S[_] of values operate basically as one would intuit as
+  * an input to other functions.
+  *
+  * It functions a bit like `Future.sequence`, which takes a `Seq[Future[T\]\]` and returns a single Future[Seq[T]\].
+  * It is basically repackaging things, adding an adaptor layer.
   */
 
 import java.io.Serializable
@@ -29,6 +37,7 @@ class GatherWithProvenance[S[_], E](
 
   val currentVersion: Version = NoVersion
 
+  // NOTE: The impl() is circumvented by runCall, and is only present for API completeness.
   def impl(inputs: S[E]): S[E] = inputs
 
   def apply(inputs: S[ValueWithProvenance[E]], v: ValueWithProvenance[Version] = currentVersion): Call =
@@ -41,6 +50,8 @@ class GatherWithProvenance[S[_], E](
   }
 
   protected def runCall(call: Call)(implicit rt: ResultTracker): Result = {
+    // The distinctive logic of this class is here.
+    // Circumvent running impl(), and actually resolve all of the members, then create a regular unified result.
     val inputs: S[ValueWithProvenance[E]] = call.gatheredInputs
     def v2r(a: ValueWithProvenance[E]): FunctionCallResultWithProvenance[E] = a.resolve
     val inputsResolved: S[FunctionCallResultWithProvenance[E]] = hok.map(v2r)(inputs)
