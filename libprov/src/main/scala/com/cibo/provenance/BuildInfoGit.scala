@@ -79,12 +79,12 @@ object BuildInfoGit {
       (
         vcs: String, name: String, version: String, scalaVersion: String, sbtVersion: String,
         builtAtString: String, builtAtMillis: Long, commitId: String, buildId: String,
-        gitBranch: String, gitUncommittedChanges: String, gitHash: String, gitHashShort: String,
+        gitBranch: String, gitUncommittedChanges: Boolean, gitHash: String, gitHashShort: String,
         gitCommitAuthor: String, gitCommitDate: String, gitMessage: String
       ) =>
         BuildInfoGitSaved(
           name, version, scalaVersion, sbtVersion, builtAtString, builtAtMillis,
-          gitBranch, gitUncommittedChanges.toBoolean, gitHash, gitHashShort, gitCommitAuthor, gitCommitDate, gitMessage
+          gitBranch, gitUncommittedChanges, gitHash, gitHashShort, gitCommitAuthor, gitCommitDate, gitMessage
         )
     }
 
