@@ -1,7 +1,6 @@
 // This configures SbtBuildInfo for the current project for provenance tracking.
 // It presumes you have a multi-module project.
 
-
 // Setup:
 // - put this content into the build.sbt that configures project settings
 // - put this into your project/plugins.sbt: `addSbtPlugin("com.eed3si9n" %  "sbt-buildinfo" % "0.7.0")``
@@ -9,14 +8,9 @@
 //      .enablePlugins(BuildInfoPlugin)
 //      .settings(buildInfoSettings)
 
-// The sbt git plugins do not work w/ sbt 1.0 yet.  This suffices.
+// This presumes the project uses git for source control.
+
 import scala.sys.process._
-val gitBranch: String          = ("git status" #| "head -n 1").!!.replace("On branch ", "").stripSuffix("\n")
-val gitCommitAuthor: String    = "git log -1 --pretty=%aN".!!.stripSuffix("\n")
-val gitCommitDate: String      = "git log -1 --pretty=%aI".!!.stripSuffix("\n")
-val gitDescribe: String        = "git log -1 --pretty=%B".!!.stripSuffix("\n")
-val gitHeadRev: String         = "git rev-parse HEAD".!!.stripSuffix("\n")
-val gitRepoClean: String       = if ("git status".!!.split("\n").length == 3) "true" else "false"
 
 // The settings:
 lazy val buildInfoSettings: Seq[Setting[_]] = Seq(
@@ -26,13 +20,17 @@ lazy val buildInfoSettings: Seq[Setting[_]] = Seq(
     "com.cibo" %% "provenance" % "0.5" withSources(),
   ),
   buildInfoKeys := Seq[BuildInfoKey](
-    name, version, scalaVersion, sbtVersion,
-    BuildInfoKey("gitBranch", gitBranch),
-    BuildInfoKey("gitRepoClean", gitRepoClean),
-    BuildInfoKey("gitHeadRev", gitHeadRev),
-    BuildInfoKey("gitCommitAuthor", gitCommitAuthor),
-    BuildInfoKey("gitCommitDate", gitCommitDate),
-    BuildInfoKey("gitDescribe", gitDescribe)
+    name,
+    version,
+    scalaVersion,
+    sbtVersion,
+    "gitBranch"             -> git.gitCurrentBranch.value,
+    "gitUncommittedChanges"  -> git.gitUncommittedChanges.value,
+    "gitHash"               -> git.gitHeadCommit.value.get,
+    "gitMessage"            -> git.gitHeadMessage.value.get,
+    "gitCommitAuthor"       -> "git log -1 --pretty=%aN".!!.stripSuffix("\n"),
+    "gitCommitDate"         -> git.gitHeadCommitDate.value.get,
+    "gitHashShort"          -> git.gitHeadCommit.value.get.substring(0,8),
 
     // If you have a non-git repo, replace the above but be sure to specify the commitId explicitly.
     //BuildInfoKey("commitId", "some shell command".!!.stripSuffix("\n"))
