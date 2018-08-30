@@ -108,7 +108,7 @@ object ValueWithProvenance {
       ct: ClassTag[E],
       cd: Codec[E],
       cts: ClassTag[S[E]],
-      cds: Codec[S[E]],
+      cds: Codec[S[E]]
     ): GatherWithProvenance[S, E]#Call = {
     val gatherer: GatherWithProvenance[S, E] = GatherWithProvenance[S, E]
     val call = gatherer(seq)
