@@ -10,15 +10,16 @@ import io.circe.{Decoder, Encoder}
   */
 trait BuildInfoGit extends BuildInfo with Serializable {
   def gitBranch: String
-  def gitRepoClean: String
-  def gitHeadRev: String
+  def gitUncommittedChanges: Boolean
+  def gitHash: String
+  def gitHashShort: String
   def gitCommitAuthor: String
   def gitCommitDate: String
-  def gitDescribe: String
+  def gitMessage: String
 
-  def commitId: String = gitHeadRev
+  def commitId: String = gitHash
 
-  def codec = BuildInfoGit.codec
+  def codec: Codec[BuildInfoGit] = BuildInfoGit.codec
   def toEncoded = codec.encoder.apply(this)
 }
 
@@ -32,11 +33,12 @@ trait BuildInfoGit extends BuildInfo with Serializable {
   * @param builtAtString
   * @param builtAtMillis
   * @param gitBranch
-  * @param gitRepoClean
-  * @param gitHeadRev
+  * @param gitUncommittedChanges
+  * @param gitHash
+  * @param gitHashShort
   * @param gitCommitAuthor
   * @param gitCommitDate
-  * @param gitDescribe
+  * @param gitMessage
   */
 case class BuildInfoGitSaved(
   name: String,
@@ -46,42 +48,43 @@ case class BuildInfoGitSaved(
   builtAtString: String,
   builtAtMillis: Long,
   gitBranch: String,
-  gitRepoClean: String,
-  gitHeadRev: String,
+  gitUncommittedChanges: Boolean,
+  gitHash: String,
+  gitHashShort: String,
   gitCommitAuthor: String,
   gitCommitDate: String,
-  gitDescribe: String
+  gitMessage: String
 ) extends BuildInfoGit
 
 
 object BuildInfoGit {
   private val encoder: Encoder[BuildInfoGit] =
-    Encoder.forProduct15(
+    Encoder.forProduct16(
       "vcs", "name", "version", "scalaVersion", "sbtVersion", "builtAtString", "builtAtMillis", "commitId", "buildId",
-      "gitBranch", "gitRepoClean", "gitHeadRev", "gitCommitAuthor", "gitCommitDate", "gitDescribe"
+      "gitBranch", "gitUncommittedChanges", "gitHash", "gitHashShort", "gitCommitAuthor", "gitCommitDate", "gitMessage"
     ) {
       bi =>
-        Tuple15(
+        Tuple16(
           "git", bi.name, bi.version, bi.scalaVersion, bi.sbtVersion, bi.builtAtString, bi.builtAtMillis,
-          bi.commitId, bi.buildId, bi.gitBranch, bi.gitRepoClean, bi.gitHeadRev, bi.gitCommitAuthor,
-          bi.gitCommitDate, bi.gitDescribe
+          bi.commitId, bi.buildId, bi.gitBranch, bi.gitUncommittedChanges, bi.gitHash, bi.gitHashShort, bi.gitCommitAuthor,
+          bi.gitCommitDate, bi.gitMessage
         )
     }
 
   private val decoder: Decoder[BuildInfoGit] =
-    Decoder.forProduct15(
+    Decoder.forProduct16(
       "vcs", "name", "version", "scalaVersion", "sbtVersion", "builtAtString", "builtAtMillis", "commitId", "buildId",
-      "gitBranch", "gitRepoClean", "gitHeadRev", "gitCommitAuthor", "gitCommitDate", "gitDescribe"
+      "gitBranch", "gitUncommittedChanges", "gitHash", "gitHashShort", "gitCommitAuthor", "gitCommitDate", "gitMessage"
     ) {
       (
         vcs: String, name: String, version: String, scalaVersion: String, sbtVersion: String,
         builtAtString: String, builtAtMillis: Long, commitId: String, buildId: String,
-        gitBranch: String, gitRepoClean: String, gitHeadRev: String,
-        gitCommitAuthor: String, gitCommitDate: String, gitDescribe: String
+        gitBranch: String, gitUncommittedChanges: Boolean, gitHash: String, gitHashShort: String,
+        gitCommitAuthor: String, gitCommitDate: String, gitMessage: String
       ) =>
         BuildInfoGitSaved(
           name, version, scalaVersion, sbtVersion, builtAtString, builtAtMillis,
-          gitBranch, gitRepoClean, gitHeadRev, gitCommitAuthor, gitCommitDate, gitDescribe
+          gitBranch, gitUncommittedChanges, gitHash, gitHashShort, gitCommitAuthor, gitCommitDate, gitMessage
         )
     }
 
