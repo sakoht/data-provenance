@@ -8,6 +8,8 @@ package com.cibo.provenance
 import com.cibo.provenance.exceptions.InconsistentVersionException
 import com.typesafe.scalalogging.LazyLogging
 import org.scalatest.{FunSpec, Matchers}
+import com.cibo.aws.AWSClient.Implicits.s3SyncClient
+import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
 
 class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
   import com.cibo.io.s3.SyncablePath

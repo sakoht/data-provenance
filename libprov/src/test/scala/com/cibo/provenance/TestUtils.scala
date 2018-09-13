@@ -4,6 +4,8 @@ import com.cibo.io.s3.SyncablePath
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.io.FileUtils
 import org.scalatest.Matchers
+import com.cibo.aws.AWSClient.Implicits.s3SyncClient
+import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
 
 object TestUtils extends LazyLogging with Matchers {
   import java.io.File
@@ -40,12 +42,12 @@ object TestUtils extends LazyLogging with Matchers {
 
     val actualOutputDirPath = SyncablePath(f"$testOutputBaseDir/$subdir")
     if (actualOutputDirPath.isRemote) {
-      val f = actualOutputDirPath.getFile
+      val f = actualOutputDirPath.toFile
       FileUtils.deleteDirectory(f)
       actualOutputDirPath.syncFromS3()
     }
 
-    val actualOutputLocalPath = actualOutputDirPath.getLocalPathString
+    val actualOutputLocalPath = actualOutputDirPath.localPath
 
     val newManifestBytes =
       getOutputAsBytes(s"cd $actualOutputLocalPath && wc -c `find . -type file | sort | grep -v codecs`")

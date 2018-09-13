@@ -28,7 +28,7 @@ trait TestTracking extends ResultTrackerSimple {
           )
       }
     } else {
-      val testDataDir = basePath.getFile
+      val testDataDir = basePath.toFile
       FileUtils.deleteDirectory(testDataDir)
     }
   }

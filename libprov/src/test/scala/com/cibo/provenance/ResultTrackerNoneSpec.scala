@@ -2,6 +2,7 @@ package com.cibo.provenance
 
 import org.scalatest.{FunSpec, Matchers}
 
+
 /**
   * Created by ssmith on 9/20/17.
   */

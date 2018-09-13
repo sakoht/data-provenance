@@ -561,6 +561,8 @@ class ResultTrackerSimple(
 
   import scala.concurrent.duration._
   import scala.concurrent.Await
+  import com.cibo.aws.AWSClient.Implicits.s3SyncClient
+  import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
 
   @transient
   protected lazy val s3db: S3DB = S3DB.fromSyncablePath(basePath)
@@ -662,7 +664,7 @@ class ResultTrackerSimple(
           case Some(_) =>
             true
           case None =>
-            if (basePath.extendPath(path).exists) {
+            if ((basePath / path).exists) {
               lightCache.put(path, Unit)
               true
             } else {
@@ -717,6 +719,9 @@ class ResultTrackerSimple(
 }
 
 object ResultTrackerSimple {
+  import com.cibo.aws.AWSClient.Implicits.s3SyncClient
+  import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
+
   def apply(basePath: SyncablePath, writable: Boolean)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
     new ResultTrackerSimple(basePath, writable)(currentAppBuildInfo)
 
