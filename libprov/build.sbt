@@ -2,7 +2,7 @@ organization := "com.cibo"
 name         := "provenance"
 licenses     += ("BSD Simplified", url("https://opensource.org/licenses/BSD-3-Clause"))
 
-crossScalaVersions := Seq("2.12.6", "2.11.12")
+crossScalaVersions := Seq("2.12.6")
 scalaVersion := crossScalaVersions.value.head
 
 lazy val provenance = project.in(file(".")).configs(IntegrationTest)
