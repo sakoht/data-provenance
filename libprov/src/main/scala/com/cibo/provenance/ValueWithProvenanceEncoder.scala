@@ -9,7 +9,10 @@ import io.circe._
   * @tparam O The output type of the ValueWithProvenance.
   * @tparam T The overall type of ValueWithProvenance being saved.
   */
-class ValueWithProvenanceEncoder[O, T <: ValueWithProvenance[O]](implicit rt: ResultTracker) extends Encoder[T] {
+class ValueWithProvenanceEncoder[O, T <: ValueWithProvenance[O]](
+  @transient
+  implicit val rt: ResultTracker
+) extends Encoder[T] {
   def apply(obj: T): Json =  {
     val serializable: ValueWithProvenanceSerializable = ValueWithProvenanceSerializable.save[O](obj)
     val json: Json = ValueWithProvenanceSerializable.codec.encoder.apply(serializable)
