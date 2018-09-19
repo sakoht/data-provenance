@@ -4,10 +4,7 @@ import io.circe._
 
 import scala.util.{Failure, Success, Try}
 
-class ValueWithProvenanceDecoder[O, T <: ValueWithProvenance[O]](
-  @transient
-  implicit val rt: ResultTracker
-) extends Decoder[T] {
+class ValueWithProvenanceDecoder[O, T <: ValueWithProvenance[O]](implicit val rt: ResultTracker) extends Decoder[T] {
   def apply(c: HCursor) = {
     val result: Either[DecodingFailure, ValueWithProvenanceSerializable] = ValueWithProvenanceSerializable.codec.decoder.apply(c)
     // NOTE: .map is not available in scala 2.11, which is still a target.
