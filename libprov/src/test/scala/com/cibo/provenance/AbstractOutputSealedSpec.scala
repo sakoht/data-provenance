@@ -2,6 +2,8 @@ package com.cibo.provenance
 
 import com.cibo.io.s3.SyncablePath
 import org.scalatest.{FunSpec, Matchers}
+import com.cibo.aws.AWSClient.Implicits.s3SyncClient
+import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
 
 /*
  * When output is abstract, but the abstract type is a sealed trait,

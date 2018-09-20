@@ -1,10 +1,10 @@
 package com.cibo.provenance
 
-import com.cibo.provenance
 import com.cibo.provenance.FunctionCallWithProvenance.TraversableCallExt
 import org.scalatest.{FunSpec, Matchers}
+import com.cibo.aws.AWSClient.Implicits.s3SyncClient
+import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
 
-import scala.collection.immutable
 
 /**
   * Created by ssmith on 11/07/17.

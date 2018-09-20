@@ -49,19 +49,20 @@ class ResultTrackerSimple(
   val writable: Boolean = true,
   val underlyingTracker: Option[ResultTrackerSimple] = None
 )(implicit val currentAppBuildInfo: BuildInfo,
-  @transient val ec: ExecutionContext = ExecutionContext.global) extends ResultTracker {
+  @transient
+  val ec: ExecutionContext = ExecutionContext.global) extends ResultTracker {
 
   import com.amazonaws.services.s3.model.PutObjectResult
   import com.cibo.cache.GCache
   import com.cibo.io.s3.S3DB
   import com.cibo.provenance.exceptions.InconsistentVersionException
-  import io.circe.generic.auto._
 
   import scala.reflect.ClassTag
   import scala.reflect.runtime.universe.TypeTag
   import scala.util.{Failure, Success, Try}
 
-  implicit val vwpCodec: Codec[ValueWithProvenanceSerializable] = ValueWithProvenanceSerializable.codec
+  @transient
+  implicit lazy val vwpCodec: Codec[ValueWithProvenanceSerializable] = ValueWithProvenanceSerializable.codec
 
   def over(underlying: ResultTrackerSimple): ResultTrackerSimple = {
     new ResultTrackerSimple(basePath, writable, Some(underlying))
@@ -106,7 +107,8 @@ class ResultTrackerSimple(
     digest
   }
 
-  val resultCacheSize = 1000L
+  @transient
+  lazy val resultCacheSize = 1000L
 
   @transient
   private lazy val resultCache =
@@ -511,7 +513,8 @@ class ResultTrackerSimple(
    * Even if a value hypothetically has the same codec as others of its class, the exact codec is still recorded.
    */
 
-  val codecCacheSize = 1000L
+  @transient
+  lazy val codecCacheSize = 1000L
 
   @transient
   private lazy val codecCache =
@@ -561,11 +564,13 @@ class ResultTrackerSimple(
 
   import scala.concurrent.duration._
   import scala.concurrent.Await
+  import com.cibo.aws.AWSClient.Implicits.s3SyncClient
 
   @transient
   protected lazy val s3db: S3DB = S3DB.fromSyncablePath(basePath)
 
-  protected val saveTimeout: FiniteDuration = 5.minutes
+  @transient
+  protected lazy val saveTimeout: FiniteDuration = 5.minutes
 
   /**
     * There are two caches at the lowest level of path -> bytes:
@@ -581,8 +586,8 @@ class ResultTrackerSimple(
     *     - prevents duplicate loads
     *
     */
-
-  val lightCacheSize: Long = 50000L
+  @transient
+  lazy val lightCacheSize: Long = 50000L
 
   @transient
   protected lazy val lightCache: Cache[String, Unit] =
@@ -662,7 +667,7 @@ class ResultTrackerSimple(
           case Some(_) =>
             true
           case None =>
-            if (basePath.extendPath(path).exists) {
+            if ((basePath / path).exists) {
               lightCache.put(path, Unit)
               true
             } else {
@@ -717,21 +722,17 @@ class ResultTrackerSimple(
 }
 
 object ResultTrackerSimple {
-  def apply(basePath: SyncablePath, writable: Boolean)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
-    new ResultTrackerSimple(basePath, writable)(currentAppBuildInfo)
+  def apply(storageRoot: SyncablePath, writable: Boolean)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
+    new ResultTrackerSimple(storageRoot, writable)(currentAppBuildInfo)
 
-  def apply(basePath: String, writable: Boolean)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
-    new ResultTrackerSimple(SyncablePath(basePath), writable=writable)(currentAppBuildInfo)
+  def apply(storageRoot: String, writable: Boolean)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
+    new ResultTrackerSimple(SyncablePath(storageRoot), writable=writable)(currentAppBuildInfo)
 
-  def apply(basePath: String)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
-    new ResultTrackerSimple(SyncablePath(basePath))(currentAppBuildInfo)
+  def apply(storageRoot: String)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
+    new ResultTrackerSimple(SyncablePath(storageRoot))(currentAppBuildInfo)
 
-  def apply(basePath: SyncablePath)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
-    new ResultTrackerSimple(basePath)(currentAppBuildInfo)
-
-  // It is not normal to encode trackers, but it is possible that someone writes tools that record the trackers
-  // themselves.  Also, if an application that takes calls as data attempt to save the Call, the result tracker
-  // will be referenced in the codec.
+  def apply(storageRoot: SyncablePath)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
+    new ResultTrackerSimple(storageRoot)(currentAppBuildInfo)
 }
 
 class ReadOnlyTrackerException(msg: String)

@@ -3,6 +3,8 @@ package com.cibo.provenance
 import com.cibo.io.s3.SyncablePath
 import com.cibo.provenance.monadics.MapWithProvenance
 import org.scalatest.{FunSpec, Matchers}
+import com.cibo.aws.AWSClient.Implicits.s3SyncClient
+import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
 
 /**
   * Created by ssmith on 10/26/17.
