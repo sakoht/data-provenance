@@ -56,7 +56,6 @@ class ResultTrackerSimple(
   import com.cibo.cache.GCache
   import com.cibo.io.s3.S3DB
   import com.cibo.provenance.exceptions.InconsistentVersionException
-  import io.circe.generic.auto._
 
   import scala.reflect.ClassTag
   import scala.reflect.runtime.universe.TypeTag
@@ -566,7 +565,6 @@ class ResultTrackerSimple(
   import scala.concurrent.duration._
   import scala.concurrent.Await
   import com.cibo.aws.AWSClient.Implicits.s3SyncClient
-  import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
 
   @transient
   protected lazy val s3db: S3DB = S3DB.fromSyncablePath(basePath)
@@ -724,7 +722,6 @@ class ResultTrackerSimple(
 }
 
 object ResultTrackerSimple {
-
   def apply(storageRoot: SyncablePath, writable: Boolean)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
     new ResultTrackerSimple(storageRoot, writable)(currentAppBuildInfo)
 
@@ -736,10 +733,6 @@ object ResultTrackerSimple {
 
   def apply(storageRoot: SyncablePath)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
     new ResultTrackerSimple(storageRoot)(currentAppBuildInfo)
-
-  // It is not normal to encode trackers, but it is possible that someone writes tools that record the trackers
-  // themselves.  Also, if an application that takes calls as data attempt to save the Call, the result tracker
-  // will be referenced in the codec.
 }
 
 class ReadOnlyTrackerException(msg: String)
