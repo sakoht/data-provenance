@@ -1,13 +1,1 @@
-     650 ./calls/7f4d41a6ea821415a0551ad6c83fe7923f645be8
-     471 ./commits/DUMMY-COMMIT/builds/1955.11.12T22.04.00Z/37ec13133419421ab0bacaa1c377c117047d06b7
-       2 ./data-provenance/77de68daecd823babbb58edb1c8e14d7106e83bb/as/scala.Int/from/com.cibo.provenance.Add/1.0/with-inputs/eec61d10d22a6cdf8727a40b4a8412960e6a5569/with-provenance/7f4d41a6ea821415a0551ad6c83fe7923f645be8/at/DUMMY-COMMIT/1955.11.12T22.04.00Z
-       1 ./data/356a192b7913b04c54574d18c28d46e6395428ab
-       1 ./data/77de68daecd823babbb58edb1c8e14d7106e83bb
-       1 ./data/da4b9237bacccdf19c0760cab7aec4a8359010b0
-       2 ./functions/com.cibo.provenance.Add/1.0/call-resolved-inputs/7f4d41a6ea821415a0551ad6c83fe7923f645be8/eec61d10d22a6cdf8727a40b4a8412960e6a5569
-       2 ./functions/com.cibo.provenance.Add/1.0/calls/7f4d41a6ea821415a0551ad6c83fe7923f645be8
-      87 ./functions/com.cibo.provenance.Add/1.0/input-groups/eec61d10d22a6cdf8727a40b4a8412960e6a5569
-       2 ./functions/com.cibo.provenance.Add/1.0/inputs-to-output/eec61d10d22a6cdf8727a40b4a8412960e6a5569/77de68daecd823babbb58edb1c8e14d7106e83bb/DUMMY-COMMIT/1955.11.12T22.04.00Z
-       2 ./functions/com.cibo.provenance.Add/1.0/output-to-provenance/77de68daecd823babbb58edb1c8e14d7106e83bb/eec61d10d22a6cdf8727a40b4a8412960e6a5569/7f4d41a6ea821415a0551ad6c83fe7923f645be8
-     412 ./results/0aaf80e44c2ab008cf22577a3f231b6a4128533b
-    1633 total
+0
