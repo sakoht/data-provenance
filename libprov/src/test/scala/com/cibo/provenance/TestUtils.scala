@@ -28,8 +28,12 @@ object TestUtils extends LazyLogging with Matchers {
   val remoteTestOutputBaseDir: String =
     f"s3://com-cibo-user/" + subdir
 
-  // NOTE: Switch to the remote version to manually test on S3. ;)
-  val testOutputBaseDir = localTestOutputBaseDir
+  // Set this env var
+  val testOutputBaseDir =
+    sys.env.get("PROVENANCE_TEST_REMOTE") match {
+      case Some(value) => remoteTestOutputBaseDir
+      case None => localTestOutputBaseDir
+    }
 
   def diffOutputSubdir(subdir: String) = {
     val version =
