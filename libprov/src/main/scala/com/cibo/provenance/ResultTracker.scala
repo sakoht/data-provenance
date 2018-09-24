@@ -1,5 +1,7 @@
 package com.cibo.provenance
 
+import scala.concurrent.{ExecutionContext, Future}
+
 
 /**
   * Created by ssmith on 5/16/17.
@@ -31,8 +33,8 @@ trait ResultTracker extends Serializable {
   lazy val logger = com.typesafe.scalalogging.Logger(LoggerFactory.getLogger(getClass.getName))
 
   /**
-    * This is the core function of a ResultTracker.  It converts a call which may or may not have
-    * a result into a result.
+    * The .resolve method is the core function of a ResultTracker.
+    * It converts a call which may or may not have a result into a result.
     *
     * First, it checks to see if there is already a result for the exact call
     * in question, and if so returns that result.  If not it checks to see if there has ever been
@@ -63,6 +65,21 @@ trait ResultTracker extends Serializable {
     }
   }
 
+  def resolveAsync[O](call: FunctionCallWithProvenance[O])(implicit ec: ExecutionContext): Future[FunctionCallResultWithProvenance[O]] = {
+    for {
+      callWithInputDigests <- call.resolveInputsAsync(rt=this)
+      resultOption <- loadResultByCallOptionAsync[O](callWithInputDigests)
+    }
+      yield resultOption match {
+        case Some(existingResult) =>
+          existingResult
+        case None =>
+          val newResult: FunctionCallResultWithProvenance[O] = callWithInputDigests.run(this)
+          FunctionCallResultWithKnownProvenanceSerializable.save(newResult)(this)
+          newResult
+      }
+  }
+
   // abstract interface
 
   /**
@@ -71,7 +88,7 @@ trait ResultTracker extends Serializable {
     * param callId   The digest of the serialized call as referenced elsewhere in the system.
     * return         Some FunctionCallWithProvenance[_] if it exists.
     */
-  def loadCallById(callId: Digest): Option[FunctionCallWithProvenanceDeflated[_]]
+  def  loadCallById(callId: Digest): Option[FunctionCallWithProvenanceDeflated[_]]
 
   /**
     *
@@ -103,13 +120,13 @@ trait ResultTracker extends Serializable {
     * @return       The deflated call created during saving.
     */
   def saveCallSerializable[O](callInSerializableForm: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O]
-  
+
   /**
-    * Write out one `FunctionCallResultWithProvenanceSaved`.  
-    * 
+    * Write out one `FunctionCallResultWithProvenanceSaved`.
+    *
     * This is directly called by the constructor of the *Saved object when called with an unsaved result.
-    * 
-    * This is automatically called during resolve(), but can be called independently when 
+    *
+    * This is automatically called during resolve(), but can be called independently when
     * moving results made from one ResultTracker to another.
     *
     * @param resultInSerializableForm:   The result to save after conversion to savable form.
@@ -124,14 +141,14 @@ trait ResultTracker extends Serializable {
   /**
     * Save a regular input/output value to the storage fabric.
     *
-    * This is used by the 
+    * This is used by the
     *
     * @param obj:   The object to save.  It must have a circe Codec implicitly available.
     * @tparam T     The type of data to save.
     * @return       The Digest of the serialized data.  A unique ID usable to re-load later.
     */
   def saveOutputValue[T : Codec](obj: T)(implicit cdcd: Codec[Codec[T]]): Digest
-  
+
   def saveBuildInfo: Digest
 
   /**
@@ -167,6 +184,8 @@ trait ResultTracker extends Serializable {
     * @return         An Option[FunctionCallResultWithProvenance] that has Some if the result exists.
     */
   def loadResultByCallOption[O](call: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]]
+
+  def loadResultByCallOptionAsync[O](call: FunctionCallWithProvenance[O])(implicit ec: ExecutionContext): Future[Option[FunctionCallResultWithProvenance[O]]]
 
   /**
     * Retrieve one value from storage if the specified digest key is found.
@@ -222,8 +241,7 @@ trait ResultTracker extends Serializable {
     workingCodecValuePairs.headOption match {
       case Some(pair) =>
         pair
-      case None =>
-        throw new RuntimeException(f"Failed to find codec for value digest $valueDigest for type ${implicitly[ClassTag[T]]}")
+      case None => throw new RuntimeException(f"Failed to find codec for value digest $valueDigest for type ${implicitly[ClassTag[T]]}")
     }
   }
 

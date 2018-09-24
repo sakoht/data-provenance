@@ -1,9 +1,17 @@
 package com.cibo.provenance
 
-import com.cibo.io.s3.SyncablePath
-import com.google.common.cache.Cache
+import java.io.{BufferedInputStream, BufferedOutputStream, File, FileOutputStream}
+import java.nio.file.{Files, Paths}
 
-import scala.concurrent.ExecutionContext
+import com.amazonaws.services.s3.AmazonS3
+import com.amazonaws.services.s3.model.{AmazonS3Exception, ListObjectsRequest, PutObjectResult, S3Object}
+import com.cibo.io.s3._
+import com.google.common.cache.Cache
+import org.slf4j.{Logger, LoggerFactory}
+
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.util.control.NonFatal
 
 /**
   * Created by ssmith on 5/16/17.
@@ -52,9 +60,7 @@ class ResultTrackerSimple(
   @transient
   val ec: ExecutionContext = ExecutionContext.global) extends ResultTracker {
 
-  import com.amazonaws.services.s3.model.PutObjectResult
   import com.cibo.cache.GCache
-  import com.cibo.io.s3.S3DB
   import com.cibo.provenance.exceptions.InconsistentVersionException
 
   import scala.reflect.ClassTag
@@ -294,11 +300,7 @@ class ResultTrackerSimple(
 
   //def saveOutputValue[T : Codec](obj: T)(implicit tt: TypeTag[Codec[T]], ct: ClassTag[Codec[T]]): Digest = {
   def saveOutputValue[T: Codec](obj: T)(implicit cdcd: Codec[Codec[T]]) = {
-    //val outputClassTag = implicitly[ClassTag[T]]
-    //val outputClass: Class[_ <: T] = obj.getClass
-    //val ct3 = ClassTag(outputClass)
     val (bytes, digest) = Codec.serialize(obj, checkForInconsistentSerialization(obj))
-    //val outputClassName = Util.classToName[T]
     saveCodec[T](digest)
     val path = f"data/${digest.id}"
     logger.info(f"Saving raw $obj to $path")
@@ -307,7 +309,6 @@ class ResultTrackerSimple(
   }
 
   def loadCodecByClassNameAndCodecDigest[T: ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]) = {
-  //def loadCodecByClassNameAndCodecDigest[T: ClassTag](valueClassName: String,codecDigest: Digest)(implicittt: TypeTag[Codec[T]],ct: ClassTag[Codec[T]]): Codec[T] = {
     val bytes = loadBytes(f"codecs/$valueClassName/${codecDigest.id}")
     Codec.deserialize[Codec[T]](bytes)
   }
@@ -346,29 +347,36 @@ class ResultTrackerSimple(
     loadOutputIdsForCallOption(call).nonEmpty
 
 
-  def loadResultByCallOption[O](call: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] = {
-    loadOutputIdsForCallOption(call).map {
-      case (outputId, commitId, buildId) =>
-        implicit val c: ClassTag[O] = call.outputClassTag
-        implicit val e: Codec[O] = call.outputCodec
+  def loadResultByCallOption[O](call: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] =
+    Await.result(loadResultByCallOptionAsync(call), ioTimeout)
 
-        val output: O = try {
-          loadValue[O](outputId)
-        } catch {
-          case e: Exception =>
-            // TODO: Remove debug code
-            println(e.toString)
-            loadValue[O](outputId)(call.outputCodec)
+  def loadResultByCallOptionAsync[O](call: FunctionCallWithProvenance[O])(implicit ec: ExecutionContext): Future[Option[FunctionCallResultWithProvenance[O]]] = {
+    // just re-run anything we need to "load"
+    loadOutputIdsForCallOptionAsync(call).map {
+      opt =>
+        opt.map {
+          case (outputId, commitId, buildId) =>
+            implicit val c: ClassTag[O] = call.outputClassTag
+            implicit val e: Codec[O] = call.outputCodec
+
+            val output: O = try {
+              loadValue[O](outputId)
+            } catch {
+              case e: Exception =>
+                // TODO: Remove debug code
+                println(e.toString)
+                loadValue[O](outputId)(call.outputCodec)
+            }
+
+            val outputId2 = Codec.digestObject(output)
+            if (outputId2 != outputId) {
+              throw new SerializationInconsistencyException(f"Output value saved as $outputId reloads with a digest of $outputId2: $output")
+            }
+
+            val outputWrapped = VirtualValue(valueOption = Some(output), digestOption = Some(outputId), serializedDataOption = None)
+            val bi = BuildInfoBrief(commitId, buildId)
+            call.newResult(outputWrapped)(bi)
         }
-
-        val outputId2 = Codec.digestObject(output)
-        if (outputId2 != outputId) {
-          throw new SerializationInconsistencyException(f"Output value saved as $outputId reloads with a digest of $outputId2: $output")
-        }
-
-        val outputWrapped = VirtualValue(valueOption = Some(output), digestOption = Some(outputId), serializedDataOption = None)
-        val bi = BuildInfoBrief(commitId, buildId)
-        call.newResult(outputWrapped)(bi)
     }
   }
 
@@ -398,18 +406,16 @@ class ResultTrackerSimple(
 
   // Private Methods
 
-  private def loadCallSerializedDataOption(functionName: String, version: Version, digest: Digest): Option[Array[Byte]] =
-    //loadBytesOption(f"functions/$functionName/${version.id}/calls/${digest.id}")
-    loadBytesOption(f"calls/${digest.id}")
+  private def loadOutputIdsForCallOption[O](call: FunctionCallWithProvenance[O]): Option[(Digest, String, String)] =
+    Await.result(loadOutputIdsForCallOptionAsync(call), ioTimeout)
 
-
-  private def loadOutputIdsForCallOption[O](call: FunctionCallWithProvenance[O]): Option[(Digest, String, String)] = {
+  private def loadOutputIdsForCallOptionAsync[O](call: FunctionCallWithProvenance[O]): Future[Option[(Digest, String, String)]] = {
     val inputGroupValuesDigest = call.getInputGroupValuesDigest(this)
-    loadOutputCommitAndBuildIdForInputGroupIdOption(
+    loadOutputCommitAndBuildIdForInputGroupIdOptionAsync(
       call.functionName,
       call.versionValue(this),
       inputGroupValuesDigest
-    ) match {
+    ).map {
       case Some(ids) =>
         Some(ids)
       case None =>
@@ -418,8 +424,26 @@ class ResultTrackerSimple(
     }
   }
 
-  private def loadOutputCommitAndBuildIdForInputGroupIdOption(fname: String, fversion: Version, inputGroupId: Digest): Option[(Digest,String, String)] = {
-    getListingRecursive(f"functions/$fname/${fversion.id}/inputs-to-output/${inputGroupId.id}") match {
+  private def loadOutputCommitAndBuildIdForInputGroupIdOption(fname: String, fversion: Version, inputGroupId: Digest): Option[(Digest,String, String)] =
+    Await.result(
+      loadOutputCommitAndBuildIdForInputGroupIdOptionAsync(fname, fversion, inputGroupId),
+      ioTimeout
+    )
+
+  private def loadOutputCommitAndBuildIdForInputGroupIdOptionAsync(fname: String, fversion: Version, inputGroupId: Digest): Future[Option[(Digest,String, String)]] = {
+    getListingRecursiveAsync(f"functions/$fname/${fversion.id}/inputs-to-output/${inputGroupId.id}").map {
+      suffixes =>
+        parseOutputSuffixes(
+          fname: String,
+          fversion: Version,
+          inputGroupId: Digest,
+          suffixes
+        )
+    }
+  }
+
+  private def parseOutputSuffixes(fname: String, fversion: Version, inputGroupId: Digest, suffixes: List[String]): Option[(Digest,String, String)] = {
+    suffixes match {
       case Nil =>
         None
       case head :: Nil =>
@@ -447,7 +471,7 @@ class ResultTrackerSimple(
           }
           logger.error(f"Multiple outputs for $fname $fversion $inputGroupId")
           ids.foreach {
-            id => 
+            id =>
               logger.error(f"output ID: $id")
           }
         }
@@ -558,7 +582,7 @@ class ResultTrackerSimple(
    *
    * Each unit of work should be something of a size that is reasonable to queue, check status, store,
    * and pre-check-for-completion before executing, etc.
-   * 
+   *
    * Granular chunks will have too much overhead to be used at this layer.
    */
 
@@ -567,14 +591,14 @@ class ResultTrackerSimple(
   import com.cibo.aws.AWSClient.Implicits.s3SyncClient
 
   @transient
-  protected lazy val s3db: S3DB = S3DB.fromSyncablePath(basePath)
+  protected lazy val storage: KVStore = KVStore.fromSyncablePath(basePath)
 
   @transient
-  protected lazy val saveTimeout: FiniteDuration = 5.minutes
+  protected lazy val ioTimeout: FiniteDuration = 5.minutes
 
   /**
     * There are two caches at the lowest level of path -> bytes:
-    * 
+    *
     * - lightCache (path -> Unit)
     *     - larger max size
     *     - holds just paths, no content
@@ -593,68 +617,89 @@ class ResultTrackerSimple(
   protected lazy val lightCache: Cache[String, Unit] =
     GCache[String, Unit]().maximumSize(lightCacheSize).buildWith[String, Unit]
 
-  val heavyCacheSize: Long = 500L
+  @transient
+  lazy val heavyCacheSize: Long = 500L
 
   @transient
   protected lazy val heavyCache: Cache[String, Array[Byte]] =
     GCache[String, Array[Byte]]().maximumSize(heavyCacheSize).buildWith[String, Array[Byte]]
 
+  // sync interface
+
   protected def saveBytes(path: String, bytes: Array[Byte]): Unit =
+    Await.result(saveBytesAsync(path, bytes), ioTimeout)
+
+
+  protected def loadBytes(path: String): Array[Byte] =
+    Await.result(loadBytesAsync(path), ioTimeout)
+
+  // async interface
+
+  protected def saveBytesAsync(path: String, bytes: Array[Byte]): Future[Unit] =
     if (!writable) {
       throw new ReadOnlyTrackerException(f"Attempt to save to a read-only ResultTracker $this.")
     } else {
       Option(lightCache.getIfPresent(path)) match {
         case Some(_) =>
         // Already saved.  Do nothing.
+          Future.successful { }
         case None =>
           Option(heavyCache.getIfPresent(path)) match {
             case Some(_) =>
               // Recently loaded.  Flag in the larger save cache, but otherwise do nothing.
               lightCache.put(path, Unit)
+              Future.successful { }
             case None =>
               // Actually save.
-              s3db.putObject(path, bytes) match {
-                case Some(f) =>
-                  val result: PutObjectResult = Await.result(f, saveTimeout)
-                  logger.debug(result.toString)
-                case None =>
-                // No future...
+              val future = storage.putBytes(path, bytes)
+              future.onComplete {
+                case s: Success[Unit] =>
+                  lightCache.put(path, Unit)
+                  heavyCache.put(path, bytes)
+                case f: Failure[Unit] =>
+                  logger.error(f"Failed to save data to $path!: ${f.exception.toString}")
               }
-              lightCache.put(path, Unit)
-              heavyCache.put(path, bytes)
+              future
           }
       }
     }
 
-  protected def loadBytes(path: String): Array[Byte] =
-    try {
-      val bytes = Option(heavyCache.getIfPresent(path)) match {
-        case Some(found) =>
-          found
-        case None =>
-          s3db.getBytesForPrefix(path)
-      }
-      lightCache.put(path, Unit)   // larger, lighter, prevents re-saves
-      heavyCache.put(path, bytes)  // smaller, heavier, actually provides data
-      bytes
-    } catch {
-      case e: Exception =>
+
+  protected def loadBytesAsync(path: String): Future[Array[Byte]] =
+    Option(heavyCache.getIfPresent(path)) match {
+      case Some(found) =>
+        Future.successful(found)
+      case None =>
+        val future = storage.getBytes(path).map {
+          obj =>
+            lightCache.put(path, Unit)      // larger, lighter, prevents re-saves
+            heavyCache.put(path, obj)   // smaller, heavier, actually provides data
+            obj
+        }
         underlyingTracker match {
-          case Some(underlying) =>
-            underlying.loadBytes(path)
-          case None =>
-            throw e
+          case Some(underlying) => future.fallbackTo { underlying.loadBytesAsync(path) }
+          case None => future
         }
     }
 
   protected def getListingRecursive(path: String): List[String] = {
-    val listing1: Iterator[String] = s3db.getSuffixesForPrefix(path)
+    val listing1: Iterator[String] = storage.getSuffixesForPrefix(path)
     underlyingTracker match {
       case Some(underlying) =>
+        // NOTE: It would be a performance improvment to make this a merge sort.
+        // In practice all lists used here are tiny, though.
         val listing2 = underlying.getListingRecursive(path)
         (listing1.toVector ++ listing2.toVector).sorted.toList
       case None =>
         listing1.toList
+    }
+  }
+
+  protected def getListingRecursiveAsync(path: String): Future[List[String]] = {
+    // NOTE: The listing iterator uses one asynchronous thread to be 1-page ahead.
+    // So this is is not really doing fully async I/O.  Refactor if needed later.
+    Future.successful {
+      getListingRecursive(path)
     }
   }
 
@@ -683,6 +728,11 @@ class ResultTrackerSimple(
         }
     }
 
+  protected def pathExistsAsync(path: String): Future[Boolean] = {
+    // NOTE: This is not truly async yet.
+    Future.successful { pathExists(path) }
+  }
+
   // Wrappers for loadBytes() and saveBytes():
 
   protected def loadBytesOption(path: String): Option[Array[Byte]] =
@@ -695,10 +745,21 @@ class ResultTrackerSimple(
         None
     }
 
+  protected def loadBytesOptionAsync(path: String): Future[Option[Array[Byte]]] = {
+    Future.successful { loadBytesOption(path) } // NOTE: invert
+  }
+
+
   protected def loadObject[T : Codec](path: String): T = {
     val bytes = loadBytes(path)
     Codec.deserialize[T](bytes)
   }
+
+  protected def loadObjectAsync[T : Codec](path: String): Future[T] =
+    loadBytesAsync(path).map {
+      bytes =>
+        Codec.deserialize[T](bytes)
+    }
 
   protected def saveObject[T : ClassTag: Codec](path: String, obj: T): String =
     obj match {
@@ -709,12 +770,16 @@ class ResultTrackerSimple(
         saveBytes(path, bytes)
         digest.id
     }
-  
+
+  protected def saveObjectAsync[T : ClassTag: Codec](path: String, obj: T): Future[String] = {
+    Future.successful(saveObject(path, obj)) // NOTE: invert
+  }
+
   @transient
   private lazy val emptyBytesAndDigest = Codec.serialize("")
   protected def emptyBytes: Array[Byte] = emptyBytesAndDigest._1
   protected def emptyDigest: Digest = emptyBytesAndDigest._2
-  
+
   protected def saveLinkPath(path: String): Digest = {
     saveBytes(path, emptyBytes)
     emptyDigest
@@ -738,3 +803,237 @@ object ResultTrackerSimple {
 class ReadOnlyTrackerException(msg: String)
   extends RuntimeException(f"Attempt to use a read-only tracker to write data: $msg")
 
+import scala.concurrent.duration._
+
+
+/**
+  * KVStore is a replacement for S3DB.  It could evolve to possibly replace it.
+  * Right now it is used by ResultTrackerSimple only.
+  */
+object KVStore {
+  def fromSyncablePath(path: SyncablePath)(implicit ec: ExecutionContext, s3SyncClient: AmazonS3): KVStore =
+    path match {
+      case s3Path: S3SyncablePath => new S3Store(s3Path)
+      case localPath: LocalPath => new LocalStore(localPath)
+    }
+}
+
+trait KVStore {
+
+  // public API
+
+  def putBytes(path: String, value: Array[Byte]): Future[Unit] =
+    putBytesForFullPath(getFullPathForRelativePath(path), value)
+
+  def getBytes(path: String): Future[Array[Byte]] =
+    getBytesForFullPath(getFullPathForRelativePath(path))
+
+  def getSuffixesForPrefix(
+    prefix: String,
+    filterOption: Option[String => Boolean] = None,
+    delimiterOption: Option[String] = None
+  ): Iterator[String] = {
+    val fullPrefix = getFullPathForRelativePath(prefix)
+    val offset: Int =
+      if (fullPrefix.endsWith("/"))
+        fullPrefix.length
+      else
+        fullPrefix.length + 1
+    getFullPathsForPrefix(prefix, filterOption, delimiterOption).map { fullPath =>
+      // This has more sanity checking that should be necessary, but one-off errors have crept in several times.
+      assert(fullPath.startsWith(fullPrefix), s"Full path '$fullPath' does not start with the expected prefix 'fullPrefix'")
+      fullPath
+        .substring(offset)
+        .ensuring(!_.startsWith("/"), s"Full path suffix should not start with a '/'")
+    }
+  }
+
+  // protected methods implemented by subclasses
+
+  protected def putBytesForFullPath(path: String, value: Array[Byte]): Future[Unit]
+
+  protected def getBytesForFullPath(fullPath: String): Future[Array[Byte]]
+
+  protected def getFullPathForRelativePath(subPrefix: String): String
+
+  protected def getIteratorForFullPath(
+    fullPath: String,
+    delimiterOption: Option[String] = Some("/"),
+    prevMarker: Option[String] = None,
+    prevResults: Iterator[String] = Iterator.empty
+  ): Iterator[String]
+
+  // private API
+
+  private def getFullPathsForPrefix(
+    subPrefix: String,
+    filterOption: Option[String => Boolean] = None,
+    delimiterOption: Option[String] = None
+  ): Iterator[String] = {
+    // Lots of things use a subPrefix as a query and pull back a list of suffixes in a single request (caveat: paginated).
+    // Note that this returns a buffered iterator and throws an exception if it is empty.
+    val keyIterator = getFullPathIteratorForPath(subPrefix, delimiterOption = delimiterOption)
+    filterOption.foldLeft(keyIterator)((it, f) => it.filter(f))
+  }
+
+  private def getFullPathIteratorForPath(
+    path: String,
+    delimiterOption: Option[String] = Some("/"),
+    prevMarker: Option[String] = None,
+    prevResults: Iterator[String] = Iterator.empty
+  ): Iterator[String] = {
+    val fullPath = getFullPathForRelativePath(path)
+    getIteratorForFullPath(fullPath, delimiterOption, prevMarker, prevResults)
+  }
+}
+
+class S3Store(sp: S3SyncablePath)(implicit ec: ExecutionContext, s3SyncClient: AmazonS3) extends KVStore {
+
+  // protected methods implement the KVStore protected API
+
+  protected def putBytesForFullPath(fullPath: String, value: Array[Byte]): Future[Unit] = {
+    logger.debug("putObject: checking bucket")
+    createBucketIfMissing
+
+    logger.debug(s"putObject: saving to $fullPath")
+
+    s3async.putObject(bucketName, fullPath, value)
+      .transform(
+        identity[PutObjectResult],
+        t => {
+          logger.error(s"Failed to put byte array to s3://$bucketName/$fullPath", t)
+          new RuntimeException(s"Failed to put byte array to s3://$bucketName/$fullPath", t)
+        }
+      ).map { _ => }
+  }
+
+  protected def getBytesForFullPath(fullPath: String): Future[Array[Byte]] = {
+    createBucketIfMissing
+    s3async.getObject(bucketName, fullPath).transform(
+      {
+        obj =>
+          try {
+            val bis: BufferedInputStream = new java.io.BufferedInputStream(obj.getObjectContent)
+            val content: Array[Byte] = Stream.continually(bis.read).takeWhile(_ != -1).map(_.toByte).toArray
+            content
+          } finally {
+            obj.close()
+          }
+      },
+      {
+        {
+          case e: AmazonS3Exception =>
+            logger.error(s"Failed to find object in bucket s3://$bucketName/$fullPath!", e)
+            throw new RuntimeException(s"Failed to find object in bucket s3://$bucketName/$fullPath!", e)
+          case e: Exception =>
+            logger.error(s"Error accessing s3://$bucketName/$fullPath!", e)
+            throw new RuntimeException(s"Error accessing s3://$bucketName/$fullPath!", e)
+        }
+      }
+    )
+  }
+
+  protected def getFullPathForRelativePath(path: String): String =
+    if (basePrefix.nonEmpty) basePrefix + "/" + path else path
+
+  protected def getIteratorForFullPath(
+    fullPath: String,
+    delimiterOption: Option[String] = Some("/"),
+    prevMarker: Option[String] = None,
+    prevResults: Iterator[String] = Iterator.empty
+  ): Iterator[String] = {
+    createBucketIfMissing
+    val req = new ListObjectsRequest(bucketName, fullPath, prevMarker.orNull, delimiterOption.orNull, 1000)
+    new S3KeyIterator(req, timeout)(s3SyncClient)
+  }
+
+  // private API
+
+  private val bucketName: String = sp.s3Bucket
+  private val basePrefix: String = sp.s3Path
+  private lazy val timeout: Duration = 2.minutes
+  private lazy val logger: Logger = LoggerFactory.getLogger(getClass)
+  private lazy val s3async: S3AsyncTransfer = S3AsyncTransfer.apply
+
+  private lazy val createBucketIfMissing: Unit = {
+    // This is only done once.
+    val exists = try s3SyncClient.doesBucketExistV2(bucketName) catch {
+      case NonFatal(e) =>
+        logger.error(s"Error checking existence bucket $bucketName", e)
+        throw new RuntimeException(s"Error checking existence bucket $bucketName", e)
+    }
+
+    if (!exists) {
+      logger.info(s"Bucket $bucketName not found. Creating it now.")
+      try s3SyncClient.createBucket(bucketName) catch {
+        case NonFatal(e) =>
+          logger.error(s"Error creating bucket $bucketName", e)
+          throw new RuntimeException(s"Error creating bucket $bucketName", e)
+      }
+    }
+  }
+
+}
+
+
+class LocalStore(path: LocalPath)(implicit ec: ExecutionContext) extends KVStore {
+
+  // the only addition to the public API is a method to destroy everything
+
+  def cleanUp(): Unit =
+    recursiveListFiles(new File(getFsDir)).sortBy(_.getAbsolutePath).reverse.foreach(_.delete)
+
+  // protected methods implement the KVStore subclass protected API
+
+  protected def putBytesForFullPath(subPrefix: String, value: Array[Byte]): Future[Unit] =
+    Future {
+      val path: String = getFsPathForSubPrefix(subPrefix)
+      val parentDir = new File(path).getParentFile
+      if (!parentDir.exists)
+        parentDir.mkdirs
+      val bos: BufferedOutputStream = new BufferedOutputStream(new FileOutputStream(path))
+      Stream.continually(bos.write(value))
+      bos.close()
+    }
+
+  protected def getBytesForFullPath(fullPath: String): Future[Array[Byte]] = {
+    val fullFsPathValue: String = getFsPathForFullPrefix(fullPath)
+    Future { Files.readAllBytes(Paths.get(fullFsPathValue)) }
+  }
+
+  protected def getFullPathForRelativePath(path: String): String = path
+
+  protected def getIteratorForFullPath(
+    fullPrefix: String,
+    delimiterOption: Option[String] = Some("/"),
+    prevMarker: Option[String] = None,
+    prevResults: Iterator[String] = Iterator.empty
+  ): Iterator[String] = {
+    val fsPath = getFsPathForFullPrefix(fullPrefix)
+    val dir = new File(fsPath)
+    val offset = getFsDir.length + 1
+    try {
+      recursiveListFiles(dir).filter(f => !f.isDirectory).map(_.getAbsolutePath).sorted.map(_.substring(offset)).toIterator
+    } catch {
+      case e: Exception =>
+        recursiveListFiles(dir).map(_.getAbsolutePath).sorted.map(_.substring(offset)).toIterator
+    }
+  }
+
+  // private API
+
+  private def getFsDir = path.localPath
+
+  private def getFsPathForFullPrefix(fullPrefix: String) = Seq(getFsDir, fullPrefix).filter(_.nonEmpty).mkString("/")
+
+  private def getFsPathForSubPrefix(subPrefix: String) = getFsPathForFullPrefix(getFullPathForRelativePath(subPrefix))
+
+  private def recursiveListFiles(f: File): Array[File] = {
+    if (!f.exists)
+      Array.empty
+    else {
+      val these = f.listFiles
+      these ++ these.filter(_.isDirectory).flatMap(recursiveListFiles)
+    }
+  }
+}

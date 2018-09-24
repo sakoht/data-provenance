@@ -59,11 +59,15 @@ import scala.reflect.ClassTag
 import scala.reflect.runtime.universe.TypeTag
 import io.circe._
 
+import scala.concurrent.{ExecutionContext, Future}
+
 
 sealed trait ValueWithProvenance[O] extends Serializable {
   def outputClassTag: ClassTag[O]
 
   def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O]
+
+  def resolveAsync(implicit rt: ResultTracker, ec: ExecutionContext): Future[FunctionCallResultWithProvenance[O]]
 
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
 
@@ -181,6 +185,8 @@ abstract class FunctionCallWithProvenance[O : Codec](var vv: ValueWithProvenance
 
   def resolveInputs(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
 
+  def resolveInputsAsync(implicit rt: ResultTracker): Future[FunctionCallWithProvenance[O]] = ???
+
   def unresolveInputs(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
 
   def saveInputs(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
@@ -210,6 +216,9 @@ abstract class FunctionCallWithProvenance[O : Codec](var vv: ValueWithProvenance
 
   def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
     rt.resolve(this)
+
+  def resolveAsync(implicit rt: ResultTracker, ec: ExecutionContext): Future[FunctionCallResultWithProvenance[O]] =
+    rt.resolveAsync(this)
 
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     unresolveInputs(rt)
@@ -266,6 +275,9 @@ abstract class FunctionCallResultWithProvenance[O](
 
   def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
     this
+
+  def resolveAsync(implicit rt: ResultTracker, ec: ExecutionContext): Future[FunctionCallResultWithProvenance[O]] =
+    Future.successful(this)
 
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     this.call.unresolve
@@ -373,6 +385,9 @@ case class FunctionCallWithProvenanceDeflated[O](data: FunctionCallWithProvenanc
   def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
     load.resolve(rt)
 
+  def resolveAsync(implicit rt: ResultTracker, ec: ExecutionContext): Future[FunctionCallResultWithProvenance[O]] =
+    load.resolveAsync(rt, ec)
+
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     load.unresolve(rt)
 
@@ -401,6 +416,10 @@ case class FunctionCallResultWithProvenanceDeflated[O](data: FunctionCallResultW
 
   def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
     load.resolve(rt)
+
+  def resolveAsync(implicit rt: ResultTracker, ec: ExecutionContext): Future[FunctionCallResultWithProvenance[O]] =
+    load.resolveAsync(rt, ec)
+
 
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     load.unresolve(rt)

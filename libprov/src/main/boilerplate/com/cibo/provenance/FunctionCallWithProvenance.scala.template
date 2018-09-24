@@ -1,8 +1,10 @@
 package com.cibo.provenance
 
+import scala.concurrent.{ExecutionContext, Future}
 import scala.language.implicitConversions
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe.TypeTag
+
 import io.circe._
 
 /**
@@ -38,6 +40,11 @@ abstract class Function0CallWithProvenance[O : Codec](v: ValueWithProvenance[Ver
 
   def resolveInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
     nocopy(duplicate(v.resolve), this)
+
+  def resolveInputsAsync(implicit rt: ResultTracker, ec: ExecutionContext): Future[Function0CallWithProvenance[O]] =
+    for {
+      version <- v.resolveAsync
+    } yield nocopy(duplicate(version), this)
 
   def unresolveInputs(implicit rt: ResultTracker): Function0CallWithProvenance[O] =
     nocopy(duplicate(v.unresolve), this)
@@ -92,7 +99,14 @@ abstract class Function1CallWithProvenance[[#I1#], O : Codec]([#i1: ValueWithPro
   def resolveInputs(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
     nocopy(duplicate([#i1.resolve#], v.resolve), this)
 
-  def unresolveInputs(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
+  def resolveInputsAsync(implicit rt: ResultTracker, ec: ExecutionContext): Future[Function1CallWithProvenance[[#I1#], O]] =
+    for {
+      [#i1r <- i1.resolveAsync#
+      ]
+      vr <- v.resolveAsync
+    } yield nocopy(duplicate([#i1r#], vr.resolve), this)
+
+def unresolveInputs(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =
     nocopy(duplicate([#i1.unresolve#], v.unresolve), this)
 
   def loadInputs(implicit rt: ResultTracker): Function1CallWithProvenance[[#I1#], O] =

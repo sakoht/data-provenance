@@ -61,7 +61,10 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       TestUtils.diffOutputSubdir(testSubdir)
     }
 
-    it("has calls save and reload correctly.") {
+    ignore("has calls save and reload correctly when used as regular data") {
+      // When we save a call we break it up into N JSON objects, each referencing each other by ID.
+      // As such, we con't support saving a call as a regular data object.
+      // If we updated the ValueWithProvenance{En,De}coder this could be made to work again.
       val testSubdir = "reload2"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
       
