@@ -1,5 +1,7 @@
 package com.cibo.provenance
 
+import java.time.Instant
+
 import com.cibo.io.s3.SyncablePath
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.io.FileUtils
@@ -47,15 +49,33 @@ object TestUtils extends LazyLogging with Matchers {
     val actualOutputDirPath = SyncablePath(f"$testOutputBaseDir/$subdir")
     if (actualOutputDirPath.isRemote) {
       val f = actualOutputDirPath.toFile
+      logger.info(s"Syncing $actualOutputDirPath to local disk...")
       FileUtils.deleteDirectory(f)
+      val t1 = Instant.now
       actualOutputDirPath.syncFromS3()
+      val t2 = Instant.now
+      val d = t2.toEpochMilli - t1.toEpochMilli
+      logger.warn(s"Sync of $actualOutputDirPath completed in ${d}ms.")
+
     }
 
     val actualOutputLocalPath = actualOutputDirPath.localPath
 
+    def normalize(in: String): String = {
+      val lines = in.split("\n")
+      val leftMarginSize: Int = lines.foldLeft[Int](lines.head.length) {
+        case (prevMargin, nextLine) =>
+          val margin = nextLine.length - nextLine.replaceAll("^\\s+", "").length
+          if (margin < prevMargin) margin else prevMargin
+      }
+      val leftMargin = " " * leftMarginSize
+      def rightColumn(line: String): String = line.split("\\s+").last
+      lines.map(_.stripPrefix(leftMargin)).sortBy(rightColumn).mkString("\n") + "\n"
+    }
+
     val newManifestBytes =
-      getOutputAsBytes(s"cd $actualOutputLocalPath && wc -c `find . -type file | sort | grep -v codecs`")
-    val newManifestString = new String(newManifestBytes)
+      getOutputAsBytes(s"cd $actualOutputLocalPath && (wc -c `find . -type f | grep -v codecs`)")
+    val newManifestString = normalize(new String(newManifestBytes))
 
     val rootSubdir = "src/test/resources/expected-output"
 
@@ -83,14 +103,14 @@ object TestUtils extends LazyLogging with Matchers {
           new String(expectedManifestBytes)
         }
 
-      newManifestString shouldBe expectedManifestString
+      newManifestString shouldEqual expectedManifestString
 
     } catch {
-      case e: Exception =>
+      case e: org.scalatest.exceptions.TestFailedException =>
         // For any failure, replace the test content.  This will show up in git status, and it can be committed or not.
         expectedManifestFile.getParentFile.mkdirs()
         logger.error(f"Writing $expectedManifestFile to put in source control.  Reverse this if the change is not intentional.")
-        Files.write(Paths.get(expectedManifestFile.getAbsolutePath), newManifestBytes)
+        Files.write(Paths.get(expectedManifestFile.getAbsolutePath), newManifestString.getBytes("UTF-8"))
         throw e
     }
   }

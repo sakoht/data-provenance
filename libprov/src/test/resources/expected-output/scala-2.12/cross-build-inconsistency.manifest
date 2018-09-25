@@ -1,1 +1,20 @@
-0
+ 650 ./calls/72abe0e64db0f73857e03b65f8074632b7343210
+  55 ./commits/commit1/builds/build1/10cda243ceb13371e8daa9170c5d2af63d410f0c
+  55 ./commits/commit1/builds/build2/d3918c2ae661eae89bfcb9826f908e53995dd270
+   2 ./data-provenance/1b6453892473a467d07372d45eb05abc2031647a/as/scala.Int/from/com.cibo.provenance.Add/1.0/with-inputs/c06a73ec389b2ec4d80027cfd1c6196458ac6064/with-provenance/72abe0e64db0f73857e03b65f8074632b7343210/at/commit1/build2
+   2 ./data-provenance/da4b9237bacccdf19c0760cab7aec4a8359010b0/as/scala.Int/from/com.cibo.provenance.Add/1.0/with-inputs/c06a73ec389b2ec4d80027cfd1c6196458ac6064/with-provenance/72abe0e64db0f73857e03b65f8074632b7343210/at/commit1/build1
+   1 ./data/1b6453892473a467d07372d45eb05abc2031647a
+   1 ./data/356a192b7913b04c54574d18c28d46e6395428ab
+   1 ./data/da4b9237bacccdf19c0760cab7aec4a8359010b0
+   2 ./functions/com.cibo.provenance.Add/1.0/call-resolved-inputs/72abe0e64db0f73857e03b65f8074632b7343210/c06a73ec389b2ec4d80027cfd1c6196458ac6064
+   2 ./functions/com.cibo.provenance.Add/1.0/calls/72abe0e64db0f73857e03b65f8074632b7343210
+   2 ./functions/com.cibo.provenance.Add/1.0/conflict/c06a73ec389b2ec4d80027cfd1c6196458ac6064
+   2 ./functions/com.cibo.provenance.Add/1.0/conflicted
+  87 ./functions/com.cibo.provenance.Add/1.0/input-groups/c06a73ec389b2ec4d80027cfd1c6196458ac6064
+   2 ./functions/com.cibo.provenance.Add/1.0/inputs-to-output/c06a73ec389b2ec4d80027cfd1c6196458ac6064/1b6453892473a467d07372d45eb05abc2031647a/commit1/build2
+   2 ./functions/com.cibo.provenance.Add/1.0/inputs-to-output/c06a73ec389b2ec4d80027cfd1c6196458ac6064/da4b9237bacccdf19c0760cab7aec4a8359010b0/commit1/build1
+   2 ./functions/com.cibo.provenance.Add/1.0/output-to-provenance/1b6453892473a467d07372d45eb05abc2031647a/c06a73ec389b2ec4d80027cfd1c6196458ac6064/72abe0e64db0f73857e03b65f8074632b7343210
+   2 ./functions/com.cibo.provenance.Add/1.0/output-to-provenance/da4b9237bacccdf19c0760cab7aec4a8359010b0/c06a73ec389b2ec4d80027cfd1c6196458ac6064/72abe0e64db0f73857e03b65f8074632b7343210
+ 393 ./results/5d300c00eb53b409869d70ff7aae44e40abdc814
+ 393 ./results/8e4f1121686a24e3efa380e618b128d63cbf2a65
+1656 total
