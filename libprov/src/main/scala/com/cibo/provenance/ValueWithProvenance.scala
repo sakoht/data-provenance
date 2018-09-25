@@ -177,7 +177,7 @@ abstract class FunctionCallWithProvenance[O : Codec](var vv: ValueWithProvenance
 
   def outputTypeTag: TypeTag[O] = outputCodec.typeTag
 
-  // Abstract interface.  These are implemented in each Function{n}CallSignatureWithProvenance subclass.
+  // Abstract interface.  These are implemented in each Function{n}CallWithProvenance subclass.
 
   def functionName: String
 
@@ -185,7 +185,7 @@ abstract class FunctionCallWithProvenance[O : Codec](var vv: ValueWithProvenance
 
   def resolveInputs(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
 
-  def resolveInputsAsync(implicit rt: ResultTracker): Future[FunctionCallWithProvenance[O]] = ???
+  def resolveInputsAsync(implicit rt: ResultTracker, ec: ExecutionContext): Future[FunctionCallWithProvenance[O]]
 
   def unresolveInputs(implicit rt: ResultTracker): FunctionCallWithProvenance[O]
 

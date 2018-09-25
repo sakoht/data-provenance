@@ -66,8 +66,9 @@ trait ResultTracker extends Serializable {
   }
 
   def resolveAsync[O](call: FunctionCallWithProvenance[O])(implicit ec: ExecutionContext): Future[FunctionCallResultWithProvenance[O]] = {
+    implicit val rt: ResultTracker = this
     for {
-      callWithInputDigests <- call.resolveInputsAsync(rt=this)
+      callWithInputDigests <- call.resolveInputsAsync
       resultOption <- loadResultByCallOptionAsync[O](callWithInputDigests)
     }
       yield resultOption match {

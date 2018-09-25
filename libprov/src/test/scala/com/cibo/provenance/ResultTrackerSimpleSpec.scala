@@ -88,7 +88,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
 
       TestUtils.diffOutputSubdir(testSubdir)
     }
-    
+
     */
 
     it("lets a result save and be re-loaded by its call signature.") {
