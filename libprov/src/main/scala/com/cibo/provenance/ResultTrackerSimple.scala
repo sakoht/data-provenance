@@ -807,8 +807,8 @@ import scala.concurrent.duration._
 
 
 /**
-  * KVStore is a replacement for S3DB.  It could evolve to possibly replace it.
-  * Right now it is used by ResultTrackerSimple only.
+  * KVStore is a replacement for S3DB in this library.
+  * It could evolve to possibly replace it globally, but right now it is used only here.
   */
 object KVStore {
   def fromSyncablePath(path: SyncablePath)(implicit ec: ExecutionContext, s3SyncClient: AmazonS3): KVStore =
