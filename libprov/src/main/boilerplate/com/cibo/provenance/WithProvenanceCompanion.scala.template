@@ -1,0 +1,35 @@
+package com.cibo.provenance
+
+import com.cibo.provenance._
+import io.circe.{Decoder, Encoder}
+
+import scala.reflect.ClassTag
+import scala.reflect.runtime.universe.TypeTag
+
+abstract class WithProvenanceCompanion[O : ClassTag : TypeTag] {
+  def encoder: Encoder[O]
+  def decoder: Decoder[O]
+  protected implicit lazy val codec: Codec[O] = Codec(encoder, decoder)
+  protected lazy val constructorWithProvenanceName: String = implicitly[ClassTag[O]].toString + ".withProvenance"
+}
+
+trait ConstructorWithProvenance
+
+[1..21#
+abstract class WithProvenanceCompanion1[[#I1 : ClassTag#], O : ClassTag : TypeTag](v: Version) extends WithProvenanceCompanion[O] {
+  [#]
+  private val c1: Class[_] = implicitly[ClassTag[I1]].runtimeClass.asInstanceOf[Class[I1]]#
+  ]
+  private val constructor = implicitly[ClassTag[O]].runtimeClass.getConstructor(c1, c2, c3)
+
+  trait ConstructorWithProvenance extends Function3WithProvenance[[#I1#], O] {
+    val currentVersion: Version = v
+    override lazy val name: String = constructorWithProvenanceName
+    def impl([#i1: I1#]): O = {
+      constructor.newInstance(Array([#i1.asInstanceOf[AnyRef]#])).asInstanceOf[O]
+    }
+  }
+  val withProvenance = new ConstructorWithProvenance {}
+}
+#
+]
