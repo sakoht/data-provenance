@@ -1,16 +1,18 @@
 package com.cibo.provenance
 
-import java.io.{BufferedInputStream, BufferedOutputStream, File, FileOutputStream}
+import java.io._
 import java.nio.file.{Files, Paths}
 
 import com.amazonaws.services.s3.AmazonS3
-import com.amazonaws.services.s3.model.{AmazonS3Exception, ListObjectsRequest, PutObjectResult, S3Object}
+import com.amazonaws.services.s3.model._
+import com.cibo.io.s3.S3AsyncTransfer.calcMd5Base64
 import com.cibo.io.s3._
 import com.google.common.cache.Cache
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.util.Try
 import scala.util.control.NonFatal
 
 /**
@@ -627,11 +629,45 @@ class ResultTrackerSimple(
   // sync interface
 
   protected def saveBytes(path: String, bytes: Array[Byte]): Unit =
-    Await.result(saveBytesAsync(path, bytes), ioTimeout)
+    if (!writable) {
+      throw new ReadOnlyTrackerException(f"Attempt to save to a read-only ResultTracker $this.")
+    } else {
+      Option(lightCache.getIfPresent(path)) match {
+        case Some(_) =>
+          // Already saved.  Do nothing.
+        case None =>
+          Option(heavyCache.getIfPresent(path)) match {
+            case Some(_) =>
+              // Recently loaded.  Flag in the larger save cache, but otherwise do nothing.
+              lightCache.put(path, Unit)
+            case None =>
+              // Actually save.
+              storage.putBytes(path, bytes)
+              lightCache.put(path, Unit)
+              heavyCache.put(path, bytes)
+          }
+      }
+    }
 
 
   protected def loadBytes(path: String): Array[Byte] =
-    Await.result(loadBytesAsync(path), ioTimeout)
+    Option(heavyCache.getIfPresent(path)) match {
+      case Some(found) =>
+        found
+      case None =>
+        try {
+          val bytes = storage.getBytes(path)
+          lightCache.put(path, Unit)    // larger, lighter, prevents re-saves
+          heavyCache.put(path, bytes)   // smaller, heavier, actually provides data
+          bytes
+        } catch {
+          case e: Exception =>
+            underlyingTracker match {
+              case Some(underlying) => underlying.loadBytes(path)
+              case None => throw e
+            }
+        }
+    }
 
   // async interface
 
@@ -651,7 +687,7 @@ class ResultTrackerSimple(
               Future.successful { }
             case None =>
               // Actually save.
-              val future = storage.putBytes(path, bytes)
+              val future = storage.putBytesAsync(path, bytes)
               future.onComplete {
                 case s: Success[Unit] =>
                   lightCache.put(path, Unit)
@@ -670,7 +706,7 @@ class ResultTrackerSimple(
       case Some(found) =>
         Future.successful(found)
       case None =>
-        val future = storage.getBytes(path).map {
+        val future = storage.getBytesAsync(path).map {
           obj =>
             lightCache.put(path, Unit)      // larger, lighter, prevents re-saves
             heavyCache.put(path, obj)   // smaller, heavier, actually provides data
@@ -683,7 +719,7 @@ class ResultTrackerSimple(
     }
 
   protected def getListingRecursive(path: String): List[String] = {
-    val listing1: Iterator[String] = storage.getSuffixesForPrefix(path)
+    val listing1: Iterator[String] = storage.getSuffixes(path)
     underlyingTracker match {
       case Some(underlying) =>
         // NOTE: It would be a performance improvment to make this a merge sort.
@@ -818,17 +854,23 @@ object KVStore {
     }
 }
 
-trait KVStore {
+sealed trait KVStore {
 
   // public API
 
-  def putBytes(path: String, value: Array[Byte]): Future[Unit] =
+  def putBytes(path: String, value: Array[Byte]): Unit =
     putBytesForFullPath(getFullPathForRelativePath(path), value)
 
-  def getBytes(path: String): Future[Array[Byte]] =
+  def getBytes(path: String): Array[Byte] =
     getBytesForFullPath(getFullPathForRelativePath(path))
 
-  def getSuffixesForPrefix(
+  def putBytesAsync(path: String, value: Array[Byte]): Future[Unit] =
+    putBytesForFullPathAsync(getFullPathForRelativePath(path), value)
+
+  def getBytesAsync(path: String): Future[Array[Byte]] =
+    getBytesForFullPathAsync(getFullPathForRelativePath(path))
+
+  def getSuffixes(
     prefix: String,
     filterOption: Option[String => Boolean] = None,
     delimiterOption: Option[String] = None
@@ -850,13 +892,19 @@ trait KVStore {
 
   // protected methods implemented by subclasses
 
-  protected def putBytesForFullPath(path: String, value: Array[Byte]): Future[Unit]
-
-  protected def getBytesForFullPath(fullPath: String): Future[Array[Byte]]
-
   protected def getFullPathForRelativePath(subPrefix: String): String
 
-  protected def getIteratorForFullPath(
+  protected def putBytesForFullPath(path: String, value: Array[Byte]): Unit
+
+  protected def getBytesForFullPath(fullPath: String): Array[Byte]
+
+  protected def putBytesForFullPathAsync(path: String, value: Array[Byte]): Future[Unit]
+
+  protected def getBytesForFullPathAsync(fullPath: String): Future[Array[Byte]]
+
+  protected[provenance] def remove(path: String): Unit
+
+  protected def getSuffixesForFullPath(
     fullPath: String,
     delimiterOption: Option[String] = Some("/"),
     prevMarker: Option[String] = None,
@@ -883,15 +931,38 @@ trait KVStore {
     prevResults: Iterator[String] = Iterator.empty
   ): Iterator[String] = {
     val fullPath = getFullPathForRelativePath(path)
-    getIteratorForFullPath(fullPath, delimiterOption, prevMarker, prevResults)
+    getSuffixesForFullPath(fullPath, delimiterOption, prevMarker, prevResults)
   }
 }
 
-class S3Store(sp: S3SyncablePath)(implicit ec: ExecutionContext, s3SyncClient: AmazonS3) extends KVStore {
+class S3Store(rootPath: S3SyncablePath)(implicit ec: ExecutionContext, s3SyncClient: AmazonS3) extends KVStore {
 
-  // protected methods implement the KVStore protected API
+  // implement the KVStore protected API
 
-  protected def putBytesForFullPath(fullPath: String, value: Array[Byte]): Future[Unit] = {
+  protected def getFullPathForRelativePath(path: String): String =
+    if (basePrefix.nonEmpty) basePrefix + "/" + path else path
+
+  protected def putBytesForFullPath(fullPath: String, value: Array[Byte]): Unit = {
+    logger.debug("putObject: checking bucket")
+    createBucketIfMissing
+
+    logger.debug(s"putObject: saving to $fullPath")
+
+    val metadata = new ObjectMetadata()
+    metadata.setContentType("application/json")
+    metadata.setContentLength(value.length.toLong)
+    metadata.setContentMD5(calcMd5Base64(value))
+
+    try {
+      s3SyncClient.putObject(bucketName, fullPath, new ByteArrayInputStream(value), metadata)
+    } catch {
+      case e: Exception =>
+        logger.error(s"Failed to put byte array to s3://$bucketName/$fullPath", e)
+        new AccessError(s"Failed to put byte array to s3://$bucketName/$fullPath")
+    }
+  }
+
+  protected def putBytesForFullPathAsync(fullPath: String, value: Array[Byte]): Future[Unit] = {
     logger.debug("putObject: checking bucket")
     createBucketIfMissing
 
@@ -900,14 +971,35 @@ class S3Store(sp: S3SyncablePath)(implicit ec: ExecutionContext, s3SyncClient: A
     s3async.putObject(bucketName, fullPath, value)
       .transform(
         identity[PutObjectResult],
-        t => {
-          logger.error(s"Failed to put byte array to s3://$bucketName/$fullPath", t)
-          new RuntimeException(s"Failed to put byte array to s3://$bucketName/$fullPath", t)
+        e => {
+          logger.error(s"Failed to put byte array to s3://$bucketName/$fullPath", e)
+          new AccessError(s"Failed to put byte array to s3://$bucketName/$fullPath")
         }
       ).map { _ => }
   }
 
-  protected def getBytesForFullPath(fullPath: String): Future[Array[Byte]] = {
+  protected def getBytesForFullPath(fullPath: String): Array[Byte] = {
+    createBucketIfMissing
+    try {
+      val obj: S3Object = s3SyncClient.getObject(bucketName, fullPath)
+      try {
+        val bis: BufferedInputStream = new java.io.BufferedInputStream(obj.getObjectContent)
+        val content: Array[Byte] = Stream.continually(bis.read).takeWhile(_ != -1).map(_.toByte).toArray
+        content
+      } finally {
+        obj.close()
+      }
+    } catch {
+      case e: AmazonS3Exception =>
+        logger.error(s"Failed to find object in bucket s3://$bucketName/$fullPath!", e)
+        throw new NotFound(s"Failed to find object in bucket s3://$bucketName/$fullPath!")
+      case e: Exception =>
+        logger.error(s"Error accessing s3://$bucketName/$fullPath!", e)
+        throw new AccessError(s"Error accessing s3://$bucketName/$fullPath!")
+    }
+  }
+
+  protected def getBytesForFullPathAsync(fullPath: String): Future[Array[Byte]] = {
     createBucketIfMissing
     s3async.getObject(bucketName, fullPath).transform(
       {
@@ -924,19 +1016,16 @@ class S3Store(sp: S3SyncablePath)(implicit ec: ExecutionContext, s3SyncClient: A
         {
           case e: AmazonS3Exception =>
             logger.error(s"Failed to find object in bucket s3://$bucketName/$fullPath!", e)
-            throw new RuntimeException(s"Failed to find object in bucket s3://$bucketName/$fullPath!", e)
+            throw new NotFound(s"Failed to find object in bucket s3://$bucketName/$fullPath!")
           case e: Exception =>
             logger.error(s"Error accessing s3://$bucketName/$fullPath!", e)
-            throw new RuntimeException(s"Error accessing s3://$bucketName/$fullPath!", e)
+            throw new AccessError(s"Error accessing s3://$bucketName/$fullPath!")
         }
       }
     )
   }
 
-  protected def getFullPathForRelativePath(path: String): String =
-    if (basePrefix.nonEmpty) basePrefix + "/" + path else path
-
-  protected def getIteratorForFullPath(
+  protected def getSuffixesForFullPath(
     fullPath: String,
     delimiterOption: Option[String] = Some("/"),
     prevMarker: Option[String] = None,
@@ -949,8 +1038,8 @@ class S3Store(sp: S3SyncablePath)(implicit ec: ExecutionContext, s3SyncClient: A
 
   // private API
 
-  private val bucketName: String = sp.s3Bucket
-  private val basePrefix: String = sp.s3Path
+  private val bucketName: String = rootPath.s3Bucket
+  private val basePrefix: String = rootPath.s3Path
   private lazy val timeout: Duration = 2.minutes
   private lazy val logger: Logger = LoggerFactory.getLogger(getClass)
   private lazy val s3async: S3AsyncTransfer = S3AsyncTransfer.apply
@@ -973,37 +1062,30 @@ class S3Store(sp: S3SyncablePath)(implicit ec: ExecutionContext, s3SyncClient: A
     }
   }
 
+  protected[provenance] def remove(path: String): Unit = {
+    val fullPath = (rootPath / path).asInstanceOf[S3SyncablePath]
+    val file = fullPath.toFile
+    s3SyncClient.deleteObject(fullPath.s3Bucket, fullPath.s3Path)
+    if (file.exists())
+      file.delete()
+  }
 }
 
 
-class LocalStore(path: LocalPath)(implicit ec: ExecutionContext) extends KVStore {
+class LocalStore(rootPath: LocalPath)(implicit ec: ExecutionContext) extends KVStore {
+
+  private lazy val logger: Logger = LoggerFactory.getLogger(getClass)
 
   // the only addition to the public API is a method to destroy everything
 
   def cleanUp(): Unit =
     recursiveListFiles(new File(getFsDir)).sortBy(_.getAbsolutePath).reverse.foreach(_.delete)
 
-  // protected methods implement the KVStore subclass protected API
-
-  protected def putBytesForFullPath(subPrefix: String, value: Array[Byte]): Future[Unit] =
-    Future {
-      val path: String = getFsPathForSubPrefix(subPrefix)
-      val parentDir = new File(path).getParentFile
-      if (!parentDir.exists)
-        parentDir.mkdirs
-      val bos: BufferedOutputStream = new BufferedOutputStream(new FileOutputStream(path))
-      Stream.continually(bos.write(value))
-      bos.close()
-    }
-
-  protected def getBytesForFullPath(fullPath: String): Future[Array[Byte]] = {
-    val fullFsPathValue: String = getFsPathForFullPrefix(fullPath)
-    Future { Files.readAllBytes(Paths.get(fullFsPathValue)) }
-  }
+  // implement the KVStore subclass protected API
 
   protected def getFullPathForRelativePath(path: String): String = path
 
-  protected def getIteratorForFullPath(
+  protected def getSuffixesForFullPath(
     fullPrefix: String,
     delimiterOption: Option[String] = Some("/"),
     prevMarker: Option[String] = None,
@@ -1020,9 +1102,43 @@ class LocalStore(path: LocalPath)(implicit ec: ExecutionContext) extends KVStore
     }
   }
 
+  protected def putBytesForFullPath(fullPath: String, value: Array[Byte]): Unit = {
+    val path: String = getFsPathForSubPrefix(fullPath)
+    val parentDir = new File(path).getParentFile
+    if (!parentDir.exists)
+      parentDir.mkdirs
+    val bos: BufferedOutputStream = new BufferedOutputStream(new FileOutputStream(path))
+    Stream.continually(bos.write(value))
+    bos.close()
+  }
+
+  protected def getBytesForFullPath(fullPath: String): Array[Byte] = {
+    val fullFsPathValue: String = getFsPathForFullPrefix(fullPath)
+    val file = new File(fullFsPathValue)
+    if (!file.exists()) {
+      logger.error(s"Failed to find object at $fullPath!")
+      throw new NotFound(s"Failed to find object at $fullPath!")
+    } else
+
+    try {
+        Files.readAllBytes(Paths.get(fullFsPathValue))
+      } catch {
+        case e: Exception =>
+          logger.error(s"Error accessing $fullPath!", e)
+          throw new AccessError(s"Error accessing $fullPath!")
+      }
+  }
+
+  protected def getBytesForFullPathAsync(fullPath: String): Future[Array[Byte]] =
+    Future { getBytesForFullPath(fullPath) }
+
+  protected def putBytesForFullPathAsync(fullPath: String, value: Array[Byte]): Future[Unit] =
+    Future { putBytesForFullPath(fullPath, value) }
+
+
   // private API
 
-  private def getFsDir = path.localPath
+  private def getFsDir = rootPath.localPath
 
   private def getFsPathForFullPrefix(fullPrefix: String) = Seq(getFsDir, fullPrefix).filter(_.nonEmpty).mkString("/")
 
@@ -1036,4 +1152,10 @@ class LocalStore(path: LocalPath)(implicit ec: ExecutionContext) extends KVStore
       these ++ these.filter(_.isDirectory).flatMap(recursiveListFiles)
     }
   }
+
+  protected[provenance] def remove(path: String): Unit =
+    (rootPath / path).toFile.delete()
 }
+
+class NotFound(msg: String) extends RuntimeException(msg)
+class AccessError(msg: String) extends RuntimeException(msg)
