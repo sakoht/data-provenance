@@ -1,5 +1,7 @@
 package com.cibo.provenance
 
+import java.time.Instant
+
 import com.cibo.io.s3.SyncablePath
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.io.FileUtils
@@ -28,10 +30,19 @@ object TestUtils extends LazyLogging with Matchers {
   val remoteTestOutputBaseDir: String =
     f"s3://com-cibo-user/" + subdir
 
-  // NOTE: Switch to the remote version to manually test on S3. ;)
-  val testOutputBaseDir = localTestOutputBaseDir //localTestOutputBaseDir
+  // Set this env var
+  val testOutputBaseDir =
+    sys.env.get("PROVENANCE_TEST_REMOTE") match {
+      case Some(value) => remoteTestOutputBaseDir
+      case None => localTestOutputBaseDir
+    }
 
   def diffOutputSubdir(subdir: String) = {
+    diffOutputSubdirX(subdir + "/sync")
+    diffOutputSubdirX(subdir + "/async")
+  }
+
+  def diffOutputSubdirX(subdir: String) = {
     val version =
       if (libBuildInfo.scalaVersion.startsWith("2.11"))
         "2.11"
@@ -43,15 +54,33 @@ object TestUtils extends LazyLogging with Matchers {
     val actualOutputDirPath = SyncablePath(f"$testOutputBaseDir/$subdir")
     if (actualOutputDirPath.isRemote) {
       val f = actualOutputDirPath.toFile
+      logger.info(s"Syncing $actualOutputDirPath to local disk...")
       FileUtils.deleteDirectory(f)
+      val t1 = Instant.now
       actualOutputDirPath.syncFromS3()
+      val t2 = Instant.now
+      val d = t2.toEpochMilli - t1.toEpochMilli
+      logger.warn(s"Sync of $actualOutputDirPath completed in ${d}ms.")
+
     }
 
     val actualOutputLocalPath = actualOutputDirPath.localPath
 
+    def normalize(in: String): String = {
+      val lines = in.split("\n")
+      val leftMarginSize: Int = lines.foldLeft[Int](lines.head.length) {
+        case (prevMargin, nextLine) =>
+          val margin = nextLine.length - nextLine.replaceAll("^\\s+", "").length
+          if (margin < prevMargin) margin else prevMargin
+      }
+      val leftMargin = " " * leftMarginSize
+      def rightColumn(line: String): String = line.split("\\s+").last
+      lines.map(_.stripPrefix(leftMargin)).sortBy(rightColumn).mkString("\n") + "\n"
+    }
+
     val newManifestBytes =
-      getOutputAsBytes(s"cd $actualOutputLocalPath && wc -c `find . -type file | sort | grep -v codecs`")
-    val newManifestString = new String(newManifestBytes)
+      getOutputAsBytes(s"cd $actualOutputLocalPath && (wc -c `find . -type f | grep -v codecs`)")
+    val newManifestString = normalize(new String(newManifestBytes))
 
     val rootSubdir = "src/test/resources/expected-output"
 
@@ -63,31 +92,43 @@ object TestUtils extends LazyLogging with Matchers {
       else
         throw new RuntimeException(f"Failed to find $rootSubdir under the current directory or provenance subdir!")
 
-    val expectedManifestFile = new File(f"$expectedDataRoot/scala-$version/$subdir.manifest")
+    val manifestBaseName =
+      if (subdir endsWith "/sync")
+        subdir.stripSuffix("/sync")
+      else if (subdir endsWith "/async")
+        subdir.stripSuffix("/async")
+      else
+        subdir
+
+    val expectedManifestFile = new File(f"$expectedDataRoot/scala-$version/$manifestBaseName.manifest")
+
+    val expectedManifestString =
+      if (!expectedManifestFile.exists) {
+        logger.warn(s"Failed to find $expectedManifestFile!")
+        ""
+      } else {
+        val expectedManifestBytes = Files.readAllBytes(Paths.get(expectedManifestFile.getAbsolutePath))
+        new String(expectedManifestBytes)
+      }
 
     try {
-
       if (!new File(actualOutputLocalPath).exists)
         throw new RuntimeException(s"Failed to find $actualOutputLocalPath!")
 
-      val expectedManifestString =
-        if (!expectedManifestFile.exists) {
-          logger.warn(s"Failed to find $expectedManifestFile!")
-          ""
-        } else {
-          val expectedManifestBytes = Files.readAllBytes(Paths.get(expectedManifestFile.getAbsolutePath))
-          new String(expectedManifestBytes)
-        }
-
-      newManifestString shouldBe expectedManifestString
+      newManifestString shouldEqual expectedManifestString
 
     } catch {
-      case e: Exception =>
+      case e: org.scalatest.exceptions.TestFailedException =>
         // For any failure, replace the test content.  This will show up in git status, and it can be committed or not.
         expectedManifestFile.getParentFile.mkdirs()
         logger.error(f"Writing $expectedManifestFile to put in source control.  Reverse this if the change is not intentional.")
-        Files.write(Paths.get(expectedManifestFile.getAbsolutePath), newManifestBytes)
+        logger.error(f"Previous value was $expectedManifestString")
+        expectedManifestFile.delete()
+        Files.write(Paths.get(expectedManifestFile.getAbsolutePath), newManifestString.getBytes("UTF-8"))
         throw e
+      case ee: Exception =>
+        println(ee)
+        throw ee
     }
   }
 }

@@ -24,6 +24,8 @@ import io.circe.{Decoder, Encoder}
 import com.cibo.provenance._
 import com.cibo.provenance.implicits.Traversable
 
+import scala.concurrent.{ExecutionContext, Future}
+
 class GatherWithProvenance[S[_], E](
   implicit hok: Traversable[S],
   cda: Codec[E],
@@ -101,6 +103,17 @@ class GatherWithProvenance[S[_], E](
     def resolveInputs(implicit rt: ResultTracker): Call = {
       def f(a: ValueWithProvenance[E]): ValueWithProvenance[E] = a.resolve
       nocopy(duplicate(hok.map(f)(gatheredInputs), v.resolve), this)
+    }
+
+    def resolveInputsAsync(implicit rt: ResultTracker, ec: ExecutionContext): Future[Call] = {
+      def f(a: ValueWithProvenance[E]): Future[ValueWithProvenance[E]] = a.resolveAsync
+      val traversableOfFutures: S[Future[ValueWithProvenance[E]]] = hok.map(f)(gatheredInputs)
+      val futureOfTraversable: Future[Seq[ValueWithProvenance[E]]] = Future.sequence(hok.toSeq(traversableOfFutures))
+      futureOfTraversable.map {
+        gatheredInputsSeq: Seq[ValueWithProvenance[E]] =>
+          val gatheredInputsWithHokS: S[ValueWithProvenance[E]] = hok.create(gatheredInputsSeq)
+          nocopy(duplicate(gatheredInputsWithHokS, v.resolve), this)
+      }
     }
 
     def unresolveInputs(implicit rt: ResultTracker): Call = {

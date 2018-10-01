@@ -1,5 +1,6 @@
 package com.cibo.provenance
 
+import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe
 import scala.reflect.runtime.universe.TypeTag
@@ -17,7 +18,7 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
   implicit val bi: BuildInfo = currentAppBuildInfo
 
-  protected[provenance] def saveResultSerializable(
+  def saveResultSerializable(
     resultInSaveableForm: FunctionCallResultWithKnownProvenanceSerializable,
     inputResultsAlreadySaved: Vector[FunctionCallResultWithProvenanceSerializable]
   ): FunctionCallResultWithProvenanceDeflated[_] = {
@@ -43,6 +44,11 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
   def loadResultByCallOption[O](f: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] = {
     // just re-run anything we need to "load"
     Some(f.run(this))
+  }
+
+  def loadResultByCallOptionAsync[O](f: FunctionCallWithProvenance[O])(implicit ec: ExecutionContext): Future[Option[FunctionCallResultWithProvenance[O]]] = {
+    // just re-run anything we need to "load"
+    Future { Some(f.run(this)) }
   }
 
   def hasValue[T : Codec](obj: T): Boolean = false // never

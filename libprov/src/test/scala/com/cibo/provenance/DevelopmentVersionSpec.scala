@@ -25,7 +25,7 @@ class DevelopmentVersionSpec extends FunSpec with Matchers {
     it("should use produce with the DevVersion suffix") {
       val testSubdir = "dev-version"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt: ResultTracker = ResultTrackerSimple(SyncablePath(testDataDir))
+      implicit val rt: ResultTracker = ResultTrackerForTest(SyncablePath(testDataDir))
 
       val result1 = myFunc(123).resolve
       result1.call.versionValue(rt).isDev shouldBe true
