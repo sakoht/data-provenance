@@ -24,7 +24,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       val subDir = "monadic-calls"
       val testDataDir = f"$outputBaseDir/$subDir"
       
-      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
       rt.wipe
 
       val a: MakeDummyOutputList.Call = MakeDummyOutputList() // (11, 22, 33, 44)
@@ -34,10 +34,10 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       val e = SumValues(d)          // 122
 
       c(3).resolve.output shouldBe 46
-      MyIncrement.runCount shouldBe 8 // we ran two of the three map calls
+      MyIncrement.runCount shouldBe 8 * rt.countUnderlying // we ran two of the three map calls
 
       d(0).resolve.output shouldBe 14
-      MyIncrement.runCount shouldBe 12 // all three map calls have run
+      MyIncrement.runCount shouldBe 12 * rt.countUnderlying // all three map calls have run
 
       a.resolve.output.sum shouldBe 110
       b.resolve.output.sum shouldBe 114
@@ -45,7 +45,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       d.resolve.output.sum shouldBe 122
       e.resolve.output shouldBe 122
 
-      MyIncrement.runCount shouldBe 12 // no more work has happened, just lookups
+      MyIncrement.runCount shouldBe 12 * rt.countUnderlying // no more work has happened, just lookups
 
       TestUtils.diffOutputSubdir(subDir)
     }
@@ -87,7 +87,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       val subDir = "mappable-calls-are-dry"
       val testDataDir = f"$outputBaseDir/$subDir"
 
-      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
       rt.wipe
 
       MakeDummyOutputList.runCount = 0
@@ -109,7 +109,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       i3.resolve.output shouldBe 44
 
       // Only ever ran once.
-      MakeDummyOutputList.runCount shouldBe 1
+      MakeDummyOutputList.runCount shouldBe 1 * rt.countUnderlying
 
       TestUtils.diffOutputSubdir(subDir)
     }
@@ -134,39 +134,39 @@ class MonadicCallsSpec extends FunSpec with Matchers {
     it("maps efficiently") {
       val subDir = "mappable-results-map"
       val testDataDir = f"$outputBaseDir/$subDir"
-      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
       rt.wipe
 
       MakeDummyOutputList.runCount = 0
 
       val myResult1: MakeDummyOutputList.Result = MakeDummyOutputList().resolve
-      MakeDummyOutputList.runCount shouldBe 1
+      MakeDummyOutputList.runCount shouldBe 1 * rt.countUnderlying
 
       MyIncrement.runCount = 0
 
       val myResult2: MapWithProvenance[List, Int, Int]#Call = myResult1.map(MyIncrement)
-      MakeDummyOutputList.runCount shouldBe 1
+      MakeDummyOutputList.runCount shouldBe 1 * rt.countUnderlying
       MyIncrement.runCount shouldBe 0
 
       val r2 = myResult2(2)
-      MakeDummyOutputList.runCount shouldBe 1
+      MakeDummyOutputList.runCount shouldBe 1 * rt.countUnderlying
       MyIncrement.runCount shouldBe 0
 
       r2.resolve.output shouldBe 34
-      MakeDummyOutputList.runCount shouldBe 1
-      MyIncrement.runCount shouldBe 4 // ideally 1, if we can make the system be lazy on the full map
+      MakeDummyOutputList.runCount shouldBe 1 * rt.countUnderlying
+      MyIncrement.runCount shouldBe 4 * rt.countUnderlying // ideally 1, if we can make the system be lazy on the full map
 
       myResult2(2).resolve.output shouldBe 34
-      MakeDummyOutputList.runCount shouldBe 1 // no change
-      MyIncrement.runCount shouldBe 4 // no change, again 1 if we can get lazy
+      MakeDummyOutputList.runCount shouldBe 1 * rt.countUnderlying // no change
+      MyIncrement.runCount shouldBe 4 * rt.countUnderlying // no change, again 1 if we can get lazy
 
       myResult2(0).resolve.output shouldBe 12
       myResult2(1).resolve.output shouldBe 23
       myResult2(2).resolve.output shouldBe 34 // already done
       myResult2(3).resolve.output shouldBe 45
 
-      MakeDummyOutputList.runCount shouldBe 1 // no change
-      MyIncrement.runCount shouldBe 4 // no repeat calls
+      MakeDummyOutputList.runCount shouldBe 1 * rt.countUnderlying // no change
+      MyIncrement.runCount shouldBe 4 * rt.countUnderlying // no repeat calls
 
       TestUtils.diffOutputSubdir(subDir)
     }
@@ -189,30 +189,30 @@ class MonadicCallsSpec extends FunSpec with Matchers {
     it("handles `scatter` with efficient pass-through to the underling implementation") {
       val subDir = "mappable-results-scatter"
       val testDataDir = f"$outputBaseDir/$subDir"
-      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
       rt.wipe
 
       MakeDummyOutputList.runCount = 0
 
       val myResult = MakeDummyOutputList().resolve
-      MakeDummyOutputList.runCount shouldBe 1
+      MakeDummyOutputList.runCount shouldBe 1 * rt.countUnderlying
 
       val seqOfResults = myResult.scatter
-      MakeDummyOutputList.runCount shouldBe 1
+      MakeDummyOutputList.runCount shouldBe 1 * rt.countUnderlying
 
       val r0 = seqOfResults(0)
       val r1 = seqOfResults(1)
       val r2 = seqOfResults(2)
       val r3 = seqOfResults(3)
 
-      MakeDummyOutputList.runCount shouldBe 1
+      MakeDummyOutputList.runCount shouldBe 1 * rt.countUnderlying
 
       r0.output shouldBe 11
       r1.output shouldBe 22
       r2.output shouldBe 33
       r3.output shouldBe 44
 
-      MakeDummyOutputList.runCount shouldBe 1
+      MakeDummyOutputList.runCount shouldBe 1 * rt.countUnderlying
 
       TestUtils.diffOutputSubdir(subDir)
     }
@@ -223,7 +223,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
     it("works implicitly, and keeps history") {
       val subDir = "gather"
       val testDataDir = f"$outputBaseDir/$subDir"
-      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
       rt.wipe
 
       // Make a list with a variety of tracked objects, all returning an Int.

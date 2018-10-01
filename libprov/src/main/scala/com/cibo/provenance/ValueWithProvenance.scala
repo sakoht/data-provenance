@@ -335,6 +335,9 @@ case class UnknownProvenance[O : Codec](value: O)
 
   override def resolve(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = cachedResult
 
+  override def resolveAsync(implicit rt: ResultTracker, ec: ExecutionContext): Future[FunctionCallResultWithProvenance[O]] =
+    Future.successful(cachedResult)
+
   override def run(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] = cachedResult
 
   override def unresolve(implicit rt: ResultTracker): UnknownProvenance[O] = this

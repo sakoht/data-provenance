@@ -38,6 +38,11 @@ object TestUtils extends LazyLogging with Matchers {
     }
 
   def diffOutputSubdir(subdir: String) = {
+    diffOutputSubdirX(subdir + "/sync")
+    diffOutputSubdirX(subdir + "/async")
+  }
+
+  def diffOutputSubdirX(subdir: String) = {
     val version =
       if (libBuildInfo.scalaVersion.startsWith("2.11"))
         "2.11"
@@ -87,21 +92,28 @@ object TestUtils extends LazyLogging with Matchers {
       else
         throw new RuntimeException(f"Failed to find $rootSubdir under the current directory or provenance subdir!")
 
-    val expectedManifestFile = new File(f"$expectedDataRoot/scala-$version/$subdir.manifest")
+    val manifestBaseName =
+      if (subdir endsWith "/sync")
+        subdir.stripSuffix("/sync")
+      else if (subdir endsWith "/async")
+        subdir.stripSuffix("/async")
+      else
+        subdir
+
+    val expectedManifestFile = new File(f"$expectedDataRoot/scala-$version/$manifestBaseName.manifest")
+
+    val expectedManifestString =
+      if (!expectedManifestFile.exists) {
+        logger.warn(s"Failed to find $expectedManifestFile!")
+        ""
+      } else {
+        val expectedManifestBytes = Files.readAllBytes(Paths.get(expectedManifestFile.getAbsolutePath))
+        new String(expectedManifestBytes)
+      }
 
     try {
-
       if (!new File(actualOutputLocalPath).exists)
         throw new RuntimeException(s"Failed to find $actualOutputLocalPath!")
-
-      val expectedManifestString =
-        if (!expectedManifestFile.exists) {
-          logger.warn(s"Failed to find $expectedManifestFile!")
-          ""
-        } else {
-          val expectedManifestBytes = Files.readAllBytes(Paths.get(expectedManifestFile.getAbsolutePath))
-          new String(expectedManifestBytes)
-        }
 
       newManifestString shouldEqual expectedManifestString
 
@@ -110,8 +122,13 @@ object TestUtils extends LazyLogging with Matchers {
         // For any failure, replace the test content.  This will show up in git status, and it can be committed or not.
         expectedManifestFile.getParentFile.mkdirs()
         logger.error(f"Writing $expectedManifestFile to put in source control.  Reverse this if the change is not intentional.")
+        logger.error(f"Previous value was $expectedManifestString")
+        expectedManifestFile.delete()
         Files.write(Paths.get(expectedManifestFile.getAbsolutePath), newManifestString.getBytes("UTF-8"))
         throw e
+      case ee: Exception =>
+        println(ee)
+        throw ee
     }
   }
 }

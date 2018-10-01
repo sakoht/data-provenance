@@ -12,7 +12,6 @@ import org.slf4j.{Logger, LoggerFactory}
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.util.Try
 import scala.util.control.NonFatal
 
 /**
@@ -125,7 +124,7 @@ class ResultTrackerSimple(
       .logRemoval(logger)
       .buildWith[FunctionCallResultWithKnownProvenanceSerializable, Boolean]
 
-  protected[provenance] def saveResultSerializable(
+  def saveResultSerializable(
     resultSerializable: FunctionCallResultWithKnownProvenanceSerializable,
     inputResultsAlreadySaved: Vector[FunctionCallResultWithProvenanceSerializable]
   ): FunctionCallResultWithProvenanceDeflated[_] = {
@@ -279,6 +278,8 @@ class ResultTrackerSimple(
           throw new FailedSaveException(f"No data saved for the current inputs?")
       }
     } catch {
+      case e: InconsistentVersionException =>
+        throw e
       case e: FailedSaveException =>
         throw e
       case e: Exception =>
@@ -348,38 +349,29 @@ class ResultTrackerSimple(
   def hasOutputForCall[O](call: FunctionCallWithProvenance[O]): Boolean =
     loadOutputIdsForCallOption(call).nonEmpty
 
-
   def loadResultByCallOption[O](call: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] =
-    Await.result(loadResultByCallOptionAsync(call), ioTimeout)
+    loadOutputIdsForCallOption(call).map {
+      case (outputId, commitId, buildId) =>
+        createResultFromPreviousCallOutput(call, outputId, commitId, buildId)
+    }
 
   def loadResultByCallOptionAsync[O](call: FunctionCallWithProvenance[O])(implicit ec: ExecutionContext): Future[Option[FunctionCallResultWithProvenance[O]]] = {
-    // just re-run anything we need to "load"
     loadOutputIdsForCallOptionAsync(call).map {
       opt =>
         opt.map {
           case (outputId, commitId, buildId) =>
-            implicit val c: ClassTag[O] = call.outputClassTag
-            implicit val e: Codec[O] = call.outputCodec
-
-            val output: O = try {
-              loadValue[O](outputId)
-            } catch {
-              case e: Exception =>
-                // TODO: Remove debug code
-                println(e.toString)
-                loadValue[O](outputId)(call.outputCodec)
-            }
-
-            val outputId2 = Codec.digestObject(output)
-            if (outputId2 != outputId) {
-              throw new SerializationInconsistencyException(f"Output value saved as $outputId reloads with a digest of $outputId2: $output")
-            }
-
-            val outputWrapped = VirtualValue(valueOption = Some(output), digestOption = Some(outputId), serializedDataOption = None)
-            val bi = BuildInfoBrief(commitId, buildId)
-            call.newResult(outputWrapped)(bi)
+            createResultFromPreviousCallOutput(call, outputId, commitId, buildId)
         }
     }
+  }
+
+  protected def createResultFromPreviousCallOutput[O](call: FunctionCallWithProvenance[O], outputId: Digest, commitId: String, buildId: String): FunctionCallResultWithProvenance[O] = {
+    implicit val c: ClassTag[O] = call.outputClassTag
+    implicit val e: Codec[O] = call.outputCodec
+    val outputWrapped1 = VirtualValue[O](valueOption = None, digestOption = Some(outputId), serializedDataOption = None)
+    val outputWrapped = outputWrapped1.resolveValue(this)
+    val bi = BuildInfoBrief(commitId, buildId)
+    call.newResult(outputWrapped)(bi)
   }
 
   def loadValueOption[T : Codec](digest: Digest): Option[T] =

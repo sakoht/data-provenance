@@ -18,7 +18,7 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
   implicit val bi: BuildInfo = currentAppBuildInfo
 
-  protected[provenance] def saveResultSerializable(
+  def saveResultSerializable(
     resultInSaveableForm: FunctionCallResultWithKnownProvenanceSerializable,
     inputResultsAlreadySaved: Vector[FunctionCallResultWithProvenanceSerializable]
   ): FunctionCallResultWithProvenanceDeflated[_] = {

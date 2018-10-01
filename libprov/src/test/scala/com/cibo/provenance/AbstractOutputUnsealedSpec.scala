@@ -27,7 +27,7 @@ class AbstractOutputUnsealedSpec extends FunSpec with Matchers {
     it("should work") {
       val testSubdir = f"abstract-outputs-unsealed"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt = new ResultTrackerSimple(SyncablePath(testDataDir)) with TestTracking
+      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
       rt.wipe
 
       val p1 = pickAPet2("Kittykitty")

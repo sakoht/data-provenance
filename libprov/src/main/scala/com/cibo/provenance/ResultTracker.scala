@@ -134,7 +134,7 @@ trait ResultTracker extends Serializable {
     * @param inputResults:          The inputs, which must themselves be results at this point.
     * @return                       The deflated result.
     */
-  protected[provenance] def saveResultSerializable(
+  def saveResultSerializable(
     resultInSerializableForm: FunctionCallResultWithKnownProvenanceSerializable,
     inputResults: Vector[FunctionCallResultWithProvenanceSerializable]
   ): FunctionCallResultWithProvenanceDeflated[_]
