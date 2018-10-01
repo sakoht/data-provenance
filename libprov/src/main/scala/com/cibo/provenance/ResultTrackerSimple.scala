@@ -11,7 +11,7 @@ import com.google.common.cache.Cache
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
 
 /**
@@ -57,9 +57,7 @@ class ResultTrackerSimple(
   val basePath: SyncablePath,
   val writable: Boolean = true,
   val underlyingTracker: Option[ResultTrackerSimple] = None
-)(implicit val currentAppBuildInfo: BuildInfo,
-  @transient
-  val ec: ExecutionContext = ExecutionContext.global) extends ResultTracker {
+)(implicit val currentAppBuildInfo: BuildInfo) extends ResultTracker {
 
   import com.cibo.cache.GCache
   import com.cibo.provenance.exceptions.InconsistentVersionException
@@ -400,10 +398,21 @@ class ResultTrackerSimple(
 
   // Private Methods
 
-  private def loadOutputIdsForCallOption[O](call: FunctionCallWithProvenance[O]): Option[(Digest, String, String)] =
-    Await.result(loadOutputIdsForCallOptionAsync(call), ioTimeout)
+  private def loadOutputIdsForCallOption[O](call: FunctionCallWithProvenance[O]): Option[(Digest, String, String)] = {
+    val inputGroupValuesDigest = call.getInputGroupValuesDigest(this)
+    val ids = loadOutputCommitAndBuildIdForInputGroupIdOption(
+      call.functionName,
+      call.versionValue(this),
+      inputGroupValuesDigest
+    )
+    if (ids.isEmpty) {
+      logger.debug(f"Failed to find value for $call")
+    }
+    ids
+  }
 
-  private def loadOutputIdsForCallOptionAsync[O](call: FunctionCallWithProvenance[O]): Future[Option[(Digest, String, String)]] = {
+
+  private def loadOutputIdsForCallOptionAsync[O](call: FunctionCallWithProvenance[O])(implicit ec: ExecutionContext): Future[Option[(Digest, String, String)]] = {
     val inputGroupValuesDigest = call.getInputGroupValuesDigest(this)
     loadOutputCommitAndBuildIdForInputGroupIdOptionAsync(
       call.functionName,
@@ -418,13 +427,17 @@ class ResultTrackerSimple(
     }
   }
 
-  private def loadOutputCommitAndBuildIdForInputGroupIdOption(fname: String, fversion: Version, inputGroupId: Digest): Option[(Digest,String, String)] =
-    Await.result(
-      loadOutputCommitAndBuildIdForInputGroupIdOptionAsync(fname, fversion, inputGroupId),
-      ioTimeout
+  private def loadOutputCommitAndBuildIdForInputGroupIdOption(fname: String, fversion: Version, inputGroupId: Digest): Option[(Digest,String, String)] = {
+    val suffixes = getListingRecursive(f"functions/$fname/${fversion.id}/inputs-to-output/${inputGroupId.id}")
+    parseOutputSuffixes(
+      fname: String,
+      fversion: Version,
+      inputGroupId: Digest,
+      suffixes
     )
+  }
 
-  private def loadOutputCommitAndBuildIdForInputGroupIdOptionAsync(fname: String, fversion: Version, inputGroupId: Digest): Future[Option[(Digest,String, String)]] = {
+  private def loadOutputCommitAndBuildIdForInputGroupIdOptionAsync(fname: String, fversion: Version, inputGroupId: Digest)(implicit ec: ExecutionContext): Future[Option[(Digest,String, String)]] = {
     getListingRecursiveAsync(f"functions/$fname/${fversion.id}/inputs-to-output/${inputGroupId.id}").map {
       suffixes =>
         parseOutputSuffixes(
@@ -581,7 +594,6 @@ class ResultTrackerSimple(
    */
 
   import scala.concurrent.duration._
-  import scala.concurrent.Await
   import com.cibo.aws.AWSClient.Implicits.s3SyncClient
 
   @transient
@@ -663,7 +675,7 @@ class ResultTrackerSimple(
 
   // async interface
 
-  protected def saveBytesAsync(path: String, bytes: Array[Byte]): Future[Unit] =
+  protected def saveBytesAsync(path: String, bytes: Array[Byte])(implicit ec: ExecutionContext): Future[Unit] =
     if (!writable) {
       throw new ReadOnlyTrackerException(f"Attempt to save to a read-only ResultTracker $this.")
     } else {
@@ -693,7 +705,7 @@ class ResultTrackerSimple(
     }
 
 
-  protected def loadBytesAsync(path: String): Future[Array[Byte]] =
+  protected def loadBytesAsync(path: String)(implicit ec: ExecutionContext): Future[Array[Byte]] =
     Option(heavyCache.getIfPresent(path)) match {
       case Some(found) =>
         Future.successful(found)
@@ -783,7 +795,7 @@ class ResultTrackerSimple(
     Codec.deserialize[T](bytes)
   }
 
-  protected def loadObjectAsync[T : Codec](path: String): Future[T] =
+  protected def loadObjectAsync[T : Codec](path: String)(implicit ec: ExecutionContext): Future[T] =
     loadBytesAsync(path).map {
       bytes =>
         Codec.deserialize[T](bytes)
@@ -839,7 +851,7 @@ import scala.concurrent.duration._
   * It could evolve to possibly replace it globally, but right now it is used only here.
   */
 object KVStore {
-  def fromSyncablePath(path: SyncablePath)(implicit ec: ExecutionContext, s3SyncClient: AmazonS3): KVStore =
+  def fromSyncablePath(path: SyncablePath)(implicit s3SyncClient: AmazonS3): KVStore =
     path match {
       case s3Path: S3SyncablePath => new S3Store(s3Path)
       case localPath: LocalPath => new LocalStore(localPath)
@@ -856,10 +868,10 @@ sealed trait KVStore {
   def getBytes(path: String): Array[Byte] =
     getBytesForFullPath(getFullPathForRelativePath(path))
 
-  def putBytesAsync(path: String, value: Array[Byte]): Future[Unit] =
+  def putBytesAsync(path: String, value: Array[Byte])(implicit ec: ExecutionContext): Future[Unit] =
     putBytesForFullPathAsync(getFullPathForRelativePath(path), value)
 
-  def getBytesAsync(path: String): Future[Array[Byte]] =
+  def getBytesAsync(path: String)(implicit ec: ExecutionContext): Future[Array[Byte]] =
     getBytesForFullPathAsync(getFullPathForRelativePath(path))
 
   def getSuffixes(
@@ -890,9 +902,9 @@ sealed trait KVStore {
 
   protected def getBytesForFullPath(fullPath: String): Array[Byte]
 
-  protected def putBytesForFullPathAsync(path: String, value: Array[Byte]): Future[Unit]
+  protected def putBytesForFullPathAsync(path: String, value: Array[Byte])(implicit ec: ExecutionContext): Future[Unit]
 
-  protected def getBytesForFullPathAsync(fullPath: String): Future[Array[Byte]]
+  protected def getBytesForFullPathAsync(fullPath: String)(implicit ec: ExecutionContext): Future[Array[Byte]]
 
   protected[provenance] def remove(path: String): Unit
 
@@ -927,7 +939,7 @@ sealed trait KVStore {
   }
 }
 
-class S3Store(rootPath: S3SyncablePath)(implicit ec: ExecutionContext, s3SyncClient: AmazonS3) extends KVStore {
+class S3Store(rootPath: S3SyncablePath)(implicit s3SyncClient: AmazonS3) extends KVStore {
 
   // implement the KVStore protected API
 
@@ -954,7 +966,7 @@ class S3Store(rootPath: S3SyncablePath)(implicit ec: ExecutionContext, s3SyncCli
     }
   }
 
-  protected def putBytesForFullPathAsync(fullPath: String, value: Array[Byte]): Future[Unit] = {
+  protected def putBytesForFullPathAsync(fullPath: String, value: Array[Byte])(implicit ec: ExecutionContext): Future[Unit] = {
     logger.debug("putObject: checking bucket")
     createBucketIfMissing
 
@@ -991,7 +1003,7 @@ class S3Store(rootPath: S3SyncablePath)(implicit ec: ExecutionContext, s3SyncCli
     }
   }
 
-  protected def getBytesForFullPathAsync(fullPath: String): Future[Array[Byte]] = {
+  protected def getBytesForFullPathAsync(fullPath: String)(implicit ec: ExecutionContext): Future[Array[Byte]] = {
     createBucketIfMissing
     s3async.getObject(bucketName, fullPath).transform(
       {
@@ -1034,7 +1046,7 @@ class S3Store(rootPath: S3SyncablePath)(implicit ec: ExecutionContext, s3SyncCli
   private val basePrefix: String = rootPath.s3Path
   private lazy val timeout: Duration = 2.minutes
   private lazy val logger: Logger = LoggerFactory.getLogger(getClass)
-  private lazy val s3async: S3AsyncTransfer = S3AsyncTransfer.apply
+  private def s3async(implicit ec: ExecutionContext): S3AsyncTransfer = S3AsyncTransfer.apply
 
   private lazy val createBucketIfMissing: Unit = {
     // This is only done once.
@@ -1064,7 +1076,7 @@ class S3Store(rootPath: S3SyncablePath)(implicit ec: ExecutionContext, s3SyncCli
 }
 
 
-class LocalStore(rootPath: LocalPath)(implicit ec: ExecutionContext) extends KVStore {
+class LocalStore(rootPath: LocalPath) extends KVStore {
 
   private lazy val logger: Logger = LoggerFactory.getLogger(getClass)
 
@@ -1121,10 +1133,10 @@ class LocalStore(rootPath: LocalPath)(implicit ec: ExecutionContext) extends KVS
       }
   }
 
-  protected def getBytesForFullPathAsync(fullPath: String): Future[Array[Byte]] =
+  protected def getBytesForFullPathAsync(fullPath: String)(implicit ec: ExecutionContext): Future[Array[Byte]] =
     Future { getBytesForFullPath(fullPath) }
 
-  protected def putBytesForFullPathAsync(fullPath: String, value: Array[Byte]): Future[Unit] =
+  protected def putBytesForFullPathAsync(fullPath: String, value: Array[Byte])(implicit ec: ExecutionContext): Future[Unit] =
     Future { putBytesForFullPath(fullPath, value) }
 
 

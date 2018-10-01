@@ -13,8 +13,8 @@ import scala.concurrent.{Await, ExecutionContext}
   */
 case class ResultTrackerForTest(rootPath: SyncablePath)(implicit bi: BuildInfo, ec: ExecutionContext = ExecutionContext.global)
   extends ResultTrackerDuplex(
-    new ResultTrackerSimple(rootPath / "sync")(bi, ec) with TestTrackingOverrides,
-    new ResultTrackerSimple(rootPath / "async")(bi, ec) with TestTrackingOverrides
+    new ResultTrackerSimple(rootPath / "sync")(bi) with TestTrackingOverrides,
+    new ResultTrackerSimple(rootPath / "async")(bi) with TestTrackingOverrides
   ) {
 
   import org.apache.commons.io.FileUtils
