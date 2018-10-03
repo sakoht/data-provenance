@@ -778,7 +778,7 @@ The result of one function with provenance might be used by another application,
 
 Deleted Code Tracking
 ---------------------
-When a function vanishes, the same logic used for externally generated results applies.  The same SHA1 digest for the inputs is known, and the original function name, version, commit and build can be seen as strings.  But the types become inaccessible as real scala data.
+When a function is deleted from the code base, the same logic used for externally generated results applies.  The same SHA1 digest for the inputs is known, and the original function name, version, commit and build can be seen as strings.  But the types become inaccessible as real scala data.
 
 Best Practices
 --------------
@@ -800,4 +800,94 @@ Project Setup:
 7. Add test cases to defend your logic.
 
 Or, consider just copying the example1 project as a starting skeleton, and modifying to taste.
+
+Common Obstacles Encoding/Decoding:
+-----------------------------------
+
+Writing an encoder/decoder pair for everything that is an input or output is most of the work.
+
+Start with this for any types you want to use as inputs:
+```
+object MyClass {
+    import io.circe.generic.semiauto._
+    implicit val encoder = deriveEncoder[MyClass]
+    implicit val decoder = deriveEncoder[MyClass]
+}
+```
+
+If this fails, here are some common remedies:
+
+#### Make it a case class:
+
+Case classes automatically derive easily.  If the above fail, make sure your `MyClass` is a case class.
+
+If you cannot, you will have to write a custom encoder/decoder pair for a regular class.
+
+#### If the class is paremeterized, make the encoder/decoder a `def`:
+
+A parameterized class actually has a different encoder/decoder for each set of params:
+
+This would work for `MyClass[T, U, V]`
+```
+object MyClass {
+    import io.circe.generic.semiauto._
+    implicit def encoder[T,U,V] = deriveEncoder[MyClass[T,U,V]]
+    implicit def decoder = deriveEncoder[[MyClass[T,U,V]]
+}
+```
+
+#### Ensure that inputs have an encoder/decoder pair:
+- If it still fails, it is likely that some inputs do not have an encoder/decoder pair.
+- Comment-out the above, and try making sure each constructor property has an encoder/decoder pair first.
+- Make sure things compile with all of the inputs having an encoder/decoder.
+- If things still fail, comment-out those, and go to _their_ inputs.
+- etc.
+- When things finally start to compile, un-comment the encoder/decoder for downstream classses one-by-one.
+
+#### For an abstract class, you need a way to handle all possibe subclasses:
+
+If you have a class like `Animal`, the decoder must handle any given subclass anyone writes.
+
+There are two solutions to this:
+1. Make the base class a `sealed trait`.  The circe `derive{En,De}coder` work automatically for sealed traits.
+2. If the subclasses are truly open-ended use this:
+```
+object Animal {
+    implicit val codec = Codec.createAbstractCodec[Animal]
+    implicit val encoder = Codec.encoder
+    implicit val decoder = Codec.decoder
+}
+
+The second option will expect that all subclasses implement an `encoder` and `decoder` in their companion
+class.  Sadly this cannot be verified at compile time, so you may fail to encode at the time your `Dog` or `Cat`
+attempt to save the first time if it is missing.
+
+```
+
+#### Separate objects that mix "data" with "software machinery:
+
+Provenance tracking records data in a way that is meaningful across processes, across time, and across machines.
+If the class being serialized contains things like an ExecutionContext, or a File, an Iterator,
+or Socket in its contructor cannot serialize easily.  These things do not have a meaningful identity when the
+process exits, and as such are not trackable.
+
+The general solution is to keep the two kinds of functionality separate.  An object that represents a file path 
+is data that can be tracked.  An open file handle, in Iterator, or a Future representing incoming data, is not.
+
+Strategies:
+- Replace file handles and IO streams with either of:
+  - the data used to construct the handle (i.e. the path to the File instead of the File itself)
+  - the content that will be pulled from the handle/stream.
+- Move any ExecutionContext property in the constructor to the _methods_ that use it (usually as implicits),
+ instead of the object constructor.  This is good architecture too because
+  - it lets the core data object be shared across threads as well as processes
+  - it ensures whatever actually calls methods to do work can specify how to manage the resulting workload
+- Make methods that take and return Futures call another method that takes and returns tangible data,
+  and put tracking around the inner method, not the outer one.
+   
+
+  
+
+   
+  
 
