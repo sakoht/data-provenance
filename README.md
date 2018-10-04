@@ -844,7 +844,7 @@ object MyClass {
 - etc.
 - When things finally start to compile, un-comment the encoder/decoder for downstream classses one-by-one.
 
-#### For an abstract class, you need a way to handle all possibe subclasses:
+#### For an abstract class, you need a way to handle all possible subclasses:
 
 If you have a class like `Animal`, the decoder must handle any given subclass anyone writes.
 
@@ -886,8 +886,109 @@ Strategies:
   and put tracking around the inner method, not the outer one.
    
 
-  
+Wrapping Object Construction
+----------------------------
+It is common for key functional logic to exist behind object construction.
 
+To avoid writing a custom function every time you want to wrap an object with tracking,
+use the `ObjectCompanion{0..20}` subclasses for the _companion_ class to any object you want to track.
+
+It adds the `.withProvenance` special constructor, which wraps the underlying constructor with tracking.
+
+Example:
+```
+import com.cibo.provenance._
+import com.cibo.provenance.oo._
+
+case class MyClass(foo: Int, bar: String)
+
+object MyClass extends ObjectCompanion2[Int, String, MyClass] {
+  implicit val encoder = deriveEncoder[MyClass]
+  implicit val decoder = deriveDecoder[MyClass]
+}
+```
+
+This now works:
+```
+val obj = MyClass.withProvenance(myFoo, myBar)
+```
+
+
+Wrapping Property Access
+------------------------
+Often, one step in a process returns a `Product` (case class), and only specific elements 
+need to be passed to some other `FunctionWithProvenance`.
+
+To avoid writing a bunch of tiny custom `FunctionWithProvenance` subclasses for each case,
+there is a type class, `ProductWithProvenance`.  It makes it easy to expose the case class properties
+directly on the call/result, much like we do with map() and apply() on `Traversables` 
+
+An example:
+```
+import com.cibo.provenance._
+import com.cibo.provenance.oo._
+
+case class Fizz(a: Int, b: Double)
+
+object Fizz extends ObjectCompanion2[Int, Double, Fizz](NoVersion) { outer =>
+  implicit def encoder: Encoder[Fizz] = deriveEncoder[Fizz]
+  implicit def decoder: Decoder[Fizz] = deriveDecoder[Fizz]
+
+  implicit class FizzWithProvenance(obj: ValueWithProvenance[Fizz]) extends ProductWithProvenance[Fizz](obj) {
+    val a = productElement[Int]("a")
+    val b = productElement[Double]("b")
+  }
+}
+
+val obj = Fizz.withProvenance(123, 9.87)
+obj.a.resolve.output shouldBe 123
+obj.b.resolve.output shouldBe 9.87
+```
    
-  
+Wrapping Method Calls
+---------------------
 
+Once the object construction is wrapped in tracking, you often have methods calls,
+rather than classical functions, that need tracking.  The `ObjectCompanion` class 
+adds `mkMethod{0..20}` to make doing this minimally invasive.
+
+
+For this example class:
+```
+case class Boo(i: Int) {
+  def incrementMe: Int = i + 1
+
+  def addToMe(n: Int): Int = i + n
+
+  def catString(n: Int, s: String): String =
+    (0 until (i + n)).map(_ => s).mkString("")
+}
+```
+
+We have  the following companion object wrapping each method:
+```
+object Boo extends ObjectCompanion1[Int, Boo](Version("0.1")) { self =>
+  implicit val encoder: Encoder[Boo] = deriveEncoder[Boo]
+  implicit val decoder: Decoder[Boo] = deriveDecoder[Boo]
+
+  // Add tracking for methods on Boo that we intend to call with tracking.
+  val incrementMe = mkMethod0[Int]("incrementMe", Version("0.1"))
+  val addToMe = mkMethod1[Int, Int]("addToMe", Version("0.1"))
+  val catString = mkMethod2[Int, String, String]("catString", Version("0.1"))
+
+  // Make a type class so these can be called in a syntactically-friendly way.
+  implicit class WrappedMethods(obj: ValueWithProvenance[Boo]) {
+    val incrementMe = self.incrementMe.wrap(obj)
+    val addToMe = self.addToMe.wrap(obj)
+    val catString = self.catString.wrap(obj)
+  }
+}
+```
+
+Usage is like this:
+```
+val obj = Boo.withProvenance(2)
+obj.incrementMe().resolve.output shouldBe 3
+obj.addToMe(90).resolve.output shouldBe 92
+obj.catString(3, "z").resolve.output shouldBe "zzzzz"
+```

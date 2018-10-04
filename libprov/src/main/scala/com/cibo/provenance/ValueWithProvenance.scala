@@ -51,13 +51,11 @@ package com.cibo.provenance
 import java.io.Serializable
 
 import com.cibo.provenance.implicits.Traversable
-import com.cibo.provenance.monadics.GatherWithProvenance
 
 import scala.language.implicitConversions
 import scala.language.higherKinds
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe.TypeTag
-import io.circe._
 
 import scala.concurrent.{ExecutionContext, Future}
 

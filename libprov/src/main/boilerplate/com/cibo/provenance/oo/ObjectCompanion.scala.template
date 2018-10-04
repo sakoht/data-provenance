@@ -43,8 +43,10 @@ import com.cibo.provenance._
   * }
   *
   * val myObj = MyClass.withProvenance(myFoo, myBar)
-  * val myResult = obj.baz(3)
-  * assert(myResult.isInstanceOf[myObj.baz.Call])
+  * val myResult1 = obj.baz(3)
+  * bal myResult2 = obj.boo(myResult1, "a", "b")
+  * assert(myResult1.isInstanceOf[myObj.baz.Call])
+  * assert(myResult2.isInstanceOf[myObj.boo.Call])
   * ```
   *
   * @param ev$1
@@ -71,7 +73,7 @@ abstract class ObjectCompanion[T : ClassTag : TypeTag] {
     }
   }
 
-    [1..20#
+  [1..20#
   def mkMethod1[[#I1 : Codec#], O : Codec](methodName: String, version: Version): Method1WithProvenance[T, [#I1#], O] = {
     val method: Method = implicitly[Codec[T]].classTag.runtimeClass.getMethod(
       methodName,

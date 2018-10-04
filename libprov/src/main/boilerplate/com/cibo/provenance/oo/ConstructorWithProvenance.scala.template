@@ -3,11 +3,7 @@ package com.cibo.provenance.oo
 import com.cibo.provenance._
 
 /**
-  * This is the base trait for a special case of FunctionWithProvenance where the function
-  * is a wrapper for an object constructor.
-  *
-  * FunctionWithProvenance{1..22}
-  *   - ObjectCompanion{0..21}.ConstructorWithProvenance.
-  *     - MyClass.withProvenance
+  * This is the base trait for ObjectCompanion{0..21}.ConstructorWithProvenance.
+  * These represent functions that wrap object construction in a standard way.
   */
 trait ConstructorWithProvenance
