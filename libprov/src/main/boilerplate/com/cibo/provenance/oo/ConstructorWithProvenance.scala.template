@@ -1,9 +1,0 @@
-package com.cibo.provenance.oo
-
-import com.cibo.provenance._
-
-/**
-  * This is the base trait for ObjectCompanion{0..21}.ConstructorWithProvenance.
-  * These represent functions that wrap object construction in a standard way.
-  */
-trait ConstructorWithProvenance
