@@ -1,0 +1,138 @@
+package com.cibo.provenance.oo
+
+import io.circe.{Decoder, Encoder}
+import java.lang.reflect.Method
+import scala.language.existentials
+import scala.reflect.ClassTag
+import scala.reflect.runtime.universe.TypeTag
+
+import com.cibo.provenance._
+
+/** Extend the companion object of a class with ObjectCompanionN[...]:
+  *
+  * It offers:
+  * - the .withProvenance(...) method wraps object construction with tracking.
+  * - the ProvenanceWrapper implicit class is available to auto-wrap method calls.
+  * - the ConstructorWithProvenance inner class lets you make alternate constructors
+  * - the MethodWithProvenance inner class lets you make alternate method wrappers.
+  *
+  * To just track construction:
+  * ```
+  * case class MyClass(foo: Foo, bar: Bar)
+  *
+  * object MyClass extends ObjectCompanion2[Foo, Bar, MyClass]
+  *
+  * val obj = MyClass.withProvenance(myFoo, myBar)
+  * ```
+  *
+  * To track construction and certain method calls:
+  * ```
+  * case class MyClass(foo: Foo, bar: Bar) {
+  *   def baz(a: Int): String = foo.toString + a.toString
+  *   def boo(b: String, c: String, d: String): String = bar.toString + b + c + d
+  * }
+  *
+  * object MyClass extends ObjectCompanion2[Foo, Bar, MyClass] { self =>
+  *   val baz = mkMethod1[Int, String]("baz", Version("0.1"))
+  *   val boo = mkMethod3[String, String, String, String]("boo", Version("2.2"))
+  *
+  *   class MyClassWithProvenance(o: ValueWithProvenance[MyClass]) {
+  *     val baz = self.baz.wrap(o)
+  *     val baz = self.boo.wrap(o)
+  *   }
+  * }
+  *
+  * val myObj = MyClass.withProvenance(myFoo, myBar)
+  * val myResult1 = obj.baz(3)
+  * bal myResult2 = obj.boo(myResult1, "a", "b")
+  * assert(myResult1.isInstanceOf[myObj.baz.Call])
+  * assert(myResult2.isInstanceOf[myObj.boo.Call])
+  * ```
+  *
+  * @param ev$1
+  * @param ev$2
+  * @tparam O
+  */
+abstract class ObjectCompanion[T : ClassTag : TypeTag] {
+  implicit def encoder: Encoder[T]
+  implicit def decoder: Decoder[T]
+  implicit def codec: Codec[T] = Codec(encoder, decoder)
+
+  val constructorWithProvenanceName: String = implicitly[ClassTag[T]].toString + ".withProvenance"
+
+  val className = implicitly[Codec[T]].classTag.toString
+
+  def mkMethod0[O : Codec](methodName: String, version: Version): Method0WithProvenance[T, O] = {
+    val method: Method = implicitly[Codec[T]].classTag.runtimeClass.getMethod(
+      methodName
+    )
+    new Method0WithProvenance[T, O](className, methodName, version) {
+      override lazy val name: String = f"${className}.$methodName"
+      def impl(obj: T): O =
+        method.invoke(obj).asInstanceOf[O]
+    }
+  }
+
+  [1..20#
+  def mkMethod1[[#I1 : Codec#], O : Codec](methodName: String, version: Version): Method1WithProvenance[T, [#I1#], O] = {
+    val method: Method = implicitly[Codec[T]].classTag.runtimeClass.getMethod(
+      methodName,
+      [#implicitly[Codec[I1]].classTag.runtimeClass#]
+    )
+    new Method1WithProvenance[T, [#I1#], O](className, methodName, version) {
+      override lazy val name: String = f"${className}.$methodName"
+      def impl(obj: T, [#i1: I1#]): O =
+        method.invoke(obj, [#i1.asInstanceOf[Object]#]).asInstanceOf[O]
+    }
+  }
+  #
+  ]
+}
+
+/**
+  * Use this as the base for companion objects when the related class needs provenance tracking,
+  * and the related class has 0 parameters.
+  *
+  * It adds the .withProvenance(...) altrnate constructor to do object construction with tracking.
+  */
+abstract class ObjectCompanion0[O : ClassTag : TypeTag](v: Version) extends ObjectCompanion[O] {
+  private val constructor = implicitly[ClassTag[O]].runtimeClass.getConstructor()
+
+  trait ConstructorWithProvenance extends Function0WithProvenance[O] {
+    val currentVersion: Version = v
+    override lazy val name: String = constructorWithProvenanceName
+    def impl(): O = {
+      constructor.newInstance().asInstanceOf[O]
+    }
+  }
+
+  lazy val withProvenance = new ConstructorWithProvenance {}
+}
+
+[1..21#
+/**
+  * Use this as the base for companion objects when the related class needs provenance tracking,
+  * and the related class is a Product with arity 1.
+  *
+  * It adds the .withProvenance(...) altrnate constructor to do object construction with tracking.
+  *
+  */
+abstract class ObjectCompanion1[[#I1 : Codec#], O : ClassTag : TypeTag](v: Version) extends ObjectCompanion[O] {
+  [#
+  private val c1: Class[_] = implicitly[Codec[I1]].classTag.runtimeClass.asInstanceOf[Class[I1]]#
+  ]
+  private val constructor = implicitly[Codec[O]].classTag.runtimeClass.getConstructor([#c1#])
+
+  trait ConstructorWithProvenance extends Function1WithProvenance[[#I1#], O] {
+    val currentVersion: Version = v
+    override lazy val name: String = constructorWithProvenanceName
+    def impl([#i1: I1#]): O = {
+      constructor.newInstance([#i1.asInstanceOf[Object]#]).asInstanceOf[O]
+    }
+  }
+
+  lazy val withProvenance = new ConstructorWithProvenance {}
+}
+
+#
+]

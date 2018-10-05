@@ -1,0 +1,32 @@
+package com.cibo.provenance.oo
+
+import com.cibo.provenance._
+
+/**
+  * This is the base trait for a special case of FunctionWithProvenance where the function
+  * is a wrapper for an object method.
+  *
+  * Subclasses are ObjectCompanion{0..22}.ConstructorWithProvenance.
+  */
+
+trait MethodWithProvenance[O] extends FunctionWithProvenance[O] {
+  def className: String
+  def methodName: String
+}
+
+abstract class Method0WithProvenance[T, O : Codec](val className: String, val methodName: String, val currentVersion: Version) extends Function1WithProvenance[T, O] with MethodWithProvenance[O] {
+  def wrap(obj: ValueWithProvenance[_ <: T]): () => Call = {
+    val f: () => Call = () => apply(obj)
+    f
+  }
+}
+
+[1..20#
+abstract class Method1WithProvenance[T, [#P1#], O : Codec](val className: String, val methodName: String, val currentVersion: Version) extends Function2WithProvenance[T, [#P1#], O] with MethodWithProvenance[O] {
+  def wrap(obj: ValueWithProvenance[_ <: T]): ([#ValueWithProvenance[_ <: P1]#]) => Call = {
+    val f: ([#ValueWithProvenance[_ <: P1]#]) => Call = apply(obj, [#_#])
+    f
+  }
+}
+#
+]
