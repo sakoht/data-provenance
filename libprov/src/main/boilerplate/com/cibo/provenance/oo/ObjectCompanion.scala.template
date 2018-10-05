@@ -49,9 +49,7 @@ import com.cibo.provenance._
   * assert(myResult2.isInstanceOf[myObj.boo.Call])
   * ```
   *
-  * @param ev$1
-  * @param ev$2
-  * @tparam O
+  * @tparam T     The class name of the companion class (repeat the name of the object)
   */
 abstract class ObjectCompanion[T : ClassTag : TypeTag] {
   implicit def encoder: Encoder[T]

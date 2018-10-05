@@ -8,7 +8,6 @@ import com.cibo.provenance._
   * while tracking which parts were used.
   *
   * @param product    Some ValueWithProvenance of a Product
-  * @param ev$1       The Codec for T
   * @tparam T         The type of value the ValueWithProvenance wraps.
   */
 class ProductWithProvenance[T <: Product : Codec](product: ValueWithProvenance[T]) {
@@ -32,8 +31,6 @@ class ProductWithProvenance[T <: Product : Codec](product: ValueWithProvenance[T
   * This built-in is used to decompose case classes.  It is similar to `ApplyWithProvenance`,
   * except the parameters are accessed by name.
   *
-  * @param ev$1     A codec for the product subclass to which this applies.
-  * @param ev$2     A codec for the output type.
   * @tparam T       The type of Product to which the function is being applied.
   * @tparam O:      The type of the element being accessed.
   */
