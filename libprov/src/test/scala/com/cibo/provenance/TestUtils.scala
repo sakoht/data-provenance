@@ -38,11 +38,11 @@ object TestUtils extends LazyLogging with Matchers {
     }
 
   def diffOutputSubdir(subdir: String) = {
-    diffOutputSubdirX(subdir + "/sync")
-    diffOutputSubdirX(subdir + "/async")
+    diffOutputSubdirInner(subdir + "/sync")
+    diffOutputSubdirInner(subdir + "/async")
   }
 
-  def diffOutputSubdirX(subdir: String) = {
+  def diffOutputSubdirInner(subdir: String) = {
     val version =
       if (libBuildInfo.scalaVersion.startsWith("2.11"))
         "2.11"

@@ -21,7 +21,7 @@ class AbstractInputsSpec extends FunSpec with Matchers {
     it("work with different subclasses of input") {
       val testSubdir = f"abstract-inputs"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe
 
       sayYourName(ruffers).resolve.output shouldBe "Ruffers"

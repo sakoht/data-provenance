@@ -11,7 +11,7 @@ import org.scalatest.{FunSpec, Matchers}
 import com.cibo.aws.AWSClient.Implicits.s3SyncClient
 import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
 
-class ResultTrackerForTestSpec extends FunSpec with Matchers with LazyLogging {
+class ResultTrackerForSelfTestSpec extends FunSpec with Matchers with LazyLogging {
   import com.cibo.io.s3.SyncablePath
 
   // This is the root for test output.
@@ -29,7 +29,7 @@ class ResultTrackerForTestSpec extends FunSpec with Matchers with LazyLogging {
     it("has primitives save and reload correctly without access to real type information.") {
       val testSubdir = "reload0"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe
 
       val obj1: Int = 888
@@ -49,7 +49,7 @@ class ResultTrackerForTestSpec extends FunSpec with Matchers with LazyLogging {
     it("has primitives save and reload correctly when the type is known.") {
       val testSubdir = "reload1"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe
 
       val obj1: Int = 999
@@ -94,7 +94,7 @@ class ResultTrackerForTestSpec extends FunSpec with Matchers with LazyLogging {
       val testSubdir = "reload3"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
       
-      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe
       
       // Create a result that is not tracked.
@@ -116,7 +116,7 @@ class ResultTrackerForTestSpec extends FunSpec with Matchers with LazyLogging {
       val testSubdir = "rerun1"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
       
-      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe
       
       Add.runCount = 0
@@ -140,7 +140,7 @@ class ResultTrackerForTestSpec extends FunSpec with Matchers with LazyLogging {
       val testSubdir = "rerun2"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
       
-      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe
 
       Add.runCount = 0
@@ -174,7 +174,7 @@ class ResultTrackerForTestSpec extends FunSpec with Matchers with LazyLogging {
     it("should skip calls where the call has been made before with the same input values") {
       val testSubdir = "rerun3"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe
 
       Add.runCount = 0
@@ -216,7 +216,7 @@ class ResultTrackerForTestSpec extends FunSpec with Matchers with LazyLogging {
     it("ensures functions method calls return expected values (breakdown)") {
       val testSubdir = "breakdown"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe
 
       Add.runCount = 0
@@ -269,23 +269,23 @@ class ResultTrackerForTestSpec extends FunSpec with Matchers with LazyLogging {
     it("results should be found from a previous run") {
       val testSubdir = "collision"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      val rt = ResultTrackerForTest(SyncablePath(testDataDir))  // not used below, just wipe
+      val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))  // not used below, just wipe
       rt.wipe
 
       {
-        implicit val rt1 = ResultTrackerForTest(SyncablePath(testDataDir))(build1)
+        implicit val rt1 = ResultTrackerForSelfTest(SyncablePath(testDataDir))(build1)
         val r1 = Add(1, 1).resolve
         r1.outputBuildInfoBrief shouldEqual build1
       }
 
       {
-        implicit val rt2 = ResultTrackerForTest(SyncablePath(testDataDir))(build2)
+        implicit val rt2 = ResultTrackerForSelfTest(SyncablePath(testDataDir))(build2)
         val r2 = Add(1, 1).resolve
         r2.outputBuildInfoBrief shouldEqual build1 // still build1
       }
 
       {
-        implicit val rt3 = ResultTrackerForTest(SyncablePath(testDataDir))(build3)
+        implicit val rt3 = ResultTrackerForSelfTest(SyncablePath(testDataDir))(build3)
         val r3 = Add(1, 1).resolve
         r3.outputBuildInfoBrief == build1 // still build1
       }
@@ -293,7 +293,7 @@ class ResultTrackerForTestSpec extends FunSpec with Matchers with LazyLogging {
       
 
       {
-        implicit val rt2 = ResultTrackerForTest(SyncablePath(testDataDir))(build2)
+        implicit val rt2 = ResultTrackerForSelfTest(SyncablePath(testDataDir))(build2)
         val r2 = Add(1, 1).resolve
         r2.outputBuildInfoBrief == build2 // now build 2!
       }
@@ -301,7 +301,7 @@ class ResultTrackerForTestSpec extends FunSpec with Matchers with LazyLogging {
       
 
       {
-        implicit val rt3 = ResultTrackerForTest(SyncablePath(testDataDir))(build2)
+        implicit val rt3 = ResultTrackerForSelfTest(SyncablePath(testDataDir))(build2)
         val r3 = Add(1, 1).resolve
         r3.outputBuildInfoBrief == build3 // now build 3!
       }
@@ -312,20 +312,20 @@ class ResultTrackerForTestSpec extends FunSpec with Matchers with LazyLogging {
     it("should detect inconsistent output for the same commit/build") {
       val testSubdir = "same-build-inconsistency"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      val rt = ResultTrackerForTest(SyncablePath(testDataDir)) // not used below, just to wipe
+      val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir)) // not used below, just to wipe
       rt.wipe
 
       val call = Add(1, 1)
 
       {
-        implicit val rt1 = ResultTrackerForTest(SyncablePath(testDataDir))(build1)
+        implicit val rt1 = ResultTrackerForSelfTest(SyncablePath(testDataDir))(build1)
         val r1 = call.resolve
         r1.output shouldEqual 2
         r1.outputBuildInfoBrief shouldEqual build1
       }
 
       {
-        implicit val rt2 = ResultTrackerForTest(SyncablePath(testDataDir))(build2)
+        implicit val rt2 = ResultTrackerForSelfTest(SyncablePath(testDataDir))(build2)
 
         val r2 = call.resolve                             // The resolver finds a previous result
         r2.outputBuildInfoBrief shouldEqual build1     // from the last build
@@ -349,20 +349,20 @@ class ResultTrackerForTestSpec extends FunSpec with Matchers with LazyLogging {
     it("should detect inconsistent output for the same declared version across commit/builds") {
       val testSubdir = f"cross-build-inconsistency"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+      val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe
 
       val call = Add(1, 1)
 
       {
-        implicit val rt1: ResultTracker = ResultTrackerForTest(SyncablePath(testDataDir))(build1)
+        implicit val rt1: ResultTracker = ResultTrackerForSelfTest(SyncablePath(testDataDir))(build1)
         val r1 = call.resolve
         r1.output shouldEqual 2
         r1.outputBuildInfoBrief shouldEqual build1
       }
 
       {
-        implicit val rt2: ResultTracker = ResultTrackerForTest(SyncablePath(testDataDir))(build2)
+        implicit val rt2: ResultTracker = ResultTrackerForSelfTest(SyncablePath(testDataDir))(build2)
 
         val r4 = call.resolveInputs.newResult(4)(build2)    // Make a fake result.
         r4.outputBuildInfoBrief shouldEqual build2          // On a new commit and build.

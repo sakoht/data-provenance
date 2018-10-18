@@ -21,7 +21,7 @@ class ObjectAccessorForProductsSpec extends FunSpec with Matchers {
     it("work with provenance tracking") {
       val testSubdir = "accessors"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt: ResultTrackerForTest = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt: ResultTrackerForSelfTest = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe()
 
       val obj = Fizz.withProvenance(123, 9.87)
