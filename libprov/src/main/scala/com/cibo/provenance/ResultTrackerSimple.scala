@@ -116,7 +116,7 @@ class ResultTrackerSimple(
   lazy val resultCacheSize = 1000L
 
   @transient
-  private lazy val resultCache =
+  protected lazy val resultCache =
     GCache[FunctionCallResultWithKnownProvenanceSerializable, Boolean]()
       .maximumSize(resultCacheSize)
       .logRemoval(logger)
@@ -548,7 +548,7 @@ class ResultTrackerSimple(
   lazy val codecCacheSize = 1000L
 
   @transient
-  private lazy val codecCache =
+  protected lazy val codecCache =
     GCache[Codec[_], Digest]()
       .maximumSize(codecCacheSize)
       .logRemoval(logger)
@@ -824,6 +824,13 @@ class ResultTrackerSimple(
     saveBytes(path, emptyBytes)
     emptyDigest
   }
+
+  def clearCaches(): Unit = {
+    lightCache.invalidateAll()
+    heavyCache.invalidateAll()
+    codecCache.invalidateAll()
+    resultCache.invalidateAll()
+  }
 }
 
 object ResultTrackerSimple {
@@ -885,9 +892,12 @@ sealed trait KVStore {
         fullPrefix.length
       else
         fullPrefix.length + 1
+    val bad = getFullPathsForPrefix(prefix, filterOption, delimiterOption).filter { fullPath => !fullPath.startsWith(fullPrefix) }
+    if (bad.nonEmpty)
+      println("bad")
     getFullPathsForPrefix(prefix, filterOption, delimiterOption).map { fullPath =>
       // This has more sanity checking that should be necessary, but one-off errors have crept in several times.
-      assert(fullPath.startsWith(fullPrefix), s"Full path '$fullPath' does not start with the expected prefix 'fullPrefix'")
+      assert(fullPath.startsWith(fullPrefix), s"Full path '$fullPath' does not start with the expected prefix '$fullPrefix' (from $prefix)")
       fullPath
         .substring(offset)
         .ensuring(!_.startsWith("/"), s"Full path suffix should not start with a '/'")
@@ -940,6 +950,8 @@ sealed trait KVStore {
 }
 
 class S3Store(rootPath: S3SyncablePath)(implicit s3SyncClient: AmazonS3) extends KVStore {
+  require(!rootPath.path.endsWith("/"), s"Found a trailing slash in ${rootPath.path}")
+  require(!rootPath.path.contains("//"), s"Found multiple consecutive slashes in ${rootPath.path}")
 
   // implement the KVStore protected API
 
@@ -1077,6 +1089,8 @@ class S3Store(rootPath: S3SyncablePath)(implicit s3SyncClient: AmazonS3) extends
 
 
 class LocalStore(rootPath: LocalPath) extends KVStore {
+  require(!rootPath.path.endsWith("/"), s"Found a trailing slash in ${rootPath.path}")
+  require(!rootPath.path.contains("//"), s"Found multiple consecutive slashes in ${rootPath.path}")
 
   private lazy val logger: Logger = LoggerFactory.getLogger(getClass)
 
@@ -1120,7 +1134,6 @@ class LocalStore(rootPath: LocalPath) extends KVStore {
     val fullFsPathValue: String = getFsPathForFullPrefix(fullPath)
     val file = new File(fullFsPathValue)
     if (!file.exists()) {
-      logger.error(s"Failed to find object at $fullPath!")
       throw new NotFound(s"Failed to find object at $fullPath!")
     } else
 
@@ -1128,7 +1141,6 @@ class LocalStore(rootPath: LocalPath) extends KVStore {
         Files.readAllBytes(Paths.get(fullFsPathValue))
       } catch {
         case e: Exception =>
-          logger.error(s"Error accessing $fullPath!", e)
           throw new AccessError(s"Error accessing $fullPath!")
       }
   }

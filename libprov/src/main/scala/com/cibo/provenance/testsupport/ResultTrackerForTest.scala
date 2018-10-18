@@ -2,10 +2,11 @@ package com.cibo.provenance.testsupport
 
 import com.cibo.io.s3.SyncablePath
 import com.cibo.provenance._
+import org.apache.commons.io.FileUtils
 
 /**
   * This ResultTracker is used by applications to regression test.
-  * It re-checks results, and helps maintain the test reference data.
+  * It re-checks results of all attempts to resolve a call versus reference data that is auto-maintained.
   *
   * Usage:
   *
@@ -13,12 +14,13 @@ import com.cibo.provenance._
   *
   *   describe("mything") {
   *     it("works") {
-  *       implicit val rt = ResultTrackerForTest(outputPath = SyncablePath("/tmp/mything-works-rt.out"),
-  *                                              referencePath = SyncablePath("src/test/resources/mything-works-rt.ref")
+  *       implicit val rt = ResultTrackerForTest(outputPath = SyncablePath("/tmp/mything-works-rt"),
+  *                                              referencePath = SyncablePath("src/test/resources/mything-works-rt")
   *       rt.clean()
   *       MyThing(p1, p2).resolve
   *       MyThing(p3, p4).resolve
   *       MyThing(p5, p6).resolve
+  *       // add more examples to test corner cases here...
   *       rt.check()
   *     }
   *   }
@@ -38,16 +40,46 @@ case class ResultTrackerForTest(outputPath: SyncablePath, referencePath: Syncabl
     outputPath,
     writable = true,
     Some(ResultTrackerSimple(referencePath, writable = false))
-  ) with Rechecking with Cleanable with Pushable {
+  ) with Rechecking {
+  require(underlyingTracker.nonEmpty, "Refusing to clean() a ResultTracker that does not have an underlying tracker.")
+  require(basePath.isLocal, "Refusing to clean() an S3 path.")
 
   /**
-    * This should be called at the end of a test.  If there is new reference data, it will cancel
-    * the test, and notify the developer where the data is to stage.
+    * Remove all output data, leaving the reference data in place.
+    * This also clears caches.
     *
-    * The intent is to make it as simple as possible to upgrade
-    * @param pos
+    * This should be called at the beginning of a test.
     */
-  def check()(implicit pos: org.scalactic.source.Position): Unit = {
+  def clean(): Unit = {
+    if (basePath.isRemote) {
+      sys.env.get("USER") match {
+        case Some(user) =>
+          if (!basePath.path.contains(user))
+            throw new RuntimeException(f"Refusing to delete an S3 test a directory that does not contain the current user's name: $user not in ${basePath.path}")
+          com.cibo.io.Shell.run(s"aws s3 rm --recursive ${basePath.path}")
+
+        case None =>
+          throw new RuntimeException(
+            "Failed to determine the current user." +
+              f"Refusing to delete a test a directory that does not contain the current user's name!: ${basePath.path}"
+          )
+      }
+    }
+
+    // For local paths this deletes the primary data.  For remote it deletes the data buffered locally.
+    val testDataDir = basePath.toFile
+    FileUtils.deleteDirectory(testDataDir)
+
+    clearCaches()
+  }
+
+  /**
+    * This should be called at the end of a test.  If there is new reference data,
+    * it will notify the developer with a special exception, and give instructions on how to stage the data.
+    *
+    * Note: Calling push() will also stage it automatically.
+    */
+  def check(): Unit = {
     if (basePath.toFile.exists() && basePath.toFile.list().toList.nonEmpty) {
       val msg =
         if (outputPath.isLocal && referencePath.isLocal)
@@ -56,6 +88,25 @@ case class ResultTrackerForTest(outputPath: SyncablePath, referencePath: Syncabl
           f"# New reference data! To stage it:\naws s3 sync ${outputPath.path} ${referencePath.path}"
       throw new ResultTrackerForTest.UnstagedReferenceDataException(msg)
     }
+  }
+
+  /**
+    * This method moves data from the outputPath to the referencePath.
+    * It is typically run after a test is updated to emit new results, or the classes in question have a new version,
+    * which also means new results.
+    * It is called before check() when it is known that the test data needs to be regenerated.
+    */
+  def push(): Unit = {
+    val referencePath = underlyingTracker.get.basePath
+    assert(basePath.toFile.getName == referencePath.toFile.getName)
+
+    if (!referencePath.toFile.exists())
+      referencePath.toFile.mkdirs()
+    FileUtils.copyDirectoryToDirectory(basePath.toFile, referencePath.toFile.getParentFile)
+    if (referencePath.isRemote)
+      referencePath.syncToS3()
+
+    clean()
   }
 }
 
