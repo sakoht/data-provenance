@@ -763,14 +763,128 @@ The `FunctionCallResultWithProvenanceSerialized` embeded contains the ID used in
 It is possible that a new result will simply include #5 above, if, for instance, the same function was called previously on the with the same inputs, with those inputs coming from different source functions, all of which were, themselves, called at other times in some other context.  Or is possibly a no-op if there is a race condition that causes the result to be generated twice in parallel.
 
 
+#### Inconsistent Operations
 
-Idempotency, Consistency, Concurrency and Testing
--------------------------------------------------
-(this is implemented, and has tests, but needs a careful description)
+Each FunctionWithProvenance is expected to produce consistent output for the same inputs at the same function version.
+
+In some situations, a process is known to possibly produce different data over time.  There are two options:
+1. Don't use provenance tracking with this function, just use it with the result.
+2. Add an optional timestamp parameter, and set it to Instant.now.
+
+In the latter case, when the function returns the same data as a prior execution, a tiny record is made with the timestamp,
+and subsequent use of the result "shortcuts", since the output value has been seen before.
+
+The only down-side of option two is that, if the code attempts to run often but produces the same answer,
+you my fill your storage with tiny records indicating each time the attempt was made. 
+
+Idempotency and Concurrency
+---------------------------
+
+Because the storage is structured to be append-only without a broker, all partial operations leave storage in a valid
+state.  As such the data management layer processes are idempotent.
+
+A large number of concurrent operations can perform similar work without colliding.  The down-side of overlapping work
+is the potential waste of compute time and network bandwidth, not data corruption or conflicts.
+
+By avoiding any locking mechanisms, the system is horizontally scalable.  To shift from optimistic to pessimistic 
+concurrency, override to the ResultTracker to lock on the hash key of the inputs, plus the function and version, 
+during resolution.  This will prevent some wasted resources in exchange for possible contention.  This is not
+currently a configured option in the default trackers.
+
+Automated Testing
+-----------------
+
+#### Setup
+
+The `ResultTrackerForTest` helps create test cases in the application/library that uses tracking.
+
+It is a two-layer tracker where the reference data (expected results) are in the bottom layer,
+and new data made during the test run, if any, sits in the top layer.  
+
+
+Outside the test case, one time in the repo, make a factory for test trackers:
+```    
+    object MyTestTrackerFactory extends ResultTrackerForTestFactory(
+      outputRoot = SyncablePath(s"/tmp/${sys.env.getOrElse("USER","anonymous")}/result-trackers-for-test-cases/myapp"),
+      referenceRoot = SyncablePath(
+        new File("libprov/src/test/resources/provenance-data-by-test").getAbsolutePath
+      )
+    )(com.mycompany.myapp.BuildInfo)
+```
+(For integration tests, swap the 2nd parameter for an s3 path.)
+
+
+This example function will be used below:
+```    
+    object MyTool1 extends Function2WithProvenance[Int, Int, Int] {
+      val currentVersion = Version("0.1")
+      def impl(a: Int, b: Int): Int = a + b
+    }
+```
+
+This test case tests the function with 3 scenarios:
+```    
+    implicit val bi: BuildInfo = BuildInfoDummy
+    implicit val rt: ResultTrackerForTest = MyTestTrackerFactory("test-tracker-for-mytool1")
+    
+    it("Test MyTool with various parameters.") {
+      rt.clean()
+      MyTool1(2, 3).resolve
+      MyTool1(6, 4).resolve
+      MyTool1(7, 7).resolve
+      rt.check()
+    }
+```
+
+The first time this runs, there is no reference data.  Everything will pass until the The check() method,
+at which point an `ResultTrackerForTest.UnstagedReferenceDataException` will be thrown.
+
+The error message tell you what to do to stage the data:
+```
+# New reference data! To stage it:
+rsync -av --progress /tmp/$USER/result-trackers-for-test-cases/libprov/test-the-tester/ $HOME/myapp/src/test/resources/provenance-data-by-test/test-the-tester
+```
+
+After staging the data as directed, re-run and it should pass.
+
+
+#### Catching Errors
+
+If code ever produces an inconsistent answer for the same params & version, the ResultTrackerForTest throws an exception.
+
+To see this, change the function impl(), but do not update the currentVersion:
+```
+    object MyTool1 extends Function2WithProvenance[Int, Int, Int] {
+      val currentVersion = Version("0.1")
+      def impl(a: Int, b: Int): Int = a + b + 999
+    }
+```
+
+The suite will now throw a `com.cibo.provenance.exceptions.InconsistentVersionException`.
+
+Typically at this point you would recognize that adding 999 was a bad idea and revert the change.
+
+
+#### Upping the Version for Intentional Changes
+
+If the new result in the above example were NOT an error, you would up the currentVersion, say to `Version("0.2")`.
+
+The next test run would not fail to resolve, since the new version keeps the results from conflicting with the old.
+
+The check() call will complain on the first run that there is new reference data, though, since the v0.2 results will
+not exist in the test suite.  
+
+Follow the instrucitons in the error message to stage the data, and the test should be passable.
+
+Commit the new reference data along with the updated tool logic.
+   
 
 Futures and I/O
 ---------------
-For functions that do I/O, or have other reasons to return a future, use the `WithFutureProvenance` version of the functions.  These are built to transparently let your `implFuture` return a `Future[O]`, and the system give back a `Future[Result[O]]`, instead of a `Result[Future[O]]`.
+For functions that perform I/O, or return Futures, it is best to have the inner portion of the function be 
+broken out and have provenance tracking.  The outer function can take futures, and map them over the inner
+function that runs on tangible values and does the tracking.
+
 
 Cross-App Tracking
 ------------------
