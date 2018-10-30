@@ -66,6 +66,15 @@ trait Rechecking extends ResultTracker {
             logger.warn(f"Saving conflicted results to storage...")
             FunctionCallResultWithKnownProvenanceSerializable.save(newResult)(this)
           }
+          try {
+            implicit val rt: ResultTracker = this
+            logger.error(s"Inputs: ${newResult.call.inputs.map(_.resolve.output)}")
+            logger.error(s"Old Output: ${existingResult.output}")
+            logger.error(s"New Output: ${newResult.output}")
+          } catch {
+            case e: Exception =>
+              logger.error(s"Failed to log inputs and outputs behind inconsistent versioning: $e")
+          }
           throw new com.cibo.provenance.exceptions.InconsistentVersionException(
             newResult.call.functionName,
             newResult.call.versionValueAlreadyResolved.get,
