@@ -14,43 +14,46 @@ class TestTheTesterSpec extends FunSpec with Matchers {
   describe("A ResultTrackerForTest") {
 
     implicit val bi: BuildInfo = BuildInfoDummy
+
     implicit val rt: ResultTrackerForTest = MyFakeAppResultTrackerUT.apply("test-the-tester")
 
-    it("when code produces the same answer as the reference answer, everything passes") {
+    it("When code produces the same answer as the reference answer, everything passes.") {
       rt.clean()
-      MyTool1(2, 3).resolve.output shouldBe 5  // in the reference data
-      MyTool1(6, 4).resolve.output shouldBe 10 // in the reference data
+      MyTool1(2, 3).resolve.output shouldBe 5   // in the reference data
+      MyTool1(6, 4).resolve.output shouldBe 10  // in the reference data
       rt.check()
     }
 
-    it("when the code produces an inconsistent answer, throw an error") {
+    it("If code ever produces an inconsistent answer for the same params & version, throw an exception") {
       rt.clean()
-      // consistent with the reference data
-      MyTool1(2, 3).resolve.output shouldBe 5
-
       intercept[com.cibo.provenance.exceptions.InconsistentVersionException] {
-        // Use a back-door on the function to make it produce an inconsistent answer.
-        MyTool1.backDoorInfluenceResults = 1000
-        MyTool1(6, 4).resolve
+        // Use a back-door in MyTool2IsBad to give make the tool give an inconsistent answer.
+        // This is a bad tool, incorporating a mutable var into impl().
+        // It doesn't always demonstrate its inconsistency flaw in the other scenarios.
+        // The purpose of this test is to report on a bad/inconsistent tool.
+        // This throws an exception because it sees that the reference data had 6+4=10, but it will get 910.
+        MyTool2IsBad.backDoorInfluenceResults = 900
+        MyTool2IsBad(6, 4).resolve
       }
     }
 
-    it("when there are no errors, but there is new data, a special exception is thrown") {
+    it("When there are no errors, but we are testing new parameters with no reference answer, " +
+      "a special exception is thrown, telling us that data need to be staged, and seeting that data up.") {
       rt.clean()
       MyTool1(2, 3).resolve.output shouldBe 5  // in the reference data
       MyTool1(6, 4).resolve.output shouldBe 10 // in the reference data
-      MyTool1(7, 7).resolve.output shouldBe 14 // NOT in the reference
+      MyTool1(7, 7).resolve.output shouldBe 14 // NOT in the reference data
 
       intercept[ResultTrackerForTest.UnstagedReferenceDataException] {
         rt.check()
       }
     }
 
-    it("staging the new data as reference data prevents the exception") {
+    it("Simulate staging new data reference data, and see the error go away.") {
       rt.clean()
       MyTool1(2, 3).resolve.output shouldBe 5  // in the reference data
       MyTool1(6, 4).resolve.output shouldBe 10 // in the reference data
-      MyTool1(7, 7).resolve.output shouldBe 14 // NOT in the reference
+      MyTool1(7, 7).resolve.output shouldBe 14 // NOT in the reference data
 
       // It still fails the check.
       intercept[ResultTrackerForTest.UnstagedReferenceDataException] {
@@ -94,8 +97,12 @@ object MyFakeAppResultTrackerUT extends ResultTrackerForTestFactory(
 
 object MyTool1 extends Function2WithProvenance[Int, Int, Int] {
   val currentVersion = Version("0.1")
+  def impl(a: Int, b: Int): Int = a + b
+}
+
+object MyTool2IsBad extends Function2WithProvenance[Int, Int, Int] {
+  val currentVersion = Version("0.1")
   var backDoorInfluenceResults: Int = 0
   def impl(a: Int, b: Int): Int = a + b + backDoorInfluenceResults
 }
-
 
