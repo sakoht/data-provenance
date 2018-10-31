@@ -774,8 +774,8 @@ In some situations, a process is known to possibly produce different data over t
 In the latter case, when the function returns the same data as a prior execution, a tiny record is made with the timestamp,
 and subsequent use of the result "shortcuts", since the output value has been seen before.
 
-The only down-side of option two is that, if the code attempts to run often but produces the same answer,
-you my fill your storage with tiny records indicating each time the attempt was made. 
+The only down-side of option two is that, if the code attempts to run often, but produces the same answer,
+you may fill your storage with tiny records indicating each time the attempt was made. 
 
 Idempotency and Concurrency
 ---------------------------
@@ -836,7 +836,7 @@ This test case tests the function with 3 scenarios:
     }
 ```
 
-The first time this runs, there is no reference data.  Everything will pass until the The check() method,
+The first time this runs, there is no reference data.  Everything will pass until the the check() method,
 at which point an `ResultTrackerForTest.UnstagedReferenceDataException` will be thrown.
 
 The error message tell you what to do to stage the data:
@@ -867,7 +867,7 @@ Typically at this point you would recognize that adding 999 was a bad idea and r
 
 #### Upping the Version for Intentional Changes
 
-If the new result in the above example were NOT an error, you would up the currentVersion, say to `Version("0.2")`.
+If the new result in the above example were NOT an error, you would increment the currentVersion, say to `Version("0.2")`.
 
 The next test run would not fail to resolve, since the new version keeps the results from conflicting with the old.
 
