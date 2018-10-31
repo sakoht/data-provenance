@@ -27,7 +27,7 @@ To start a new project quickly, copy the example1 project in this repository and
 
 For an existing project, add the following to `libraryDependencies` in the `.sbt` configuration: 
     
-    `"com.cibo" %% "provenance" % "0.10.2"`
+    `"com.cibo" %% "provenance" % "0.10.3"`
 
 Applications that use this library must also use `SbtBuildInfo` to reveal provide commit/build information to
 the provenance lib for new data generated.
