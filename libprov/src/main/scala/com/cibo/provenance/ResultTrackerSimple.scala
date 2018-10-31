@@ -892,9 +892,6 @@ sealed trait KVStore {
         fullPrefix.length
       else
         fullPrefix.length + 1
-    val bad = getFullPathsForPrefix(prefix, filterOption, delimiterOption).filter { fullPath => !fullPath.startsWith(fullPrefix) }
-    if (bad.nonEmpty)
-      println("bad")
     getFullPathsForPrefix(prefix, filterOption, delimiterOption).map { fullPath =>
       // This has more sanity checking that should be necessary, but one-off errors have crept in several times.
       assert(fullPath.startsWith(fullPrefix), s"Full path '$fullPath' does not start with the expected prefix '$fullPrefix' (from $prefix)")
