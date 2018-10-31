@@ -91,7 +91,7 @@ class TestTheTesterSpec extends FunSpec with Matchers {
 object MyFakeAppResultTrackerUT extends ResultTrackerForTestFactory(
   outputRoot = SyncablePath(s"/tmp/${sys.env.getOrElse("USER","anonymous")}/result-trackers-for-test-cases/libprov"),
   referenceRoot = SyncablePath(
-    new File("libprov/src/test/resources/provenance-data-by-test").getAbsolutePath
+    new File(TestUtils.testResourcesDir + "/provenance-data-by-test").getAbsolutePath
   )
 )(BuildInfoDummy)
 

@@ -131,5 +131,12 @@ object TestUtils extends LazyLogging with Matchers {
         throw ee
     }
   }
+
+  lazy val testResourcesDir: String = {
+    if (new File("libprov").exists)
+      "libprov/src/test/resources"
+    else
+      "src/test/resources"
+  }
 }
 
