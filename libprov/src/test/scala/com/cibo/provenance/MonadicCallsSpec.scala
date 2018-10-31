@@ -24,7 +24,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       val subDir = "monadic-calls"
       val testDataDir = f"$outputBaseDir/$subDir"
       
-      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe
 
       val a: MakeDummyOutputList.Call = MakeDummyOutputList() // (11, 22, 33, 44)
@@ -87,7 +87,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       val subDir = "mappable-calls-are-dry"
       val testDataDir = f"$outputBaseDir/$subDir"
 
-      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe
 
       MakeDummyOutputList.runCount = 0
@@ -134,7 +134,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
     it("maps efficiently") {
       val subDir = "mappable-results-map"
       val testDataDir = f"$outputBaseDir/$subDir"
-      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe
 
       MakeDummyOutputList.runCount = 0
@@ -189,7 +189,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
     it("handles `scatter` with efficient pass-through to the underling implementation") {
       val subDir = "mappable-results-scatter"
       val testDataDir = f"$outputBaseDir/$subDir"
-      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe
 
       MakeDummyOutputList.runCount = 0
@@ -223,7 +223,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
     it("works implicitly, and keeps history") {
       val subDir = "gather"
       val testDataDir = f"$outputBaseDir/$subDir"
-      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe
 
       // Make a list with a variety of tracked objects, all returning an Int.

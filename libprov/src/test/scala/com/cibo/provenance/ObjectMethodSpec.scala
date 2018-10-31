@@ -19,7 +19,7 @@ class ObjectMethodSpec extends FunSpec with Matchers {
     it("work with provenance tracking") {
       val testSubdir = "methods"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt: ResultTrackerForTest = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt: ResultTrackerForSelfTest = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe()
 
       val obj = Boo.withProvenance(2)

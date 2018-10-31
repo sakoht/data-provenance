@@ -11,7 +11,7 @@ import scala.concurrent.{Await, ExecutionContext}
   * @param ec         An execution context used to do async resolution.
   *
   */
-case class ResultTrackerForTest(rootPath: SyncablePath)(implicit bi: BuildInfo, ec: ExecutionContext = ExecutionContext.global)
+case class ResultTrackerForSelfTest(rootPath: SyncablePath)(implicit bi: BuildInfo, ec: ExecutionContext = ExecutionContext.global)
   extends ResultTrackerDuplex(
     new ResultTrackerSimple(rootPath / "sync")(bi) with TestTrackingOverrides,
     new ResultTrackerSimple(rootPath / "async")(bi) with TestTrackingOverrides
@@ -67,9 +67,9 @@ case class ResultTrackerForTest(rootPath: SyncablePath)(implicit bi: BuildInfo, 
 }
 
 
-object ResultTrackerForTest {
-  def apply(pathString: String)(implicit  bi: BuildInfo): ResultTrackerForTest =
-    ResultTrackerForTest(SyncablePath(pathString))
+object ResultTrackerForSelfTest {
+  def apply(pathString: String)(implicit  bi: BuildInfo): ResultTrackerForSelfTest =
+    ResultTrackerForSelfTest(SyncablePath(pathString))
 }
 
 

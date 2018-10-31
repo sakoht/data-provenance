@@ -14,7 +14,7 @@ class ReadmeSpec extends FunSpec with Matchers {
     it("runs") {
       val testSubdir = f"readme-short"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe
 
       myApp1.main(Array[String](testDataDir))
@@ -25,7 +25,7 @@ class ReadmeSpec extends FunSpec with Matchers {
     it("runs") {
       val testSubdir = f"readme-long"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
       rt.wipe
 
       myApp2.main(Array[String](testDataDir))
@@ -55,7 +55,7 @@ object myApp1 extends App {
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir
   val testSubdir = "readme-long"
   val testDataDir = f"$testOutputBaseDir/$testSubdir"
-  implicit val rt = ResultTrackerForTest(SyncablePath(testDataDir))
+  implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
   rt.wipe
 
   import io.circe.generic.auto._
@@ -86,7 +86,7 @@ object addMe extends Function2WithProvenance[Int, Int, Int] {
 object myApp2 extends App {
 
   implicit val bi: BuildInfo = BuildInfoDummy
-  implicit val rt: ResultTracker = ResultTrackerForTest(args(0)) // or s3://...
+  implicit val rt: ResultTracker = ResultTrackerForSelfTest(args(0)) // or s3://...
 
   import io.circe.generic.auto._
 
