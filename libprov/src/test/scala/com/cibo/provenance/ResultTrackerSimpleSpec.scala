@@ -7,9 +7,12 @@ package com.cibo.provenance
 
 import com.cibo.provenance.exceptions.InconsistentVersionException
 import com.typesafe.scalalogging.LazyLogging
-import org.scalatest.{FunSpec, Matchers}
+import org.scalatest._
 import com.cibo.aws.AWSClient.Implicits.s3SyncClient
+import com.cibo.io.s3.S3SyncablePath
 import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
+
+import scala.concurrent.ExecutionContext
 
 class ResultTrackerForSelfTestSpec extends FunSpec with Matchers with LazyLogging {
   import com.cibo.io.s3.SyncablePath
@@ -378,6 +381,35 @@ class ResultTrackerForSelfTestSpec extends FunSpec with Matchers with LazyLoggin
       }
 
       TestUtils.diffOutputSubdir(testSubdir)
+    }
+  }
+
+  describe("The S3Store path parsing") {
+    implicit val ec: ExecutionContext = ExecutionContext.global
+
+    it("works with a good path") {
+      KVStore.fromSyncablePath(SyncablePath("s3://mybucket/mypath"))
+    }
+
+    it("fails with a double slash if after the s3://") {
+      intercept[RuntimeException] {
+        KVStore.fromSyncablePath(SyncablePath("s3:///mybucket/mypath"))
+        //                                          ^
+      }
+    }
+
+    it("fails with a double slash in the middle") {
+      intercept[RuntimeException] {
+        KVStore.fromSyncablePath(SyncablePath("s3://mybucket//mypath"))
+        //                                                   ^
+      }
+    }
+
+    it("fails with a trailing slash") {
+      intercept[RuntimeException] {
+        KVStore.fromSyncablePath(SyncablePath("s3://mybucket/mypath/"))
+        //                                                         ^
+      }
     }
   }
 }

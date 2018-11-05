@@ -948,7 +948,7 @@ sealed trait KVStore {
 
 class S3Store(rootPath: S3SyncablePath)(implicit s3SyncClient: AmazonS3) extends KVStore {
   require(!rootPath.path.endsWith("/"), s"Found a trailing slash in ${rootPath.path}")
-  require(!rootPath.path.contains("//"), s"Found multiple consecutive slashes in ${rootPath.path}")
+  require(!rootPath.path.substring(4).contains("//"), s"Found multiple consecutive slashes in ${rootPath.path}")
 
   // implement the KVStore protected API
 
