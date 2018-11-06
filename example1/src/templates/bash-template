@@ -47,4 +47,4 @@ if [ "$QUEUEABLE_JVM_ARGS" == "" ]; then
   echo "No QUEUEABLE_JVM_ARGS set.  Using: $QUEUEABLE_JVM_ARGS"
 fi
 
-java $QUEUEABLE_JVM_ARGS -classpath $app_classpath "$@"
+exec java $QUEUEABLE_JVM_ARGS -classpath $app_classpath "$@"
