@@ -3,7 +3,6 @@ package com.cibo.provenance
 import java.io.Serializable
 
 import scala.reflect.ClassTag
-import scala.reflect.runtime.currentMirror
 import scala.reflect.runtime.universe.TypeTag
 
 /**
