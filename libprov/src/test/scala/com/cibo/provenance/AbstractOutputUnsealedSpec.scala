@@ -68,7 +68,7 @@ object Dog2 {
 }
 
 object PetUnsealedTrait2 {
-  implicit val codec: Codec[PetUnsealedTrait2] = Codec.createAbstractCodec[PetUnsealedTrait2]()
+  implicit val codec: JsonCodec[PetUnsealedTrait2] = Codec.createAbstractCodec[PetUnsealedTrait2]()
   implicit val encoder: Encoder[PetUnsealedTrait2] = codec.encoder
   implicit val decoder: Decoder[PetUnsealedTrait2] = codec.decoder
 }

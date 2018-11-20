@@ -16,7 +16,7 @@ case class BuildInfoBrief(commitId: String, override val buildId: String) extend
   override def abbreviate: BuildInfoBrief = this
   override def debrief(implicit rt: ResultTracker):  BuildInfo = rt.loadBuildInfoOption(commitId, buildId).get
 
-  def codec = BuildInfoBrief.codec
+  def codec: JsonCodec[BuildInfoBrief] = BuildInfoBrief.codec
   def toEncoded = codec.encoder.apply(this)
 }
 
@@ -33,7 +33,7 @@ object BuildInfoBrief {
       (vcs: String, commitId: String, buildId: String) => BuildInfoBrief(commitId, buildId)
     }
 
-  implicit val codec: Codec[BuildInfoBrief] = Codec(encoder, decoder)
+  implicit val codec: JsonCodec[BuildInfoBrief] = Codec(encoder, decoder)
 
 
 }

@@ -18,7 +18,7 @@ trait BuildInfoNone extends BuildInfo with Serializable {
 object BuildInfoNone extends BuildInfoNone {
   private val encoder: Encoder[BuildInfoNone] = Encoder.forProduct1("vcs")(_ => Tuple1("none"))
   private val decoder: Decoder[BuildInfoNone] = Decoder.forProduct1("vcs")((vcs: String) => BuildInfoNone)
-  implicit val codec: Codec[BuildInfoNone] = Codec(encoder, decoder)
+  implicit val codec: JsonCodec[BuildInfoNone] = Codec(encoder, decoder)
   def toEncoded = codec.encoder.apply(this)
 }
 
