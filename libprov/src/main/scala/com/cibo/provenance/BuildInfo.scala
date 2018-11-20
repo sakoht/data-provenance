@@ -85,7 +85,7 @@ object BuildInfo {
   private val encoder: Encoder[BuildInfo] =
     Encoder.instance { _.toEncoded }
 
-  implicit def codec: JsonCodec[BuildInfo] =
+  implicit def codec: CodecUsingJson[BuildInfo] =
     Codec(encoder, decoder)
 }
 

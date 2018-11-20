@@ -13,7 +13,7 @@ import scala.reflect.runtime.universe.TypeTag
 /**
   * The base trait for wrapping encoder/decoder pairs.
   *
-  * The builtin encoding (JsonCodec) uses Circe JSON is used exclusively by the core library,
+  * The builtin encoding (CodecUsingJson) uses Circe JSON is used exclusively by the core library,
   * but any logic that can convert to/from an Array[Byte] works.
   *
   * @tparam T       The type of data to be encoded/decoded.
@@ -41,7 +41,7 @@ object Codec extends LazyLogging {
   import scala.util.{Try, Failure, Success}
 
   /**
-    * A Codec of sub-class JsonCodec can always be explicitly constructed from a pair of circe encoders,
+    * A Codec of sub-class JSON Codec can always be explicitly constructed from a pair of circe encoders,
     * presuming the ClassTag and TypeTag are available.
     *
     * @tparam T The type of data to be encoded/decoded.
@@ -49,8 +49,8 @@ object Codec extends LazyLogging {
     * @param decoder  A circe Decoder[T].
     * @return A Codec[T] created from implicits.
     */
-  def apply[T : ClassTag : TypeTag](encoder: io.circe.Encoder[T], decoder: io.circe.Decoder[T]): JsonCodec[T] =
-    JsonCodec(encoder, decoder)
+  def apply[T : ClassTag : TypeTag](encoder: io.circe.Encoder[T], decoder: io.circe.Decoder[T]): CodecUsingJson[T] =
+    CodecUsingJson(encoder, decoder)
 
   /**
     * Implicitly create a Codec[T] wherever an Encoder[T] and Decoder[T] are implicitly available.
@@ -83,7 +83,7 @@ object Codec extends LazyLogging {
     key: String = "_subclass",
     valueStringToClassName: (String) => String = (className: String) => className,
     classNameToValueString: (String) => String = (className: String) => className
-  ): JsonCodec[T] = {
+  ): CodecUsingJson[T] = {
     type COMPANION = { def encoder: Encoder[T]; def decoder: Decoder[T] }
 
     val encoder = Encoder.instance {
@@ -246,7 +246,6 @@ object Codec extends LazyLogging {
         serializeAndDigest(value)._2
     }
   }
-
 
   def getBytesAndDigestRaw[T](obj: T, checkConsistency: Boolean = true): (Array[Byte], Digest) = {
     val bytes1 = serializeRawImpl(obj)
