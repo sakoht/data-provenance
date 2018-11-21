@@ -20,7 +20,7 @@ class ObjectConstructorSpec extends FunSpec with Matchers {
     it("work with provenance tracking") {
       val testSubdir = "constructor"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt: ResultTrackerForSelfTest = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt: ResultTrackerForSelfTest = ResultTrackerForSelfTest(testDataDir)
       rt.wipe()
 
       val foo     = Foo(100, "hello")                 // no tracking

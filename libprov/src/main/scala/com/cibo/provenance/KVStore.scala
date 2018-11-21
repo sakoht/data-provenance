@@ -11,6 +11,7 @@ import org.slf4j.{Logger, LoggerFactory}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
+import scala.util.{Failure, Try}
 import scala.util.control.NonFatal
 
 
@@ -18,20 +19,27 @@ import scala.util.control.NonFatal
   * KVStore is a replacement for S3DB in this library.
   * It could evolve to possibly replace it globally, but right now it is used only here.
   */
-object KVStore {
-  def apply(path: String)(implicit s3SyncClient: AmazonS3): KVStore =
-    fromSyncablePath(SyncablePath(path))
 
-  def fromSyncablePath(path: SyncablePath)(implicit s3SyncClient: AmazonS3): KVStore =
+object KVStore {
+  def apply(path: String)(
+    implicit s3SyncClient: AmazonS3 = com.cibo.aws.AWSClient.Implicits.s3SyncClient,
+    ec: ExecutionContext = scala.concurrent.ExecutionContext.Implicits.global
+  ): KVStore =
     path match {
-      case s3Path: S3SyncablePath => new S3Store(s3Path)
-      case localPath: LocalPath => new LocalStore(localPath)
+      case p if p.startsWith("s3://") => new S3Store(p)(s3SyncClient)
+      case p => new LocalStore(p)
     }
 }
 
 sealed trait KVStore {
 
   // public API
+
+  def isLocal: Boolean
+
+  def isRemote: Boolean
+
+  def pathExists(path: String): Boolean
 
   def putBytes(path: String, value: Array[Byte]): Unit =
     putBytesForFullPath(getFullPathForRelativePath(path), value)
@@ -110,12 +118,40 @@ sealed trait KVStore {
   }
 }
 
-class S3Store(rootPath: S3SyncablePath)(implicit s3SyncClient: AmazonS3) extends KVStore {
-  require(!rootPath.path.endsWith("/"), s"Found a trailing slash in ${rootPath.path}")
-  require(!rootPath.path.contains("//"), s"Found multiple consecutive slashes in ${rootPath.path}")
+class S3Store(val baseDir: String)(implicit amazonS3: AmazonS3) extends KVStore {
+
+  require(!baseDir.endsWith("/"), s"Found a trailing slash in ${baseDir}")
+  require(!baseDir.substring(4).contains("//"), s"Found multiple consecutive slashes in ${baseDir}")
 
   // implement the KVStore protected API
 
+  def isLocal: Boolean = false
+
+  def isRemote: Boolean = true
+
+  val (s3Bucket, s3Path): (String, String) =
+    "s3://(.*?)/(.*)".r
+      .findFirstMatchIn(baseDir)
+      .map(head => (head.subgroups.head, head.subgroups.last))
+      .getOrElse(throw new IllegalArgumentException(f"Bad s3 path: $baseDir"))
+
+  def pathExists(path: String): Boolean = {
+    val lor = new ListObjectsRequest()
+    lor.setBucketName(s3Bucket)
+    lor.setPrefix(s3Path + (if (path.isEmpty) "" else "/" + path))
+    lor.setDelimiter("/")
+    lor.setMaxKeys(1)
+
+    import scala.collection.JavaConverters._
+
+    Try(amazonS3.listObjects(lor)).transform(
+      ol => Try {
+        ol.getCommonPrefixes.asScala.contains(s3Path + "/") || ol.getObjectSummaries.asScala.map(_.getKey).contains(s3Path)
+      },
+      e => Failure(new RuntimeException(s"Error checking existence of $baseDir", e))
+    ).get
+  }
+  
   protected def getFullPathForRelativePath(path: String): String =
     if (basePrefix.nonEmpty) basePrefix + "/" + path else path
 
@@ -131,7 +167,7 @@ class S3Store(rootPath: S3SyncablePath)(implicit s3SyncClient: AmazonS3) extends
     metadata.setContentMD5(calcMd5Base64(value))
 
     try {
-      s3SyncClient.putObject(bucketName, fullPath, new ByteArrayInputStream(value), metadata)
+      amazonS3.putObject(bucketName, fullPath, new ByteArrayInputStream(value), metadata)
     } catch {
       case e: Exception =>
         logger.error(s"Failed to put byte array to s3://$bucketName/$fullPath", e)
@@ -158,7 +194,7 @@ class S3Store(rootPath: S3SyncablePath)(implicit s3SyncClient: AmazonS3) extends
   protected def getBytesForFullPath(fullPath: String): Array[Byte] = {
     createBucketIfMissing
     try {
-      val obj: S3Object = s3SyncClient.getObject(bucketName, fullPath)
+      val obj: S3Object = amazonS3.getObject(bucketName, fullPath)
       try {
         val bis: BufferedInputStream = new java.io.BufferedInputStream(obj.getObjectContent)
         val content: Array[Byte] = Stream.continually(bis.read).takeWhile(_ != -1).map(_.toByte).toArray
@@ -210,20 +246,20 @@ class S3Store(rootPath: S3SyncablePath)(implicit s3SyncClient: AmazonS3) extends
   ): Iterator[String] = {
     createBucketIfMissing
     val req = new ListObjectsRequest(bucketName, fullPath, prevMarker.orNull, delimiterOption.orNull, 1000)
-    new S3KeyIterator(req, timeout)(s3SyncClient)
+    new S3KeyIterator(req, timeout)(amazonS3)
   }
 
   // private API
 
-  private val bucketName: String = rootPath.s3Bucket
-  private val basePrefix: String = rootPath.s3Path
+  private val bucketName: String = s3Bucket
+  private val basePrefix: String = s3Path
   private lazy val timeout: Duration = 2.minutes
   private lazy val logger: Logger = LoggerFactory.getLogger(getClass)
   private def s3async(implicit ec: ExecutionContext): S3AsyncTransfer = S3AsyncTransfer.apply
 
   private lazy val createBucketIfMissing: Unit = {
     // This is only done once.
-    val exists = try s3SyncClient.doesBucketExistV2(bucketName) catch {
+    val exists = try amazonS3.doesBucketExistV2(bucketName) catch {
       case NonFatal(e) =>
         logger.error(s"Error checking existence bucket $bucketName", e)
         throw new RuntimeException(s"Error checking existence bucket $bucketName", e)
@@ -231,7 +267,7 @@ class S3Store(rootPath: S3SyncablePath)(implicit s3SyncClient: AmazonS3) extends
 
     if (!exists) {
       logger.info(s"Bucket $bucketName not found. Creating it now.")
-      try s3SyncClient.createBucket(bucketName) catch {
+      try amazonS3.createBucket(bucketName) catch {
         case NonFatal(e) =>
           logger.error(s"Error creating bucket $bucketName", e)
           throw new RuntimeException(s"Error creating bucket $bucketName", e)
@@ -240,25 +276,31 @@ class S3Store(rootPath: S3SyncablePath)(implicit s3SyncClient: AmazonS3) extends
   }
 
   protected[provenance] def remove(path: String): Unit = {
-    val fullPath = (rootPath / path).asInstanceOf[S3SyncablePath]
-    val file = fullPath.toFile
-    s3SyncClient.deleteObject(fullPath.s3Bucket, fullPath.s3Path)
-    if (file.exists())
-      file.delete()
+    amazonS3.deleteObject(s3Bucket, basePrefix  + "/" + path)
   }
 }
 
 
-class LocalStore(rootPath: LocalPath) extends KVStore {
-  require(!rootPath.path.endsWith("/"), s"Found a trailing slash in ${rootPath.path}")
-  require(!rootPath.path.contains("//"), s"Found multiple consecutive slashes in ${rootPath.path}")
+class LocalStore(val baseDir: String) extends KVStore {
+
+  require(!baseDir.endsWith("/"), s"Found a trailing slash in ${baseDir}")
+  require(!baseDir.contains("//"), s"Found multiple consecutive slashes in ${baseDir}")
 
   private lazy val logger: Logger = LoggerFactory.getLogger(getClass)
 
+  def isLocal: Boolean = true
+
+  def isRemote: Boolean = false
+
+  def pathExists(path: String): Boolean = {
+    val fullPath = if (path.isEmpty) baseDir else baseDir + "/" + path
+    new File(fullPath).exists()
+  }
+  
   // the only addition to the public API is a method to destroy everything
 
   def cleanUp(): Unit =
-    recursiveListFiles(new File(getFsDir)).sortBy(_.getAbsolutePath).reverse.foreach(_.delete)
+    recursiveListFiles(new File(baseDir)).sortBy(_.getAbsolutePath).reverse.foreach(_.delete)
 
   // implement the KVStore subclass protected API
 
@@ -272,7 +314,7 @@ class LocalStore(rootPath: LocalPath) extends KVStore {
   ): Iterator[String] = {
     val fsPath = getFsPathForFullPrefix(fullPrefix)
     val dir = new File(fsPath)
-    val offset = getFsDir.length + 1
+    val offset = baseDir.length + 1
     try {
       recursiveListFiles(dir).filter(f => !f.isDirectory).map(_.getAbsolutePath).sorted.map(_.substring(offset)).toIterator
     } catch {
@@ -315,9 +357,7 @@ class LocalStore(rootPath: LocalPath) extends KVStore {
 
   // private API
 
-  private def getFsDir = rootPath.localPath
-
-  private def getFsPathForFullPrefix(fullPrefix: String) = Seq(getFsDir, fullPrefix).filter(_.nonEmpty).mkString("/")
+  private def getFsPathForFullPrefix(fullPrefix: String) = Seq(baseDir, fullPrefix).filter(_.nonEmpty).mkString("/")
 
   private def getFsPathForSubPrefix(subPrefix: String) = getFsPathForFullPrefix(getFullPathForRelativePath(subPrefix))
 
@@ -331,7 +371,7 @@ class LocalStore(rootPath: LocalPath) extends KVStore {
   }
 
   protected[provenance] def remove(path: String): Unit =
-    (rootPath / path).toFile.delete()
+    new File(baseDir + "/" + path).delete()
 }
 
 class NotFound(msg: String) extends RuntimeException(msg)

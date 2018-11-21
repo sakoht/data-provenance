@@ -63,12 +63,10 @@ class TestTheTesterSpec extends FunSpec with Matchers {
       // Make a copy of the tracker, and give it a copy of the reference data on local disk we can mutate.
       val rtb = rt.copy(
         referencePath =
-          SyncablePath(
-            rt.outputPath.path.replaceAll("result-trackers-for-test-cases", "result-trackers-for-test-cases-dummyref")
-          )
+          rt.outputPath.replaceAll("result-trackers-for-test-cases", "result-trackers-for-test-cases-dummyref")
       )
-      FileUtils.deleteDirectory(rtb.referencePath.toFile)
-      FileUtils.copyDirectory(rt.referencePath.toFile, rtb.referencePath.toFile)
+      FileUtils.deleteDirectory(new File(rtb.referencePath))
+      FileUtils.copyDirectory(new File(rt.referencePath), new File(rtb.referencePath))
 
       // It still fails the check.
       intercept[ResultTrackerForTest.UnstagedReferenceDataException] {
@@ -89,10 +87,9 @@ class TestTheTesterSpec extends FunSpec with Matchers {
   * We only need one, but want to test the
   */
 object MyFakeAppResultTrackerUT extends ResultTrackerForTestFactory(
-  outputRoot = SyncablePath(s"/tmp/${sys.env.getOrElse("USER","anonymous")}/result-trackers-for-test-cases/libprov"),
-  referenceRoot = SyncablePath(
+  outputRoot = s"/tmp/${sys.env.getOrElse("USER","anonymous")}/result-trackers-for-test-cases/libprov",
+  referenceRoot =
     new File(TestUtils.testResourcesDir + "/provenance-data-by-test").getAbsolutePath
-  )
 )(BuildInfoDummy)
 
 object MyTool1 extends Function2WithProvenance[Int, Int, Int] {

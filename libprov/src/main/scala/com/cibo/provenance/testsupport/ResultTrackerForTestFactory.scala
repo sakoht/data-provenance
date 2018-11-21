@@ -39,8 +39,8 @@ import org.apache.commons.io.FileUtils
   *                         For integration tests "s3://somebucket/somedir-for-this-repo".
   */
 
-case class ResultTrackerForTestFactory(outputRoot: SyncablePath, referenceRoot: SyncablePath)(implicit bi: BuildInfo) extends LazyLogging {
+case class ResultTrackerForTestFactory(outputRoot: String, referenceRoot: String)(implicit bi: BuildInfo) extends LazyLogging {
   def apply(testName: String): ResultTrackerForTest =
-    new ResultTrackerForTest(outputRoot / testName, referenceRoot / testName)
+    new ResultTrackerForTest(outputRoot + "/" + testName, referenceRoot + "/" + testName)
 }
 

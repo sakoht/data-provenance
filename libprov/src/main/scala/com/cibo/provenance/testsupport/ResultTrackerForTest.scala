@@ -1,5 +1,7 @@
 package com.cibo.provenance.testsupport
 
+import java.io.File
+
 import com.cibo.io.s3.SyncablePath
 import com.cibo.provenance._
 import org.apache.commons.io.FileUtils
@@ -35,14 +37,14 @@ import org.apache.commons.io.FileUtils
   * @param referencePath        A path to reference data.  For UT: src/main/resources/.  For IT s3://....
   * @param bi                   The current app build information should be implicitly available.
   */
-case class ResultTrackerForTest(outputPath: SyncablePath, referencePath: SyncablePath)(implicit val bi: BuildInfo)
+case class ResultTrackerForTest(outputPath: String, referencePath: String)(implicit val bi: BuildInfo)
   extends ResultTrackerSimple(
     outputPath,
     writable = true,
     Some(ResultTrackerSimple(referencePath, writable = false))
   ) with Rechecking {
   require(underlyingTracker.nonEmpty, "Refusing to clean() a ResultTracker that does not have an underlying tracker.")
-  require(basePath.isLocal, "Refusing to clean() an S3 path.")
+  require(storage.isLocal, "Refusing to clean() an S3 path.")
 
   /**
     * Remove all output data, leaving the reference data in place.
@@ -51,27 +53,33 @@ case class ResultTrackerForTest(outputPath: SyncablePath, referencePath: Syncabl
     * This should be called at the beginning of a test.
     */
   def clean(): Unit = {
-    if (basePath.isRemote) {
+    if (storage.isRemote) {
       sys.env.get("USER") match {
         case Some(user) =>
-          if (!basePath.path.contains(user))
-            throw new RuntimeException(f"Refusing to delete an S3 test a directory that does not contain the current user's name: $user not in ${basePath.path}")
-          com.cibo.io.Shell.run(s"aws s3 rm --recursive ${basePath.path}")
+          if (!basePath.contains(user))
+            throw new RuntimeException(f"Refusing to delete an S3 test a directory that does not contain the current user's name: $user not in ${basePath}")
+          com.cibo.io.Shell.run(s"aws s3 rm --recursive ${basePath}")
 
         case None =>
           throw new RuntimeException(
             "Failed to determine the current user." +
-              f"Refusing to delete a test a directory that does not contain the current user's name!: ${basePath.path}"
+              f"Refusing to delete a test a directory that does not contain the current user's name!: ${basePath}"
           )
       }
     }
 
     // For local paths this deletes the primary data.  For remote it deletes the data buffered locally.
-    val testDataDir = basePath.toFile
-    FileUtils.deleteDirectory(testDataDir)
+    storage match {
+      case s3: S3Store =>
+      case local: LocalStore =>
+        FileUtils.deleteDirectory(new File(local.baseDir))
+    }
+
 
     clearCaches()
   }
+
+  def referenceTracker: ResultTrackerSimple = underlyingTracker.get
 
   /**
     * This should be called at the end of a test.  If there is new reference data,
@@ -80,12 +88,12 @@ case class ResultTrackerForTest(outputPath: SyncablePath, referencePath: Syncabl
     * Note: Calling push() will also stage it automatically.
     */
   def check(): Unit = {
-    if (basePath.toFile.exists() && basePath.toFile.list().toList.nonEmpty) {
+    if (storage.getSuffixes("").toList.nonEmpty) {
       val msg =
-        if (outputPath.isLocal && referencePath.isLocal)
-          f"# New reference data! To stage it:\nrsync -av --progress ${outputPath.path}/ ${referencePath.path}"
+        if (storage.isLocal && underlyingTracker.map(_.isLocal).getOrElse(throw new RuntimeException("Missing underlying tracker.")))
+          f"# New reference data! To stage it:\nrsync -av --progress ${basePath}/ ${referenceTracker.basePath}"
         else
-          f"# New reference data! To stage it:\naws s3 sync ${outputPath.path} ${referencePath.path}"
+          f"# New reference data! To stage it:\naws s3 sync ${basePath} ${referenceTracker.basePath}"
       throw new ResultTrackerForTest.UnstagedReferenceDataException(msg)
     }
   }
@@ -97,15 +105,20 @@ case class ResultTrackerForTest(outputPath: SyncablePath, referencePath: Syncabl
     * It is called before check() when it is known that the test data needs to be regenerated.
     */
   def push(): Unit = {
-    val referencePath = underlyingTracker.get.basePath
-    assert(basePath.toFile.getName == referencePath.toFile.getName)
-
-    if (!referencePath.toFile.exists())
-      referencePath.toFile.mkdirs()
-    FileUtils.copyDirectoryToDirectory(basePath.toFile, referencePath.toFile.getParentFile)
-    if (referencePath.isRemote)
-      referencePath.syncToS3()
-
+    val referenceDir = underlyingTracker.get.basePath
+    if (isLocal && referenceTracker.isLocal) {
+      if (new File(basePath).exists) {
+        new File(referenceDir).getParentFile.mkdirs()
+        FileUtils.copyDirectoryToDirectory(new File(basePath), new File(referenceDir))
+      } else {
+        logger.warn(f"No data in $basePath to transfer to $referencePath...")
+      }
+    } else {
+      val cmd = Seq("aws", "s3", "sync", basePath, referenceDir)
+      import scala.sys.process._
+      println(cmd)
+      cmd.!
+    }
     clean()
   }
 }
@@ -120,12 +133,12 @@ object ResultTrackerForTest {
   implicit private val d2 = new BinaryDecoder[ResultTrackerSimple]
 
   implicit lazy val encoder: Encoder[ResultTrackerForTest] =
-    Encoder.forProduct3[SyncablePath, SyncablePath, BuildInfo, ResultTrackerForTest](
+    Encoder.forProduct3[String, String, BuildInfo, ResultTrackerForTest](
       "localPath", "canonicalPath", "buildInfo")(
         r => (r.outputPath, r.referencePath, r.currentAppBuildInfo))
 
   implicit lazy val decoder: Decoder[ResultTrackerForTest] =
-    Decoder.forProduct3[SyncablePath, SyncablePath, BuildInfo, ResultTrackerForTest](
+    Decoder.forProduct3[String, String, BuildInfo, ResultTrackerForTest](
       "localPath", "canonicalPath", "buildInfo")(
         (localPath,canonicalPath,buildInfo) => new ResultTrackerForTest(localPath,canonicalPath)(buildInfo))
 

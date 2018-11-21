@@ -1,6 +1,9 @@
 package com.cibo.provenance
 
+import java.io.File
+
 import com.cibo.io.s3.SyncablePath
+
 import scala.concurrent.{Await, ExecutionContext}
 
 /**
@@ -11,10 +14,10 @@ import scala.concurrent.{Await, ExecutionContext}
   * @param ec         An execution context used to do async resolution.
   *
   */
-case class ResultTrackerForSelfTest(rootPath: SyncablePath)(implicit bi: BuildInfo, ec: ExecutionContext = ExecutionContext.global)
+case class ResultTrackerForSelfTest(rootPath: String)(implicit bi: BuildInfo, ec: ExecutionContext = ExecutionContext.global)
   extends ResultTrackerDuplex(
-    new ResultTrackerSimple(rootPath / "sync")(bi) with TestTrackingOverrides,
-    new ResultTrackerSimple(rootPath / "async")(bi) with TestTrackingOverrides
+    new ResultTrackerSimple(rootPath + "/sync")(bi) with TestTrackingOverrides,
+    new ResultTrackerSimple(rootPath + "/async")(bi) with TestTrackingOverrides
   ) {
 
   import org.apache.commons.io.FileUtils
@@ -45,31 +48,25 @@ case class ResultTrackerForSelfTest(rootPath: SyncablePath)(implicit bi: BuildIn
     * Delete all data in storage.  This is typically called at the beginning of a test.
     */
   def wipe(): Unit = {
-    if (rootPath.isRemote) {
+    if (rootPath.startsWith("s3://")) {
       sys.env.get("USER") match {
         case Some(user) =>
-          if (!rootPath.path.contains(user))
-            throw new RuntimeException(f"Refusing to delete a test a directory that does not contain the current user's name: $user not in ${rootPath.path}")
-          com.cibo.io.Shell.run(s"aws s3 rm --recursive ${rootPath.path}")
+          if (!rootPath.contains(user))
+            throw new RuntimeException(f"Refusing to delete a test a directory that does not contain the current user's name: $user not in ${rootPath}")
+          com.cibo.io.Shell.run(s"aws s3 rm --recursive ${rootPath}")
 
         case None =>
           throw new RuntimeException(
             "Failed to determine the current user." +
-              f"Refusing to delete a test a directory that does not contain the current user's name!: ${rootPath.path}"
+              f"Refusing to delete a test a directory that does not contain the current user's name!: ${rootPath}"
           )
       }
     }
 
     // For local paths this deletes the primary data.  For remote it deletes the data buffered locally.
-    val testDataDir = rootPath.toFile
+    val testDataDir = new File(rootPath)
     FileUtils.deleteDirectory(testDataDir)
   }
-}
-
-
-object ResultTrackerForSelfTest {
-  def apply(pathString: String)(implicit  bi: BuildInfo): ResultTrackerForSelfTest =
-    ResultTrackerForSelfTest(SyncablePath(pathString))
 }
 
 

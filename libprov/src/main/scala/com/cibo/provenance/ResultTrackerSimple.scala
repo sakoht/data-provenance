@@ -1,6 +1,5 @@
 package com.cibo.provenance
 
-import com.cibo.io.s3._
 import com.google.common.cache.Cache
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -40,11 +39,11 @@ import scala.concurrent.{ExecutionContext, Future}
   * commit/build.  When a provenance gets multiple inputs, the same is true, but the fault is in the inconsistent
   * serialization of the inputs, typically.
   *
-  * @param basePath           The destination for new results, and default storage space for queries.
-  * @param underlyingTracker  An optional list of other trackers which "underlay" this one, read-only.
+  * @param basePath           The destination for new results and default storage space for queries (s3:// or local)
+  * @param underlyingTracker  An optional other trackers that underly this one.
   */
 class ResultTrackerSimple(
-  val basePath: SyncablePath,
+  val basePath: String,
   val writable: Boolean = true,
   val underlyingTracker: Option[ResultTrackerSimple] = None
 )(implicit val currentAppBuildInfo: BuildInfo) extends ResultTracker {
@@ -63,7 +62,7 @@ class ResultTrackerSimple(
     new ResultTrackerSimple(basePath, writable, Some(underlying))
   }
 
-  def over(underlyingPath: SyncablePath): ResultTrackerSimple = {
+  def over(underlyingPath: String): ResultTrackerSimple = {
     new ResultTrackerSimple(basePath, writable, Some(ResultTrackerSimple(underlyingPath, writable=false)))
   }
 
@@ -206,13 +205,13 @@ class ResultTrackerSimple(
       )
 
     saveLinkPath(inputOutputLinkPath)
-    
+
     if (checkForResultAfterSave(resultSerializable))
       performPostSaveCheck(resultSerializable, inputGroupDigest)
-    
+
     FunctionCallResultWithProvenanceDeflated(resultSerializable)
   }
-  
+
   private def performPreSaveCheck(
     resultSerializable: FunctionCallResultWithKnownProvenanceSerializable,
     inputGroupId: String,
@@ -586,8 +585,10 @@ class ResultTrackerSimple(
   import scala.concurrent.duration._
   import com.cibo.aws.AWSClient.Implicits.s3SyncClient
 
+  def isLocal: Boolean = storage.isLocal
+
   @transient
-  protected lazy val storage: KVStore = KVStore.fromSyncablePath(basePath)
+  protected lazy val storage: KVStore = KVStore(basePath)
 
   @transient
   protected lazy val ioTimeout: FiniteDuration = 5.minutes
@@ -742,7 +743,7 @@ class ResultTrackerSimple(
           case Some(_) =>
             true
           case None =>
-            if ((basePath / path).exists) {
+            if (storage.pathExists(path)) {
               lightCache.put(path, Unit)
               true
             } else {
@@ -824,16 +825,10 @@ class ResultTrackerSimple(
 }
 
 object ResultTrackerSimple {
-  def apply(storageRoot: SyncablePath, writable: Boolean)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
-    new ResultTrackerSimple(storageRoot, writable)(currentAppBuildInfo)
-
   def apply(storageRoot: String, writable: Boolean)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
-    new ResultTrackerSimple(SyncablePath(storageRoot), writable=writable)(currentAppBuildInfo)
+    new ResultTrackerSimple(storageRoot, writable=writable)(currentAppBuildInfo)
 
   def apply(storageRoot: String)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
-    new ResultTrackerSimple(SyncablePath(storageRoot))(currentAppBuildInfo)
-
-  def apply(storageRoot: SyncablePath)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
     new ResultTrackerSimple(storageRoot)(currentAppBuildInfo)
 }
 
