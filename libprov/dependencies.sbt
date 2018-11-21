@@ -1,7 +1,9 @@
 val circeVersion = "0.9.1"
+val awsSdkVersion = "1.11.428"
 
 libraryDependencies ++= Seq(
   "com.cibo"                   %% "shared"                      % "0.25.5",
+  "com.amazonaws"              %  "aws-java-sdk-s3"             % awsSdkVersion,
   "org.scala-lang"             % "scala-compiler"               % scalaVersion.value,
 
   "io.circe"                   %% "circe-core"                  % circeVersion,
