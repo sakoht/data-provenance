@@ -1,6 +1,9 @@
 package com.cibo.provenance
 
 import java.io.File
+
+import com.cibo.provenance.kvstore.{KVStore, S3Store}
+
 import scala.concurrent.{Await, ExecutionContext}
 
 
@@ -14,8 +17,8 @@ import scala.concurrent.{Await, ExecutionContext}
   */
 case class ResultTrackerForSelfTest(rootPath: String)(implicit bi: BuildInfo, ec: ExecutionContext = ExecutionContext.global)
   extends ResultTrackerDuplex(
-    new ResultTrackerSimple(rootPath + "/sync")(bi) with TestTrackingOverrides,
-    new ResultTrackerSimple(rootPath + "/async")(bi) with TestTrackingOverrides
+    new ResultTrackerSimple(KVStore(rootPath + "/sync"))(bi) with TestTrackingOverrides,
+    new ResultTrackerSimple(KVStore(rootPath + "/async"))(bi) with TestTrackingOverrides
   ) {
 
   import org.apache.commons.io.FileUtils
@@ -52,7 +55,7 @@ case class ResultTrackerForSelfTest(rootPath: String)(implicit bi: BuildInfo, ec
           if (!rootPath.contains(user))
             throw new RuntimeException(f"Refusing to delete a test a directory that does not contain the current user's name: $user not in ${rootPath}")
           val bothStores: S3Store = new S3Store(rootPath)(a.storage.asInstanceOf[S3Store].amazonS3)
-          bothStores.getSuffixes().foreach(bothStores.remove)
+          bothStores.getKeySuffixes().foreach(bothStores.remove)
         case None =>
           throw new RuntimeException(
             "Failed to determine the current user." +

@@ -3,6 +3,7 @@ package com.cibo.provenance.testsupport
 import java.io.File
 
 import com.cibo.provenance._
+import com.cibo.provenance.kvstore.{KVStore, LocalStore, S3Store}
 import org.apache.commons.io.FileUtils
 
 /**
@@ -36,12 +37,16 @@ import org.apache.commons.io.FileUtils
   * @param referencePath        A path to reference data.  For UT: src/main/resources/.  For IT s3://....
   * @param bi                   The current app build information should be implicitly available.
   */
-case class ResultTrackerForTest(outputPath: String, referencePath: String)(implicit val bi: BuildInfo)
+case class ResultTrackerForTest(outputStorage: KVStore, referenceStorage: KVStore)(implicit val bi: BuildInfo)
   extends ResultTrackerSimple(
-    outputPath,
+    outputStorage,
     writable = true,
-    Some(ResultTrackerSimple(referencePath, writable = false))
+    Some(ResultTrackerSimple(referenceStorage, writable = false))
   ) with Rechecking {
+
+  def outputPath = outputStorage.basePath
+
+  def referencePath = referenceStorage.basePath
 
   require(underlyingTracker.nonEmpty, "Refusing to clean() a ResultTracker that does not have an underlying tracker.")
   require(storage.isLocal, "Refusing to clean() an S3 path.")
@@ -93,7 +98,7 @@ case class ResultTrackerForTest(outputPath: String, referencePath: String)(impli
     * Note: Calling push() will also stage it automatically.
     */
   def checkForUnstagedResults(): Unit = {
-    if (storage.getSuffixes("").toList.nonEmpty) {
+    if (storage.getKeySuffixes("").toList.nonEmpty) {
       val msg =
         if (storage.isLocal && underlyingTracker.map(_.isLocal).getOrElse(throw new RuntimeException("Missing underlying tracker.")))
           f"# New reference data! To stage it:\nrsync -av --progress ${basePath}/ ${referenceTracker.basePath}"
@@ -135,6 +140,7 @@ case class ResultTrackerForTest(outputPath: String, referencePath: String)(impli
 object ResultTrackerForTest {
   import io.circe._
   import com.cibo.provenance.BuildInfo.codec
+
   implicit private val buildInfoEncoder = codec.encoder
   implicit private val buildInfoDecoder = codec.decoder
   implicit private val e2 = new BinaryEncoder[ResultTrackerSimple]
@@ -148,7 +154,10 @@ object ResultTrackerForTest {
   implicit lazy val decoder: Decoder[ResultTrackerForTest] =
     Decoder.forProduct3[String, String, BuildInfo, ResultTrackerForTest](
       "localPath", "canonicalPath", "buildInfo")(
-        (localPath,canonicalPath,buildInfo) => new ResultTrackerForTest(localPath,canonicalPath)(buildInfo))
+        (localPath,canonicalPath,buildInfo) => ResultTrackerForTest(localPath, canonicalPath)(buildInfo))
+
+  def apply(outputPath: String, referencePath: String)(implicit buildInfo: BuildInfo): ResultTrackerForTest =
+    ResultTrackerForTest(KVStore(outputPath), KVStore(referencePath))(buildInfo)
 
   class UnstagedReferenceDataException(msg: String) extends RuntimeException(msg)
 }

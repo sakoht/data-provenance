@@ -1,6 +1,8 @@
 package com.cibo.provenance
 
 
+import com.cibo.provenance.kvstore.KVStore
+
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
@@ -43,28 +45,31 @@ import scala.concurrent.{ExecutionContext, Future}
   * @param underlyingTracker  An optional other trackers that underly this one.
   */
 class ResultTrackerSimple(
-  val basePath: String,
+  val storage: KVStore,
   val writable: Boolean = true,
   val underlyingTracker: Option[ResultTrackerSimple] = None
 )(implicit val currentAppBuildInfo: BuildInfo) extends ResultTracker {
   
   import com.cibo.provenance.exceptions.InconsistentVersionException
   import com.google.common.cache.Cache
-  import com.cibo.provenance.CacheUtils
 
   import scala.reflect.ClassTag
   import scala.reflect.runtime.universe.TypeTag
   import scala.util.{Failure, Success, Try}
 
+  //@transient
+  //lazy val storage: KVStore = KVStore(basePath)
+  def basePath = storage.basePath
+
   @transient
   implicit lazy val vwpCodec: Codec[ValueWithProvenanceSerializable] = ValueWithProvenanceSerializable.codec
 
   def over(underlying: ResultTrackerSimple): ResultTrackerSimple = {
-    new ResultTrackerSimple(basePath, writable, Some(underlying))
+    new ResultTrackerSimple(storage, writable, Some(underlying))
   }
 
   def over(underlyingPath: String): ResultTrackerSimple = {
-    new ResultTrackerSimple(basePath, writable, Some(ResultTrackerSimple(underlyingPath, writable=false)))
+    new ResultTrackerSimple(storage, writable, Some(ResultTrackerSimple(underlyingPath, writable=false)))
   }
 
   def loadCallById(callId: Digest): Option[FunctionCallWithProvenanceDeflated[_]] =
@@ -582,9 +587,6 @@ class ResultTrackerSimple(
   def isLocal: Boolean = storage.isLocal
 
   @transient
-  lazy val storage: KVStore = KVStore(basePath)
-
-  @transient
   protected lazy val ioTimeout: FiniteDuration = 5.minutes
 
   /**
@@ -706,7 +708,7 @@ class ResultTrackerSimple(
     }
 
   protected def getListingRecursive(path: String): List[String] = {
-    val listing1: Iterator[String] = storage.getSuffixes(path)
+    val listing1: Iterator[String] = storage.getKeySuffixes(path)
     underlyingTracker match {
       case Some(underlying) =>
         // NOTE: It would be a performance improvment to make this a merge sort.
@@ -735,7 +737,7 @@ class ResultTrackerSimple(
           case Some(_) =>
             true
           case None =>
-            if (storage.pathExists(path)) {
+            if (storage.exists(path)) {
               lightCache.put(path, Unit)
               true
             } else {
@@ -817,11 +819,17 @@ class ResultTrackerSimple(
 }
 
 object ResultTrackerSimple {
-  def apply(storageRoot: String, writable: Boolean)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
+  def apply(storageRoot: KVStore, writable: Boolean)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
     new ResultTrackerSimple(storageRoot, writable=writable)(currentAppBuildInfo)
 
-  def apply(storageRoot: String)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
+  def apply(storageRoot: KVStore)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
     new ResultTrackerSimple(storageRoot)(currentAppBuildInfo)
+
+  def apply(storageRoot: String, writable: Boolean)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
+    new ResultTrackerSimple(KVStore(storageRoot), writable=writable)(currentAppBuildInfo)
+
+  def apply(storageRoot: String)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
+    new ResultTrackerSimple(KVStore(storageRoot))(currentAppBuildInfo)
 }
 
 class ReadOnlyTrackerException(msg: String)

@@ -3,8 +3,10 @@ package com.cibo.provenance
 import java.time.Instant
 
 import com.amazonaws.services.s3.iterable.S3Objects
+import com.cibo.provenance.kvstore.{KVStore, LocalStore, S3Store}
 import com.typesafe.scalalogging.LazyLogging
 import org.scalatest.Matchers
+
 import scala.collection.JavaConverters._
 
 object TestUtils extends LazyLogging with Matchers {
@@ -136,7 +138,7 @@ object TestUtils extends LazyLogging with Matchers {
         Files.write(Paths.get(expectedManifestFile.getAbsolutePath), newManifestString.getBytes("UTF-8"))
         throw e
     }
-    logger.debug(f"Diff successful for $actualOutputLocalPath.")
+    logger.info(f"Diff successful for $actualOutputLocalPath.")
   }
 
   lazy val testResourcesDir: String = {

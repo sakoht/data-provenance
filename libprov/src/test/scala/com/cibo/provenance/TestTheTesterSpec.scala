@@ -2,6 +2,7 @@ package com.cibo.provenance
 
 import java.io.File
 
+import com.cibo.provenance.kvstore.KVStore
 import com.cibo.provenance.testsupport.{ResultTrackerForTest, ResultTrackerForTestFactory}
 import org.apache.commons.io.FileUtils
 import org.scalatest.{FunSpec, Matchers}
@@ -29,10 +30,10 @@ class TestTheTesterSpec extends FunSpec with Matchers {
         // Use a back-door in MyTool2IsBad to give make the tool give an inconsistent answer.
         // This is a bad tool, incorporating a mutable var into impl().
         // It doesn't always demonstrate its inconsistency flaw in the other scenarios.
-        // The purpose of this test is to report on a bad/inconsistent tool.
+        // The purpose of this test is to report on inconsistent logic, or logic that has changed over time.
         // This throws an exception because it sees that the reference data had 6+4=10, but it will get 910.
         MyTool2IsBad.backDoorInfluenceResults = 900
-        MyTool2IsBad(6, 4).resolve
+        MyTool2IsBad(6, 4).resolve  // Gets 910 instead of 10, and throws an error :(
       }
     }
 
@@ -61,8 +62,8 @@ class TestTheTesterSpec extends FunSpec with Matchers {
 
       // Make a copy of the tracker, and give it a copy of the reference data on local disk we can mutate.
       val rtb = rt.copy(
-        referencePath =
-          rt.outputPath.replaceAll("result-trackers-for-test-cases", "result-trackers-for-test-cases-dummyref")
+        referenceStorage =
+          KVStore(rt.outputStorage.basePath.replaceAll("result-trackers-for-test-cases", "result-trackers-for-test-cases-dummyref"))
       )
       FileUtils.deleteDirectory(new File(rtb.referencePath))
       FileUtils.copyDirectory(new File(rt.referencePath), new File(rtb.referencePath))

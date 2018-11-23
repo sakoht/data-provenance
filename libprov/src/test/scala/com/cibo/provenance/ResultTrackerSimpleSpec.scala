@@ -6,6 +6,7 @@ package com.cibo.provenance
 
 
 import com.cibo.provenance.exceptions.InconsistentVersionException
+import com.cibo.provenance.kvstore.KVStore
 import com.typesafe.scalalogging.LazyLogging
 import org.scalatest._
 
