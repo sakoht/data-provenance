@@ -1,9 +1,7 @@
 package com.cibo.provenance.testsupport
 
-import com.cibo.io.s3.SyncablePath
 import com.cibo.provenance.BuildInfo
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.commons.io.FileUtils
 
 /**
   * Generates ResultTrackerForTest() for all tests in a repo using a consistent directory tree.
@@ -11,13 +9,13 @@ import org.apache.commons.io.FileUtils
   * Create these in your app's test/ and it/ trees:
   *
   *   object MyAppResultTrackerUT extends ResultTrackerForTestFactory(
-  *       outputRoot = SyncablePath(s"/tmp/" + sys.env.getOrElse("USER","anonymous") + "/result-trackers-for-unit-tests/myapp"),
-  *       referenceRoot = SyncablePath("src/test/resources/provenance-data-by-test")
+  *       outputRoot = s"/tmp/" + sys.env.getOrElse("USER","anonymous") + "/result-trackers-for-unit-tests/myapp",
+  *       referenceRoot = "src/test/resources/provenance-data-by-test"
   *     )(com.mycompany.myapp.BuildInfo)
   *
   *   object MyAppResultTrackerIT extends ResultTrackerForTestFactory(
-  *       outputRoot = SyncablePath(s"/tmp/" + sys.env.getOrElse("USER","anonymous") + "/result-trackers-for-integration-tests/myapp"),
-  *       referenceRoot = SyncablePath("s3://mybucket/provenance-data-by-test/myapp")
+  *       outputRoot = s"/tmp/" + sys.env.getOrElse("USER","anonymous") + "/result-trackers-for-integration-tests/myapp",
+  *       referenceRoot = "s3://mybucket/provenance-data-by-test/myapp"
   *     )(com.mycompany.myapp.BuildInfo)
   *
   *

@@ -14,15 +14,15 @@ import scala.util.{Failure, Success, Try}
   * @param a: The first underlying tracker.
   * @param b: The second underlying tracker.
   */
-class ResultTrackerDuplex(val a: ResultTracker, val b: ResultTracker) extends ResultTracker {
+class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val b: U) extends ResultTracker {
 
   def countUnderlying: Int = {
     val aCount = a match {
-      case other: ResultTrackerDuplex => other.countUnderlying
+      case other: ResultTrackerDuplex[_, _] => other.countUnderlying
       case _ => 1
     }
     val bCount = b match {
-      case other: ResultTrackerDuplex => other.countUnderlying
+      case other: ResultTrackerDuplex[_, _] => other.countUnderlying
       case _ => 1
     }
     aCount + bCount

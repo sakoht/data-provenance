@@ -583,12 +583,11 @@ class ResultTrackerSimple(
    */
 
   import scala.concurrent.duration._
-  import com.cibo.aws.AWSClient.Implicits.s3SyncClient
 
   def isLocal: Boolean = storage.isLocal
 
   @transient
-  protected lazy val storage: KVStore = KVStore(basePath)
+  lazy val storage: KVStore = KVStore(basePath)
 
   @transient
   protected lazy val ioTimeout: FiniteDuration = 5.minutes

@@ -2,7 +2,6 @@ package com.cibo.provenance.testsupport
 
 import java.io.File
 
-import com.cibo.io.s3.SyncablePath
 import com.cibo.provenance._
 import org.apache.commons.io.FileUtils
 
@@ -16,8 +15,8 @@ import org.apache.commons.io.FileUtils
   *
   *   describe("mything") {
   *     it("works") {
-  *       implicit val rt = ResultTrackerForTest(outputPath = SyncablePath("/tmp/mything-works-rt"),
-  *                                              referencePath = SyncablePath("src/test/resources/mything-works-rt")
+  *       implicit val rt = ResultTrackerForTest(outputPath = "/tmp/mything-works-rt",
+  *                                              referencePath = "src/test/resources/mything-works-rt"
   *       rt.clean()
   *       MyThing(p1, p2).resolve
   *       MyThing(p3, p4).resolve
@@ -43,8 +42,16 @@ case class ResultTrackerForTest(outputPath: String, referencePath: String)(impli
     writable = true,
     Some(ResultTrackerSimple(referencePath, writable = false))
   ) with Rechecking {
+
   require(underlyingTracker.nonEmpty, "Refusing to clean() a ResultTracker that does not have an underlying tracker.")
   require(storage.isLocal, "Refusing to clean() an S3 path.")
+
+  /**
+    * Get the underlying tracker that holds just the reference data.
+    *
+    * @return a ResultTrackerSimple
+    */
+  def referenceTracker: ResultTrackerSimple = underlyingTracker.get
 
   /**
     * Remove all output data, leaving the reference data in place.
@@ -58,7 +65,8 @@ case class ResultTrackerForTest(outputPath: String, referencePath: String)(impli
         case Some(user) =>
           if (!basePath.contains(user))
             throw new RuntimeException(f"Refusing to delete an S3 test a directory that does not contain the current user's name: $user not in ${basePath}")
-          com.cibo.io.Shell.run(s"aws s3 rm --recursive ${basePath}")
+          import scala.sys.process._
+          s"aws s3 rm --recursive ${basePath}".!
 
         case None =>
           throw new RuntimeException(
@@ -70,24 +78,21 @@ case class ResultTrackerForTest(outputPath: String, referencePath: String)(impli
 
     // For local paths this deletes the primary data.  For remote it deletes the data buffered locally.
     storage match {
-      case s3: S3Store =>
       case local: LocalStore =>
-        FileUtils.deleteDirectory(new File(local.baseDir))
+        FileUtils.deleteDirectory(new File(local.basePath))
+      case _: S3Store =>
     }
-
 
     clearCaches()
   }
 
-  def referenceTracker: ResultTrackerSimple = underlyingTracker.get
-
   /**
-    * This should be called at the end of a test.  If there is new reference data,
+    * This should be called at the end of a test.  If some things were done that did not have reference data,
     * it will notify the developer with a special exception, and give instructions on how to stage the data.
     *
     * Note: Calling push() will also stage it automatically.
     */
-  def check(): Unit = {
+  def checkForUnstagedResults(): Unit = {
     if (storage.getSuffixes("").toList.nonEmpty) {
       val msg =
         if (storage.isLocal && underlyingTracker.map(_.isLocal).getOrElse(throw new RuntimeException("Missing underlying tracker.")))
@@ -97,6 +102,9 @@ case class ResultTrackerForTest(outputPath: String, referencePath: String)(impli
       throw new ResultTrackerForTest.UnstagedReferenceDataException(msg)
     }
   }
+
+  @deprecated("call checkForUnstagedResults() instead", "v0.10.5")
+  def check(): Unit = checkForUnstagedResults()
 
   /**
     * This method moves data from the outputPath to the referencePath.
@@ -143,6 +151,9 @@ object ResultTrackerForTest {
         (localPath,canonicalPath,buildInfo) => new ResultTrackerForTest(localPath,canonicalPath)(buildInfo))
 
   class UnstagedReferenceDataException(msg: String) extends RuntimeException(msg)
+
+  def apply(outputPath: String, referencePath: String)(implicit bi: BuildInfo): ResultTrackerForTest =
+    new ResultTrackerForTest(outputPath, referencePath)
 }
 
 
