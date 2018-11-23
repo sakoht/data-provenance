@@ -49,17 +49,17 @@ object Codec extends LazyLogging {
     * @param decoder  A circe Decoder[T].
     * @return A Codec[T] created from implicits.
     */
-  def apply[T : ClassTag : TypeTag](encoder: io.circe.Encoder[T], decoder: io.circe.Decoder[T]): CodecUsingJson[T] =
-    CodecUsingJson(encoder, decoder)
+  def apply[T : ClassTag : TypeTag](encoder: io.circe.Encoder[T], decoder: io.circe.Decoder[T]): CirceJsonCodec[T] =
+    CirceJsonCodec(encoder, decoder)
 
   /**
-    * Implicitly create a Codec[T] wherever an Encoder[T] and Decoder[T] are implicitly available.
+    * Implicitly create a CirceJsonCodec[T] wherever an Encoder[T] and Decoder[T] are implicitly available.
     * These can be provided by io.circe.generic.semiauto._ w/o penalty, or .auto._ with some penalty.
     *
     * @tparam   T The type of data to be encoded/decoded.
-    * @return A Codec[T] created from implicits.
+    * @return A CirceJsonCodec[T] created from implicits.
     */
-  implicit def createCodec[T : Encoder : Decoder : ClassTag : TypeTag]: Codec[T] =
+  implicit def createCirceJsonCodec[T : Encoder : Decoder : ClassTag : TypeTag]: Codec[T] =
     Codec(implicitly[Encoder[T]], implicitly[Decoder[T]])
 
   /**
@@ -83,7 +83,7 @@ object Codec extends LazyLogging {
     key: String = "_subclass",
     valueStringToClassName: (String) => String = (className: String) => className,
     classNameToValueString: (String) => String = (className: String) => className
-  ): CodecUsingJson[T] = {
+  ): CirceJsonCodec[T] = {
     type COMPANION = { def encoder: Encoder[T]; def decoder: Decoder[T] }
 
     val encoder = Encoder.instance {

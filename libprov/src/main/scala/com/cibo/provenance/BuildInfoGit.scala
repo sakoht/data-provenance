@@ -19,7 +19,7 @@ trait BuildInfoGit extends BuildInfo with Serializable {
 
   def commitId: String = gitHash
 
-  def codec: CodecUsingJson[BuildInfoGit] = BuildInfoGit.codec
+  def codec: CirceJsonCodec[BuildInfoGit] = BuildInfoGit.codec
   def toEncoded = codec.encoder.apply(this)
 }
 
@@ -88,6 +88,6 @@ object BuildInfoGit {
         )
     }
 
-  implicit val codec: CodecUsingJson[BuildInfoGit] = Codec(encoder, decoder)
+  implicit val codec: CirceJsonCodec[BuildInfoGit] = Codec(encoder, decoder)
 }
 

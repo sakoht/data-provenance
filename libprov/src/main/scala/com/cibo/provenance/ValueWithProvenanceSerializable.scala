@@ -42,7 +42,7 @@ object ValueWithProvenanceSerializable {
   // The codec for the *Serializable object tree is simple and can be auto-derived by circe.
   // The codec for the regular ValueWithProvenance[_] piggy-backs on this codec.
   import io.circe.generic.semiauto._
-  implicit val codec: CodecUsingJson[ValueWithProvenanceSerializable] =
+  implicit val codec: CirceJsonCodec[ValueWithProvenanceSerializable] =
     Codec(deriveEncoder[ValueWithProvenanceSerializable], deriveDecoder[ValueWithProvenanceSerializable])
 
   def save[O](value: ValueWithProvenance[O])(implicit rt: ResultTracker): ValueWithProvenanceSerializable = {
