@@ -14,7 +14,7 @@ import scala.reflect.runtime.universe.TypeTag
   * The base trait for wrapping encoder/decoder pairs.
   *
   * The builtin encoding (CodecUsingJson) uses Circe JSON is used exclusively by the core library,
-  * but any logic that can convert to/from an Array[Byte] works.
+  * External projects can add new subclasses of Codec that extend this trait.
   *
   * @tparam T       The type of data to be encoded/decoded.
   */
