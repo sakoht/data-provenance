@@ -50,7 +50,7 @@ class ResultTrackerSimple(
   
   import com.cibo.provenance.exceptions.InconsistentVersionException
   import com.google.common.cache.Cache
-  import com.cibo.provenance.CacheUtils
+  import com.cibo.provenance.kvstore._
 
   import scala.reflect.ClassTag
   import scala.reflect.runtime.universe.TypeTag
@@ -706,7 +706,7 @@ class ResultTrackerSimple(
     }
 
   protected def getListingRecursive(path: String): List[String] = {
-    val listing1: Iterator[String] = storage.getSuffixes(path)
+    val listing1: Iterator[String] = storage.getKeySuffixes(path)
     underlyingTracker match {
       case Some(underlying) =>
         // NOTE: It would be a performance improvment to make this a merge sort.
@@ -735,7 +735,7 @@ class ResultTrackerSimple(
           case Some(_) =>
             true
           case None =>
-            if (storage.pathExists(path)) {
+            if (storage.exists(path)) {
               lightCache.put(path, Unit)
               true
             } else {

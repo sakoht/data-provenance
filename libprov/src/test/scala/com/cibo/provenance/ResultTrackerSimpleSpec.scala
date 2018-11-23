@@ -4,8 +4,8 @@ package com.cibo.provenance
   * Created by ssmith on 9/20/17.
   */
 
-
 import com.cibo.provenance.exceptions.InconsistentVersionException
+import com.cibo.provenance.kvstore._
 import com.typesafe.scalalogging.LazyLogging
 import org.scalatest._
 

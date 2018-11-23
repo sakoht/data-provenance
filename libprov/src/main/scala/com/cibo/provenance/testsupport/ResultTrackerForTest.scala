@@ -4,6 +4,7 @@ import java.io.File
 
 import com.cibo.provenance._
 import org.apache.commons.io.FileUtils
+import com.cibo.provenance.kvstore._
 
 /**
   * This ResultTracker is used by applications to regression test.
@@ -93,7 +94,7 @@ case class ResultTrackerForTest(outputPath: String, referencePath: String)(impli
     * Note: Calling push() will also stage it automatically.
     */
   def checkForUnstagedResults(): Unit = {
-    if (storage.getSuffixes("").toList.nonEmpty) {
+    if (storage.getKeySuffixes().toList.nonEmpty) {
       val msg =
         if (storage.isLocal && underlyingTracker.map(_.isLocal).getOrElse(throw new RuntimeException("Missing underlying tracker.")))
           f"# New reference data! To stage it:\nrsync -av --progress ${basePath}/ ${referenceTracker.basePath}"
