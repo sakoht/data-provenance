@@ -2,8 +2,7 @@ package com.cibo.provenance
 
 import com.cibo.provenance.FunctionCallWithProvenance.TraversableCallExt
 import org.scalatest.{FunSpec, Matchers}
-import com.cibo.aws.AWSClient.Implicits.s3SyncClient
-import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
+
 
 
 /**
@@ -12,8 +11,7 @@ import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
 
 
 class MonadicCallsSpec extends FunSpec with Matchers {
-  import com.cibo.io.s3.SyncablePath
-  import com.cibo.provenance.monadics._
+    import com.cibo.provenance.monadics._
 
   val outputBaseDir: String = TestUtils.testOutputBaseDir
   implicit val buildInfo: BuildInfo = BuildInfoDummy

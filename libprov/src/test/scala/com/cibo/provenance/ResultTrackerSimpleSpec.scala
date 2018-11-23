@@ -8,15 +8,13 @@ package com.cibo.provenance
 import com.cibo.provenance.exceptions.InconsistentVersionException
 import com.typesafe.scalalogging.LazyLogging
 import org.scalatest._
-import com.cibo.aws.AWSClient.Implicits.s3SyncClient
+
 import com.cibo.io.s3.S3SyncablePath
-import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
 
 import scala.concurrent.ExecutionContext
 
 class ResultTrackerForSelfTestSpec extends FunSpec with Matchers with LazyLogging {
-  import com.cibo.io.s3.SyncablePath
-
+  
   // This is the root for test output.
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir
 

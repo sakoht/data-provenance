@@ -2,7 +2,6 @@ package com.cibo.provenance
 
 import java.io.File
 
-import com.cibo.io.s3.SyncablePath
 import com.cibo.provenance.testsupport.{ResultTrackerForTest, ResultTrackerForTestFactory}
 import org.apache.commons.io.FileUtils
 import org.scalatest.{FunSpec, Matchers}
@@ -21,7 +20,7 @@ class TestTheTesterSpec extends FunSpec with Matchers {
       rt.clean()
       MyTool1(2, 3).resolve.output shouldBe 5   // in the reference data
       MyTool1(6, 4).resolve.output shouldBe 10  // in the reference data
-      rt.check()
+      rt.checkForUnstagedResults()
     }
 
     it("If code ever produces an inconsistent answer for the same params & version, throw an exception") {
@@ -45,7 +44,7 @@ class TestTheTesterSpec extends FunSpec with Matchers {
       MyTool1(7, 7).resolve.output shouldBe 14 // NOT in the reference data
 
       intercept[ResultTrackerForTest.UnstagedReferenceDataException] {
-        rt.check()
+        rt.checkForUnstagedResults()
       }
     }
 
@@ -57,7 +56,7 @@ class TestTheTesterSpec extends FunSpec with Matchers {
 
       // It still fails the check.
       intercept[ResultTrackerForTest.UnstagedReferenceDataException] {
-        rt.check()
+        rt.checkForUnstagedResults()
       }
 
       // Make a copy of the tracker, and give it a copy of the reference data on local disk we can mutate.
@@ -70,14 +69,14 @@ class TestTheTesterSpec extends FunSpec with Matchers {
 
       // It still fails the check.
       intercept[ResultTrackerForTest.UnstagedReferenceDataException] {
-        rtb.check()
+        rtb.checkForUnstagedResults()
       }
 
       // A "push" to reference storage stages the data.
       rtb.push()
 
       // Then the check passes.
-      rtb.check()
+      rtb.checkForUnstagedResults()
     }
   }
 }

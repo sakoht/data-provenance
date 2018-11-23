@@ -4,7 +4,6 @@ import scala.language.existentials
 import io.circe._
 import io.circe.generic.semiauto._
 import org.scalatest._
-import com.cibo.io.s3.SyncablePath
 
 import com.cibo.provenance.oo._
 import com.cibo.provenance.implicits._

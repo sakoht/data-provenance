@@ -1,19 +1,21 @@
 package com.cibo.provenance
 
+import java.io.{ByteArrayOutputStream, PrintWriter, StringWriter}
 import java.time.Instant
 
-import com.cibo.io.s3.SyncablePath
+import com.amazonaws.services.s3.iterable.S3Objects
+import com.cibo.io.Shell.{NonZeroExitCodeException, buildCmd}
+import com.cibo.io.WithResource
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.commons.io.FileUtils
 import org.scalatest.Matchers
-import com.cibo.aws.AWSClient.Implicits.s3SyncClient
-import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
+import scala.collection.JavaConverters._
+
+import scala.concurrent.duration.Duration
+import scala.sys.process.{ProcessBuilder, ProcessLogger}
 
 object TestUtils extends LazyLogging with Matchers {
   import java.io.File
   import java.nio.file.{Files, Paths}
-
-  import com.cibo.io.Shell.getOutputAsBytes
 
   // The this is the BuildInfo _object_ for this library.
   // Not to be confused with the BuildInfo base trait use for all apps with provenance tracking.
@@ -51,20 +53,32 @@ object TestUtils extends LazyLogging with Matchers {
       else
         throw new RuntimeException(f"Unexpected scala version $libBuildInfo.scalaVersion")
 
-    val actualOutputDirPath = SyncablePath(f"$testOutputBaseDir/$subdir")
-    if (actualOutputDirPath.isRemote) {
-      val f = actualOutputDirPath.toFile
-      logger.info(s"Syncing $actualOutputDirPath to local disk...")
-      FileUtils.deleteDirectory(f)
-      val t1 = Instant.now
-      actualOutputDirPath.syncFromS3()
-      val t2 = Instant.now
-      val d = t2.toEpochMilli - t1.toEpochMilli
-      logger.warn(s"Sync of $actualOutputDirPath completed in ${d}ms.")
+    val actualOutputDirPath = KVStore(f"$testOutputBaseDir/$subdir")
 
+    val actualOutputLocalPath: String = actualOutputDirPath match {
+      case localStore: LocalStore =>
+        // The actual outputs are local files.  Just use the path directly.
+        localStore.basePath
+      case s3store: S3Store =>
+        // The actual outputs are in S3.  To keep the logic simple below, sync it down to a temp dir and use that.
+        val user = sys.env.getOrElse("USER", "nouser")
+        val startPos = actualOutputDirPath.basePath.indexOf("://") + 3
+        val tmpStore = KVStore(f"/tmp/$user/" + actualOutputDirPath.basePath.substring(startPos))
+        val t1 = Instant.now
+        S3Objects.withPrefix(
+          s3store.amazonS3,
+          s3store.s3Bucket,
+          s3store.s3Path
+        ).iterator().asScala.map(_.getKey()).foreach {
+          key =>
+            val path = key.substring(s3store.s3Path.length + 1)
+            tmpStore.putBytes(path, s3store.getBytes(path))
+        }
+        val t2 = Instant.now
+        val d = t2.toEpochMilli - t1.toEpochMilli
+        logger.warn(s"Sync of $actualOutputDirPath completed in ${d}ms.")
+        tmpStore.basePath
     }
-
-    val actualOutputLocalPath = actualOutputDirPath.localPath
 
     def normalize(in: String): String = {
       val lines = in.split("\n")
@@ -129,6 +143,33 @@ object TestUtils extends LazyLogging with Matchers {
       case ee: Exception =>
         println(ee)
         throw ee
+    }
+  }
+
+  def getOutputAsBytes(cmd: String, timeout: Option[Duration] = None): Array[Byte] =
+    WithResource(new ByteArrayOutputStream()) { outBuff =>
+      val cmdProcess = buildCmd(cmd, timeout = timeout, output = Some(outBuff))
+      runProcess(cmdProcess)
+      outBuff.toByteArray
+    }
+
+  def runProcess(
+    cmdProcess: ProcessBuilder,
+    stdout: String => Unit = _ => (),
+    stderr: String => Unit = _ => ()
+  ): Unit = {
+    WithResource(new StringWriter()) { errBuff =>
+      val errPrnt = new PrintWriter(errBuff, true)
+
+      logger.debug(s"RUN: ${cmdProcess.toString}")
+      val ret: Int = cmdProcess.!(ProcessLogger(stdout, s => {
+        stderr(s)
+        errPrnt.println(s)
+      }))
+      logger.debug(s"RUN (${cmdProcess.toString}) complete")
+
+      if (ret != 0)
+        throw NonZeroExitCodeException(ret, s"Error running '${cmdProcess.toString}'", Some(errBuff.toString))
     }
   }
 

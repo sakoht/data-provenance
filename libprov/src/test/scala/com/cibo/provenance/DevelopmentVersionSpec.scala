@@ -1,13 +1,11 @@
 package com.cibo.provenance
 
 import org.scalatest.{FunSpec, Matchers}
-import com.cibo.aws.AWSClient.Implicits.s3SyncClient
-import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
+
 
 class DevelopmentVersionSpec extends FunSpec with Matchers {
 
-  import com.cibo.io.s3.SyncablePath
-
+  
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir
 
   implicit val buildInfo: BuildInfo = BuildInfoDummy

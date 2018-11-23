@@ -2,8 +2,7 @@ package com.cibo.provenance
 
 import org.scalatest.{FunSpec, Matchers}
 import org.slf4j.{Logger, LoggerFactory}
-import com.cibo.aws.AWSClient.Implicits.s3SyncClient
-import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
+
 
 /**
   * Created by ssmith on 5/11/17.
