@@ -8,6 +8,7 @@ import com.typesafe.scalalogging.LazyLogging
 import org.scalatest.Matchers
 
 import scala.collection.JavaConverters._
+import com.cibo.provenance.kvstore._
 
 object TestUtils extends LazyLogging with Matchers {
   import java.io.File

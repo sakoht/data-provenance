@@ -52,6 +52,7 @@ class ResultTrackerSimple(
   
   import com.cibo.provenance.exceptions.InconsistentVersionException
   import com.google.common.cache.Cache
+  import com.cibo.provenance.kvstore._
 
   import scala.reflect.ClassTag
   import scala.reflect.runtime.universe.TypeTag
@@ -102,7 +103,7 @@ class ResultTrackerSimple(
   @transient
   lazy val saveBuildInfo: Digest = {
     val bi = currentAppBuildInfo
-    val (bytes, digest) = Codec.serialize(bi)
+    val (bytes, digest) = Codec.serializeAndDigest(bi)
     saveBytes(s"commits/${bi.commitId}/builds/${bi.buildId}/${digest.id}", bytes)
     digest
   }
@@ -150,7 +151,7 @@ class ResultTrackerSimple(
     val callId: String = resultSerializable.call.digestOfEquivalentWithInputs.id
 
     val (resultBytes, resultDigest) =
-      Codec.serialize(
+      Codec.serializeAndDigest(
         resultSerializable.asInstanceOf[ValueWithProvenanceSerializable]
       )(vwpCodec)
 
@@ -293,7 +294,7 @@ class ResultTrackerSimple(
 
   //def saveOutputValue[T : Codec](obj: T)(implicit tt: TypeTag[Codec[T]], ct: ClassTag[Codec[T]]): Digest = {
   def saveOutputValue[T: Codec](obj: T)(implicit cdcd: Codec[Codec[T]]) = {
-    val (bytes, digest) = Codec.serialize(obj, checkForInconsistentSerialization(obj))
+    val (bytes, digest) = Codec.serializeAndDigest(obj, checkForInconsistentSerialization(obj))
     saveCodec[T](digest)
     val path = f"data/${digest.id}"
     logger.info(f"Saving raw $obj to $path")
@@ -565,7 +566,7 @@ class ResultTrackerSimple(
     val codec: Codec[T] = implicitly[Codec[T]]
     implicit val ct: ClassTag[T] = codec.classTag
     val (codecBytes, codecDigest) =
-      Codec.serialize(codec, checkForInconsistentSerialization(codec))
+      Codec.serializeAndDigest(codec, checkForInconsistentSerialization(codec))
     saveBytes(f"codecs/$outputClassName/${codecDigest.id}", codecBytes)
     codecDigest
   }
@@ -791,7 +792,7 @@ class ResultTrackerSimple(
       case _ : Array[Byte] =>
         throw new FailedSaveException("Attempt to save pre-serialized data?")
       case _ =>
-        val (bytes, digest) = Codec.serialize(obj, checkForInconsistentSerialization(obj))
+        val (bytes, digest) = Codec.serializeAndDigest(obj, checkForInconsistentSerialization(obj))
         saveBytes(path, bytes)
         digest.id
     }
@@ -801,7 +802,7 @@ class ResultTrackerSimple(
   }
 
   @transient
-  private lazy val emptyBytesAndDigest = Codec.serialize("")
+  private lazy val emptyBytesAndDigest = Codec.serializeAndDigest("")
   protected def emptyBytes: Array[Byte] = emptyBytesAndDigest._1
   protected def emptyDigest: Digest = emptyBytesAndDigest._2
 

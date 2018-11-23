@@ -5,6 +5,7 @@ import java.io.File
 import com.cibo.provenance._
 import com.cibo.provenance.kvstore.{KVStore, LocalStore, S3Store}
 import org.apache.commons.io.FileUtils
+import com.cibo.provenance.kvstore._
 
 /**
   * This ResultTracker is used by applications to regression test.
@@ -33,8 +34,8 @@ import org.apache.commons.io.FileUtils
   * It uses the "Rechecking" trait, which overrides resolve() and resolveAsync() to re-verify results that are already saved.
   * On the first test run with tests or software changes, it will automatically stage the new data.
   *
-  * @param outputPath           A path to a local empty tmp directory used just by this test.
-  * @param referencePath        A path to reference data.  For UT: src/main/resources/.  For IT s3://....
+  * @param outputStorage        A KVStore for to a local empty tmp directory used just by this test.
+  * @param referenceStorage     A KVStore for reference data.  For UT: src/main/resources/.  For IT s3://....
   * @param bi                   The current app build information should be implicitly available.
   */
 case class ResultTrackerForTest(outputStorage: KVStore, referenceStorage: KVStore)(implicit val bi: BuildInfo)
@@ -98,7 +99,7 @@ case class ResultTrackerForTest(outputStorage: KVStore, referenceStorage: KVStor
     * Note: Calling push() will also stage it automatically.
     */
   def checkForUnstagedResults(): Unit = {
-    if (storage.getKeySuffixes("").toList.nonEmpty) {
+    if (storage.getKeySuffixes().toList.nonEmpty) {
       val msg =
         if (storage.isLocal && underlyingTracker.map(_.isLocal).getOrElse(throw new RuntimeException("Missing underlying tracker.")))
           f"# New reference data! To stage it:\nrsync -av --progress ${basePath}/ ${referenceTracker.basePath}"

@@ -1,26 +1,31 @@
 package com.cibo.provenance
 
-import io.circe._
 import java.io.Serializable
 
+import com.cibo.provenance.Codec.logger
 import com.typesafe.scalalogging.LazyLogging
+import io.circe.{Decoder, Encoder, Json}
 
 import scala.reflect.ClassTag
 import scala.reflect.runtime.currentMirror
 import scala.reflect.runtime.universe.TypeTag
 
 /**
-  * A wrapper around a circe Encoder[T] and Decoder[T], with utility methods used to save/load.
+  * The base trait for wrapping encoder/decoder pairs.
   *
-  * @param encoder  An Encoder[T]
-  * @param decoder  A Decoder[T] that matches it.
+  * The builtin encoding (CodecUsingJson) uses Circe JSON is used exclusively by the core library,
+  * External projects can add new subclasses of Codec that extend this trait.
+  *
   * @tparam T       The type of data to be encoded/decoded.
   */
-case class Codec[T : ClassTag : TypeTag](encoder: Encoder[T], decoder: Decoder[T]) extends Serializable {
-  def classTag: ClassTag[T] = implicitly[ClassTag[T]]
-  def typeTag: TypeTag[T] = implicitly[TypeTag[T]]
+trait Codec[T] extends Serializable {
+  def classTag: ClassTag[T]
+  def typeTag: TypeTag[T]
   def serializableClassName: String = Codec.classTagToSerializableName(classTag)
+  def serialize(obj: T, checkConsistency: Boolean = true): Array[Byte]
+  def deserialize(bytes: Array[Byte]): T
 }
+
 
 /**
   * Serialization-related utility methods.
@@ -31,20 +36,30 @@ object Codec extends LazyLogging {
   import scala.language.reflectiveCalls
   import scala.tools.reflect.ToolBox
 
-  import io.circe.parser._, io.circe.syntax._
   import java.io._
   import org.apache.commons.codec.digest.DigestUtils
   import scala.util.{Try, Failure, Success}
 
-
   /**
-    * Implicitly create a Codec[T] wherever an Encoder[T] and Decoder[T] are implicitly available.
-    * These can be provided by io.circe.generic.semiauto._ w/o penalty, or .auto._ with some penalty.
+    * A Codec of sub-class JSON Codec can always be explicitly constructed from a pair of circe encoders,
+    * presuming the ClassTag and TypeTag are available.
     *
     * @tparam T The type of data to be encoded/decoded.
+    * @param encoder  A circe Encoder[T].
+    * @param decoder  A circe Decoder[T].
     * @return A Codec[T] created from implicits.
     */
-  implicit def createCodec[T : Encoder : Decoder : ClassTag : TypeTag]: Codec[T] =
+  def apply[T : ClassTag : TypeTag](encoder: io.circe.Encoder[T], decoder: io.circe.Decoder[T]): CirceJsonCodec[T] =
+    CirceJsonCodec(encoder, decoder)
+
+  /**
+    * Implicitly create a CirceJsonCodec[T] wherever an Encoder[T] and Decoder[T] are implicitly available.
+    * These can be provided by io.circe.generic.semiauto._ w/o penalty, or .auto._ with some penalty.
+    *
+    * @tparam   T The type of data to be encoded/decoded.
+    * @return A CirceJsonCodec[T] created from implicits.
+    */
+  implicit def createCirceJsonCodec[T : Encoder : Decoder : ClassTag : TypeTag]: Codec[T] =
     Codec(implicitly[Encoder[T]], implicitly[Decoder[T]])
 
   /**
@@ -68,7 +83,7 @@ object Codec extends LazyLogging {
     key: String = "_subclass",
     valueStringToClassName: (String) => String = (className: String) => className,
     classNameToValueString: (String) => String = (className: String) => className
-  ): Codec[T] = {
+  ): CirceJsonCodec[T] = {
     type COMPANION = { def encoder: Encoder[T]; def decoder: Decoder[T] }
 
     val encoder = Encoder.instance {
@@ -177,7 +192,7 @@ object Codec extends LazyLogging {
       // This will work if the function is a singleton.
       val clazz = Class.forName(name + "$")
       val obj = clazz.getField("MODULE$").get(clazz)
-       obj.asInstanceOf[T]
+      obj.asInstanceOf[T]
     } catch {
       case e: Exception if e.isInstanceOf[java.lang.ClassCastException] | e.isInstanceOf[java.lang.ClassNotFoundException] =>
         // We fall back to using the compiler itself only when re-vivifying a function object as data,
@@ -210,52 +225,17 @@ object Codec extends LazyLogging {
     * @tparam T
     * @return                 A byte array and a digest value.
     */
-  def serialize[T : Codec](obj: T, checkConsistency: Boolean = true): (Array[Byte], Digest) = {
-    val bytes = serializeImpl(obj, checkConsistency)
+  def serializeAndDigest[T : Codec](obj: T, checkConsistency: Boolean = true): (Array[Byte], Digest) = {
+    val bytes = serialize(obj, checkConsistency)
     val digest = digestBytes(bytes)
     (bytes, digest)
   }
 
-  private def serializeImpl[T : Codec](obj: T, checkConsistency: Boolean = true): Array[Byte] = {
-    val codec = implicitly[Codec[T]]
-    implicit val encoder = codec.encoder
-    implicit val decoder = codec.decoder
+  def serialize[T : Codec](obj: T, checkConsistency: Boolean = true): Array[Byte] =
+    implicitly[Codec[T]].serialize(obj, checkConsistency)
 
-    if (obj.isInstanceOf[ValueWithProvenanceSerializable] && codec != ValueWithProvenanceSerializable.codec) {
-      println("Odd codec!")
-    }
-
-    val json: String = obj.asJson.noSpaces
-
-    if (checkConsistency) {
-      //if (json.contains("{"))
-      //  println(f"OBJ:$obj\nJSON: $json")
-
-      decode[T](json) match {
-        case Right(obj2) =>
-          val json2: String = obj2.asJson.noSpaces
-          if (json2 != json) {
-            throw new RuntimeException(f"Failure to serialize consistently!\n$obj\n$obj2\n$json\n$json2\n$json2")
-          }
-        case Left(e) =>
-          throw e
-      }
-    }
-
-    json.getBytes("UTF-8")
-  }
-
-  def deserialize[T](bytes: Array[Byte])(implicit cd: Codec[T]): T = {
-    implicit val encoder = cd.encoder
-    implicit val decoder = cd.decoder
-    val s = new String(bytes, "UTF-8")
-    decode[T](s) match {
-      case Left(error) =>
-        throw error
-      case Right(obj) =>
-        obj
-    }
-  }
+  def deserialize[T : Codec](bytes: Array[Byte]): T =
+    implicitly[Codec[T]].deserialize(bytes)
 
   def digestObject[T : Codec](value: T): Digest = {
     value match {
@@ -263,10 +243,9 @@ object Codec extends LazyLogging {
         //logger.warn("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
         throw new RuntimeException("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
       case _ =>
-        serialize(value)._2
+        serializeAndDigest(value)._2
     }
   }
-
 
   def getBytesAndDigestRaw[T](obj: T, checkConsistency: Boolean = true): (Array[Byte], Digest) = {
     val bytes1 = serializeRawImpl(obj)

@@ -57,7 +57,7 @@ case class VirtualValue[T](
       case None =>
         val serialization = valueOption match {
           case Some(value) =>
-            Codec.serialize(value)._1
+            Codec.serializeAndDigest(value)._1
           case None =>
             digestOption match {
               case Some(digest) =>
@@ -82,7 +82,7 @@ case class VirtualValue[T](
         case None =>
           valueOption match {
             case Some(value) =>
-              Codec.serialize(value)._1
+              Codec.serializeAndDigest(value)._1
             case None =>
               throw noDataException
           }
