@@ -151,9 +151,6 @@ object ResultTrackerForTest {
         (localPath,canonicalPath,buildInfo) => new ResultTrackerForTest(localPath,canonicalPath)(buildInfo))
 
   class UnstagedReferenceDataException(msg: String) extends RuntimeException(msg)
-
-  def apply(outputPath: String, referencePath: String)(implicit bi: BuildInfo): ResultTrackerForTest =
-    new ResultTrackerForTest(outputPath, referencePath)
 }
 
 

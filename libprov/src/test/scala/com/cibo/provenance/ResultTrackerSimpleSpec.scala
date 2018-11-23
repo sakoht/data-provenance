@@ -9,8 +9,6 @@ import com.cibo.provenance.exceptions.InconsistentVersionException
 import com.typesafe.scalalogging.LazyLogging
 import org.scalatest._
 
-import com.cibo.io.s3.S3SyncablePath
-
 import scala.concurrent.ExecutionContext
 
 class ResultTrackerForSelfTestSpec extends FunSpec with Matchers with LazyLogging {

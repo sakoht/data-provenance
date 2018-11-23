@@ -1,17 +1,11 @@
 package com.cibo.provenance
 
-import java.io.{ByteArrayOutputStream, PrintWriter, StringWriter}
 import java.time.Instant
 
 import com.amazonaws.services.s3.iterable.S3Objects
-import com.cibo.io.Shell.{NonZeroExitCodeException, buildCmd}
-import com.cibo.io.WithResource
 import com.typesafe.scalalogging.LazyLogging
 import org.scalatest.Matchers
 import scala.collection.JavaConverters._
-
-import scala.concurrent.duration.Duration
-import scala.sys.process.{ProcessBuilder, ProcessLogger}
 
 object TestUtils extends LazyLogging with Matchers {
   import java.io.File
@@ -92,8 +86,9 @@ object TestUtils extends LazyLogging with Matchers {
       lines.map(_.stripPrefix(leftMargin)).sortBy(rightColumn).mkString("\n") + "\n"
     }
 
+    import scala.sys.process._
     val newManifestBytes =
-      getOutputAsBytes(s"cd $actualOutputLocalPath && (wc -c `find . -type f | grep -v codecs`)")
+      Seq("bash", "-c", s"cd $actualOutputLocalPath && (wc -c `find . -type f | grep -v codecs`)").!!
     val newManifestString = normalize(new String(newManifestBytes))
 
     val rootSubdir = "src/test/resources/expected-output"
@@ -140,37 +135,8 @@ object TestUtils extends LazyLogging with Matchers {
         expectedManifestFile.delete()
         Files.write(Paths.get(expectedManifestFile.getAbsolutePath), newManifestString.getBytes("UTF-8"))
         throw e
-      case ee: Exception =>
-        println(ee)
-        throw ee
     }
-  }
-
-  def getOutputAsBytes(cmd: String, timeout: Option[Duration] = None): Array[Byte] =
-    WithResource(new ByteArrayOutputStream()) { outBuff =>
-      val cmdProcess = buildCmd(cmd, timeout = timeout, output = Some(outBuff))
-      runProcess(cmdProcess)
-      outBuff.toByteArray
-    }
-
-  def runProcess(
-    cmdProcess: ProcessBuilder,
-    stdout: String => Unit = _ => (),
-    stderr: String => Unit = _ => ()
-  ): Unit = {
-    WithResource(new StringWriter()) { errBuff =>
-      val errPrnt = new PrintWriter(errBuff, true)
-
-      logger.debug(s"RUN: ${cmdProcess.toString}")
-      val ret: Int = cmdProcess.!(ProcessLogger(stdout, s => {
-        stderr(s)
-        errPrnt.println(s)
-      }))
-      logger.debug(s"RUN (${cmdProcess.toString}) complete")
-
-      if (ret != 0)
-        throw NonZeroExitCodeException(ret, s"Error running '${cmdProcess.toString}'", Some(errBuff.toString))
-    }
+    logger.debug(f"Diff successful for $actualOutputLocalPath.")
   }
 
   lazy val testResourcesDir: String = {
