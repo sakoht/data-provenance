@@ -41,25 +41,22 @@ import scala.concurrent.{ExecutionContext, Future}
   * commit/build.  When a provenance gets multiple inputs, the same is true, but the fault is in the inconsistent
   * serialization of the inputs, typically.
   *
-  * @param basePath           The destination for new results and default storage space for queries (s3:// or local)
-  * @param underlyingTracker  An optional other trackers that underly this one.
+  * @param storage                  A KVStore managing the path at which we save new results, find existing results (s3:// or local)
+  * @param underlyingTrackerOption  An optional other trackers that underly this one.
   */
 class ResultTrackerSimple(
   val storage: KVStore,
   val writable: Boolean = true,
-  val underlyingTracker: Option[ResultTrackerSimple] = None
+  val underlyingTrackerOption: Option[ResultTrackerSimple] = None
 )(implicit val currentAppBuildInfo: BuildInfo) extends ResultTracker {
-  
+
   import com.cibo.provenance.exceptions.InconsistentVersionException
   import com.google.common.cache.Cache
-  import com.cibo.provenance.kvstore._
 
   import scala.reflect.ClassTag
   import scala.reflect.runtime.universe.TypeTag
   import scala.util.{Failure, Success, Try}
 
-  //@transient
-  //lazy val storage: KVStore = KVStore(basePath)
   def basePath = storage.basePath
 
   @transient
@@ -652,7 +649,7 @@ class ResultTrackerSimple(
           bytes
         } catch {
           case e: Exception =>
-            underlyingTracker match {
+            underlyingTrackerOption match {
               case Some(underlying) => underlying.loadBytes(path)
               case None => throw e
             }
@@ -702,7 +699,7 @@ class ResultTrackerSimple(
             heavyCache.put(path, obj)   // smaller, heavier, actually provides data
             obj
         }
-        underlyingTracker match {
+        underlyingTrackerOption match {
           case Some(underlying) => future.fallbackTo { underlying.loadBytesAsync(path) }
           case None => future
         }
@@ -710,7 +707,7 @@ class ResultTrackerSimple(
 
   protected def getListingRecursive(path: String): List[String] = {
     val listing1: Iterator[String] = storage.getKeySuffixes(path)
-    underlyingTracker match {
+    underlyingTrackerOption match {
       case Some(underlying) =>
         // NOTE: It would be a performance improvment to make this a merge sort.
         // In practice all lists used here are tiny, though.
@@ -742,7 +739,7 @@ class ResultTrackerSimple(
               lightCache.put(path, Unit)
               true
             } else {
-              underlyingTracker match {
+              underlyingTrackerOption match {
                 case Some(under) =>
                   // We don't cache this because the underlying tracker will decide on that.
                   under.pathExists(path)

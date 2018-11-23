@@ -49,7 +49,7 @@ case class ResultTrackerForTest(outputStorage: KVStore, referenceStorage: KVStor
 
   def referencePath = referenceStorage.basePath
 
-  require(underlyingTracker.nonEmpty, "Refusing to clean() a ResultTracker that does not have an underlying tracker.")
+  require(underlyingTrackerOption.nonEmpty, "Refusing to clean() a ResultTracker that does not have an underlying tracker.")
   require(storage.isLocal, "Refusing to clean() an S3 path.")
 
   /**
@@ -57,7 +57,7 @@ case class ResultTrackerForTest(outputStorage: KVStore, referenceStorage: KVStor
     *
     * @return a ResultTrackerSimple
     */
-  def referenceTracker: ResultTrackerSimple = underlyingTracker.get
+  def referenceTracker: ResultTrackerSimple = underlyingTrackerOption.get
 
   /**
     * Remove all output data, leaving the reference data in place.
@@ -101,7 +101,7 @@ case class ResultTrackerForTest(outputStorage: KVStore, referenceStorage: KVStor
   def checkForUnstagedResults(): Unit = {
     if (storage.getKeySuffixes().toList.nonEmpty) {
       val msg =
-        if (storage.isLocal && underlyingTracker.map(_.isLocal).getOrElse(throw new RuntimeException("Missing underlying tracker.")))
+        if (storage.isLocal && underlyingTrackerOption.map(_.isLocal).getOrElse(throw new RuntimeException("Missing underlying tracker.")))
           f"# New reference data! To stage it:\nrsync -av --progress ${basePath}/ ${referenceTracker.basePath}"
         else
           f"# New reference data! To stage it:\naws s3 sync ${basePath} ${referenceTracker.basePath}"
@@ -119,7 +119,7 @@ case class ResultTrackerForTest(outputStorage: KVStore, referenceStorage: KVStor
     * It is called before check() when it is known that the test data needs to be regenerated.
     */
   def push(): Unit = {
-    val referenceDir = underlyingTracker.get.basePath
+    val referenceDir = underlyingTrackerOption.get.basePath
     if (isLocal && referenceTracker.isLocal) {
       if (new File(basePath).exists) {
         new File(referenceDir).getParentFile.mkdirs()
