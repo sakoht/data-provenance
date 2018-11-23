@@ -11,12 +11,10 @@ import com.amazonaws.regions.Regions
 import com.amazonaws.services.s3.AmazonS3
 import com.amazonaws.services.s3.iterable.S3Objects
 import com.amazonaws.services.s3.model._
-import com.cibo.cache.GCache
 import com.github.dwhjames.awswrap.s3.AmazonS3ScalaClient
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService, Future}
-import scala.concurrent.duration._
 import scala.util.{Failure, Try}
 import scala.util.control.NonFatal
 
@@ -28,6 +26,8 @@ import scala.util.control.NonFatal
 
 object KVStore {
 
+  protected lazy val logger: Logger = LoggerFactory.getLogger(getClass)
+
   def apply(basePath: String)(implicit s3: AmazonS3 = S3Store.s3Client): KVStore =
     basePath match {
       case p if p.startsWith("s3://") => new S3Store(p)(s3)
@@ -38,6 +38,8 @@ object KVStore {
 sealed trait KVStore {
 
   // public API
+
+  protected lazy val logger: Logger = LoggerFactory.getLogger(getClass)
 
   def basePath: String
 
@@ -264,8 +266,6 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3) extends KVS
 
   // private API
 
-  private lazy val logger: Logger = LoggerFactory.getLogger(getClass)
-
   private lazy val createBucketIfMissing: Unit = {
     // This is only done once.
     val exists = try amazonS3.doesBucketExistV2(s3Bucket) catch {
@@ -291,51 +291,53 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3) extends KVS
 
 object S3Store {
 
-  // Note: The regular sync client uses the async one to construct, but doesn't actually use the EC.
-  // Supply the global one since it doesn't matter in this sceneario.
-  // All methods that use an EC take it implicitly directly.  Nothing holds an EC internally.
-  lazy val s3Client: AmazonS3 = richClient(scala.concurrent.ExecutionContext.global).client
-
   def richClient(implicit ec: ExecutionContext): AmazonS3ScalaClient = richClientCache.get(ec)
 
-  private val richClientCache = GCache().apply { implicit ec: ExecutionContext =>
-    // Set buffer size hint assuming 100 ms round trip, 100 MBps connection
-    val bufferSize = (0.100 * 100000000/8).toInt
+  private val richClientCache =
+    CacheUtils.mkLoadingCache(100) {
+      implicit ec: ExecutionContext =>
+        // Set buffer size hint assuming 100 ms round trip, 100 MBps connection
+        val bufferSize = (0.100 * 100000000/8).toInt
 
-    val s3CredsProvider: DefaultAWSCredentialsProviderChain = new DefaultAWSCredentialsProviderChain()
+        val s3CredsProvider: DefaultAWSCredentialsProviderChain = new DefaultAWSCredentialsProviderChain()
 
-    val region: Regions = Regions.US_EAST_1
+        val region: Regions = Regions.US_EAST_1
 
-    val clientConfiguration: ClientConfiguration = new ClientConfiguration()
-      .withMaxConnections(Runtime.getRuntime.availableProcessors * 10)
-      .withMaxErrorRetry (10)
-      .withConnectionTimeout (10 * 60 * 1000)
-      .withSocketTimeout (10 * 60 * 1000)
-      .withTcpKeepAlive(true)
-      .withSocketBufferSizeHints(bufferSize, bufferSize)
+        val clientConfiguration: ClientConfiguration = new ClientConfiguration()
+          .withMaxConnections(Runtime.getRuntime.availableProcessors * 10)
+          .withMaxErrorRetry (10)
+          .withConnectionTimeout (10 * 60 * 1000)
+          .withSocketTimeout (10 * 60 * 1000)
+          .withTcpKeepAlive(true)
+          .withSocketBufferSizeHints(bufferSize, bufferSize)
 
+        val executorService: ExecutionContextExecutorService =
+          new AbstractExecutorService with ExecutionContextExecutorService {
+            override def prepare(): ExecutionContext = ec
+            override def isShutdown = false
+            override def isTerminated = false
+            override def shutdown() = ()
+            override def shutdownNow() = Collections.emptyList[Runnable]
+            override def execute(runnable: Runnable): Unit = ec execute runnable
+            override def reportFailure(t: Throwable): Unit = ec reportFailure t
+            override def awaitTermination(length: Long, unit: TimeUnit): Boolean = false
+          }
 
-    val executorService: ExecutionContextExecutorService =
-      new AbstractExecutorService with ExecutionContextExecutorService {
-        override def prepare(): ExecutionContext = ec
-        override def isShutdown = false
-        override def isTerminated = false
-        override def shutdown() = ()
-        override def shutdownNow() = Collections.emptyList[Runnable]
-        override def execute(runnable: Runnable): Unit = ec execute runnable
-        override def reportFailure(t: Throwable): Unit = ec reportFailure t
-        override def awaitTermination(length: Long, unit: TimeUnit): Boolean = false
+        new AmazonS3ScalaClient(
+          awsCredentialsProvider = s3CredsProvider,
+          clientConfiguration = clientConfiguration,
+          region = Some(region),
+          endpointConfiguration = None,
+          clientOptions = None,
+          executorService = executorService
+        )
       }
 
-    new AmazonS3ScalaClient(
-      awsCredentialsProvider = s3CredsProvider,
-      clientConfiguration = clientConfiguration,
-      region = Some(region),
-      endpointConfiguration = None,
-      clientOptions = None,
-      executorService = executorService
-    )
-  }
+  // Note: All async methods that use an EC take it directly as an implicit parameter on the method, not the object.
+  // The sync client is made from the async one that is linked to the global EC, but doesn't use that EC.
+  // No synchronous operations use the EC, threads or futures.
+  // (This could be created directly but would involve code duplication.)
+  lazy val s3Client: AmazonS3 = richClient(scala.concurrent.ExecutionContext.global).client
 }
 
 
@@ -343,8 +345,6 @@ class LocalStore(val basePath: String) extends KVStore {
 
   require(!basePath.endsWith("/"), s"Found a trailing slash in ${basePath}")
   require(!basePath.contains("//"), s"Found multiple consecutive slashes in ${basePath}")
-
-  private lazy val logger: Logger = LoggerFactory.getLogger(getClass)
 
   def isLocal: Boolean = true
 

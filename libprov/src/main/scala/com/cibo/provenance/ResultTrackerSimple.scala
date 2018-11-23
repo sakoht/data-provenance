@@ -1,6 +1,6 @@
 package com.cibo.provenance
 
-import com.google.common.cache.Cache
+
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
@@ -47,9 +47,10 @@ class ResultTrackerSimple(
   val writable: Boolean = true,
   val underlyingTracker: Option[ResultTrackerSimple] = None
 )(implicit val currentAppBuildInfo: BuildInfo) extends ResultTracker {
-
-  import com.cibo.cache.GCache
+  
   import com.cibo.provenance.exceptions.InconsistentVersionException
+  import com.google.common.cache.Cache
+  import com.cibo.provenance.CacheUtils
 
   import scala.reflect.ClassTag
   import scala.reflect.runtime.universe.TypeTag
@@ -106,10 +107,7 @@ class ResultTrackerSimple(
 
   @transient
   protected lazy val resultCache =
-    GCache[FunctionCallResultWithKnownProvenanceSerializable, Boolean]()
-      .maximumSize(resultCacheSize)
-      .logRemoval(logger)
-      .buildWith[FunctionCallResultWithKnownProvenanceSerializable, Boolean]
+    CacheUtils.mkCache[FunctionCallResultWithKnownProvenanceSerializable, Boolean](resultCacheSize, logger)
 
   def saveResultSerializable(
     resultSerializable: FunctionCallResultWithKnownProvenanceSerializable,
@@ -538,10 +536,7 @@ class ResultTrackerSimple(
 
   @transient
   protected lazy val codecCache =
-    GCache[Codec[_], Digest]()
-      .maximumSize(codecCacheSize)
-      .logRemoval(logger)
-      .buildWith[Codec[_], Digest]
+    CacheUtils.mkCache[Codec[_], Digest](codecCacheSize, logger)
 
   private def saveCodec[T : Codec](outputDigest: Digest)(implicit cd: Codec[Codec[T]]): Digest = {
     val outputClassName = Codec.classTagToSerializableName[T](implicitly[Codec[T]].classTag)
@@ -610,15 +605,13 @@ class ResultTrackerSimple(
   lazy val lightCacheSize: Long = 50000L
 
   @transient
-  protected lazy val lightCache: Cache[String, Unit] =
-    GCache[String, Unit]().maximumSize(lightCacheSize).buildWith[String, Unit]
+  protected lazy val lightCache: Cache[String, Unit] = CacheUtils.mkCache[String, Unit](lightCacheSize)
 
   @transient
   lazy val heavyCacheSize: Long = 500L
 
   @transient
-  protected lazy val heavyCache: Cache[String, Array[Byte]] =
-    GCache[String, Array[Byte]]().maximumSize(heavyCacheSize).buildWith[String, Array[Byte]]
+  protected lazy val heavyCache: Cache[String, Array[Byte]] = CacheUtils.mkCache[String, Array[Byte]](heavyCacheSize)
 
   // sync interface
 
