@@ -9,7 +9,10 @@ import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * KVStore is an abstraction over a key-value store used by ResultTrackers.
-  * 
+  *
+  * The native implementation is for local files (LocalStore) and S3.
+  * Any other key-value store that supports listing keys by slash-separated prefix will work.
+  *
   */
 
 trait KVStore {
