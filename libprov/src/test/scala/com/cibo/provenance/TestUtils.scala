@@ -19,21 +19,15 @@ object TestUtils extends LazyLogging with Matchers {
   val libBuildInfo: BuildInfo = com.cibo.provenance.internal.BuildInfo
 
   // Use the scala version for the library in this test, cross-compiled tests can run in parallel.
-  val subdir =
-    sys.env.getOrElse("USER", "anonymous-" + com.cibo.provenance.internal.BuildInfo.buildId.toString) +
-      f"/data-provenance-test-output-${libBuildInfo.scalaVersion}"
+  val user = sys.env.getOrElse("USER", "anonymous-" + com.cibo.provenance.internal.BuildInfo.buildId.toString)
+  val subdir = f"data-provenance-test-output-${libBuildInfo.scalaVersion}"
 
-  val localTestOutputBaseDir: String =
-    f"/tmp/" + subdir
-
-  val remoteTestOutputBaseDir: String =
-    f"s3://com-cibo-user/" + subdir
 
   // Set this env var
   val testOutputBaseDir =
     sys.env.get("PROVENANCE_TEST_REMOTE") match {
-      case Some(value) => remoteTestOutputBaseDir
-      case None => localTestOutputBaseDir
+      case Some(value) => value + subdir
+      case None => f"/tmp/$user/" + subdir
     }
 
   def diffOutputSubdir(subdir: String) = {
@@ -58,15 +52,11 @@ object TestUtils extends LazyLogging with Matchers {
         localStore.basePath
       case s3store: S3Store =>
         // The actual outputs are in S3.  To keep the logic simple below, sync it down to a temp dir and use that.
-        val user = sys.env.getOrElse("USER", "nouser")
         val startPos = actualOutputDirPath.basePath.indexOf("://") + 3
         val tmpStore = KVStore(f"/tmp/$user/" + actualOutputDirPath.basePath.substring(startPos))
+        tmpStore.getKeySuffixes()
         val t1 = Instant.now
-        S3Objects.withPrefix(
-          s3store.amazonS3,
-          s3store.s3Bucket,
-          s3store.s3Path
-        ).iterator().asScala.map(_.getKey()).foreach {
+        tmpStore.getKeySuffixes().foreach {
           key =>
             val path = key.substring(s3store.s3Path.length + 1)
             tmpStore.putBytes(path, s3store.getBytes(path))

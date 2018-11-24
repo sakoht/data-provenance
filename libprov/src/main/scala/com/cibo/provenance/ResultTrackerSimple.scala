@@ -706,7 +706,7 @@ class ResultTrackerSimple(
     }
 
   protected def getListingRecursive(path: String): List[String] = {
-    val listing1: Iterator[String] = storage.getKeySuffixes(path)
+    val listing1 = storage.getKeySuffixes(path)
     underlyingTrackerOption match {
       case Some(underlying) =>
         // NOTE: It would be a performance improvment to make this a merge sort.
