@@ -7,10 +7,10 @@ import com.cibo.provenance.exceptions.{AccessErrorException, NotFoundException}
 
 import scala.concurrent.{ExecutionContext, Future}
 
-case class LocalStore(val basePath: String) extends KVStore {
+case class LocalStore(basePath: String) extends KVStore {
 
-  require(!basePath.endsWith("/"), s"Found a trailing slash in ${basePath}")
-  require(!basePath.contains("//"), s"Found multiple consecutive slashes in ${basePath}")
+  require(!basePath.endsWith("/"), s"Found a trailing slash in $basePath")
+  require(!basePath.contains("//"), s"Found multiple consecutive slashes in $basePath")
 
   def isLocal: Boolean = true
 
@@ -21,74 +21,63 @@ case class LocalStore(val basePath: String) extends KVStore {
     new File(absolutePath).exists()
   }
 
-  // the only addition to the public API is a method to destroy everything
-
-  def cleanUp(): Unit =
-    recursiveListFiles(new File(basePath)).sortBy(_.getAbsolutePath).reverse.foreach(_.delete)
-
-  // implement the KVStore subclass protected API
-
-  /**
-    * Translate a (relative) path in the KVStore into a full "key".
-    * In a LocalStore the "key" is a full local filesystem path.
-    * 
-    * @param key   
-    * @return       The full local filesystem path for a path in the KVStore.
-    */
-  protected def getAbsolutePathForKey(key: String): String = key
-
-  protected def getAbsolutePathsForAbsolutePrefix(
-    absolutePrefix: String,
-    delimiterOption: Option[String] = Some("/")
-  ): Iterator[String] = {
-    val fsPath = getFsPathForAbsolutePath(absolutePrefix)
-    val dir = new File(fsPath)
-    val offset = basePath.length + 1
-    try {
-      recursiveListFiles(dir).filter(f => !f.isDirectory).map(_.getAbsolutePath).sorted.map(_.substring(offset)).toIterator
-    } catch {
-      case e: Exception =>
-        recursiveListFiles(dir).map(_.getAbsolutePath).sorted.map(_.substring(offset)).toIterator
-    }
-  }
-
-  protected def putBytesForAbsolutePath(absolutePath: String, value: Array[Byte]): Unit = {
-    val path: String = getFsPathForKey(absolutePath)
+  def putBytes(key: String, value: Array[Byte]): Unit = {
+    val path: String = getFullPathForRelativePath(key)
     val parentDir = new File(path).getParentFile
     if (!parentDir.exists)
       parentDir.mkdirs
     val bos: BufferedOutputStream = new BufferedOutputStream(new FileOutputStream(path))
     Stream.continually(bos.write(value))
     bos.close()
+
   }
 
-  protected def getBytesForAbsolutePath(absolutePath: String): Array[Byte] = {
-    val fullFsPathValue: String = getFsPathForAbsolutePath(absolutePath)
+  def getBytes(key: String): Array[Byte] = {
+    val fullFsPathValue: String = getFullPathForRelativePath(key)
     val file = new File(fullFsPathValue)
     if (!file.exists()) {
-      throw new NotFoundException(s"Failed to find object at $absolutePath!")
+      throw new NotFoundException(s"Failed to find object at $key!")
     } else
-
       try {
         Files.readAllBytes(Paths.get(fullFsPathValue))
       } catch {
         case e: Exception =>
-          throw new AccessErrorException(s"Error accessing $absolutePath!")
+          throw new AccessErrorException(s"Error accessing $key!")
       }
   }
 
-  protected def getBytesForAbsolutePathAsync(absolutePath: String)(implicit ec: ExecutionContext): Future[Array[Byte]] =
-    Future { getBytesForAbsolutePath(absolutePath) }
+  def putBytesAsync(key: String, value: Array[Byte])(implicit ec: ExecutionContext): Future[Unit] =
+    Future { putBytes(key, value) }
 
-  protected def putBytesForAbsolutePathAsync(absolutePath: String, value: Array[Byte])(implicit ec: ExecutionContext): Future[Unit] =
-    Future { putBytesForAbsolutePath(absolutePath, value) }
+  def getBytesAsync(key: String)(implicit ec: ExecutionContext): Future[Array[Byte]] =
+    Future { getBytes(key) }
 
+  def getKeySuffixes(
+    keyPrefix: String = "",
+    delimiterOption: Option[String] = None
+  ): Iterable[String] = {
+    require(!keyPrefix.endsWith("/"), f"The $keyPrefix should not end in a slash!: $keyPrefix")
+
+    val fullPrefix = getFullPathForRelativePath(keyPrefix)
+    val dir = new File(fullPrefix)
+    val offset = basePath.length + 1 + keyPrefix.length + 1
+
+    recursiveListFiles(dir)
+      .filter(f => !f.isDirectory)
+      .map(_.getAbsolutePath)
+      .sorted
+      .map(_.substring(offset))
+
+  }
+
+  // the only addition to the public API is a method to destroy everything
+
+  def cleanUp(): Unit =
+    recursiveListFiles(new File(basePath)).sortBy(_.getAbsolutePath).reverse.foreach(_.delete)
 
   // private API
 
-  private def getFsPathForAbsolutePath(absolutePath: String) = Seq(basePath, absolutePath).filter(_.nonEmpty).mkString("/")
-
-  private def getFsPathForKey(key: String) = getFsPathForAbsolutePath(getAbsolutePathForKey(key))
+  private def getFullPathForRelativePath(absolutePath: String) = Seq(basePath, absolutePath).filter(_.nonEmpty).mkString("/")
 
   private def recursiveListFiles(f: File): Array[File] = {
     if (!f.exists)

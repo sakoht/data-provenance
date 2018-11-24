@@ -53,6 +53,42 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3
     ).get
   }
 
+  def putBytes(key: String, value: Array[Byte]): Unit =
+    putBytesForAbsolutePath(getAbsolutePathForKey(key), value)
+
+  def getBytes(key: String): Array[Byte] =
+    getBytesForAbsolutePath(getAbsolutePathForKey(key))
+
+  def putBytesAsync(key: String, value: Array[Byte])(implicit ec: ExecutionContext): Future[Unit] =
+    putBytesForAbsolutePathAsync(getAbsolutePathForKey(key), value)
+
+  def getBytesAsync(key: String)(implicit ec: ExecutionContext): Future[Array[Byte]] =
+    getBytesForAbsolutePathAsync(getAbsolutePathForKey(key))
+
+  def getKeySuffixes(
+    keyPrefix: String = "",
+    delimiterOption: Option[String] = None
+  ): Iterable[String] = {
+    val fullPrefix = getAbsolutePathForKey(keyPrefix)
+    val offset: Int =
+      if (fullPrefix.endsWith("/"))
+        fullPrefix.length
+      else
+        fullPrefix.length + 1
+    getAbsolutePathsForRelativePrefix(keyPrefix, delimiterOption).map { fullPath =>
+      // This has more sanity checking that should be necessary, but one-off errors have crept in several times.
+      assert(fullPath.startsWith(fullPrefix), s"Full path '$fullPath' does not start with the expected prefix '$fullPrefix' (from $keyPrefix)")
+      fullPath
+        .substring(offset)
+        .ensuring(!_.startsWith("/"), s"Full path suffix should not start with a '/'")
+    }
+  }
+
+  private def getAbsolutePathsForRelativePrefix(relativePrefix: String, delimiterOption: Option[String] = Some("/")): Iterable[String] = {
+    val absolutePrefix = getAbsolutePathForKey(relativePrefix)
+    getAbsolutePathsForAbsolutePrefix(absolutePrefix, delimiterOption)
+  }
+
   // the KVStore protected API
 
   protected def getAbsolutePathForKey(key: String): String =
@@ -161,9 +197,9 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3
   protected def getAbsolutePathsForAbsolutePrefix(
     absolutePath: String,
     delimiterOption: Option[String] = Some("/")
-  ): Iterator[String] = {
+  ): Iterable[String] = {
     import scala.collection.JavaConverters._
-    S3Objects.withPrefix(amazonS3, s3Bucket, absolutePath).iterator().asScala.map(_.getKey())
+    S3Objects.withPrefix(amazonS3, s3Bucket, absolutePath).iterator().asScala.toList.map(_.getKey())
   }
 
   // private API
