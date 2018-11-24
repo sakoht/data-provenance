@@ -636,7 +636,6 @@ class ResultTrackerSimple(
       }
     }
 
-
   protected def loadBytes(path: String): Array[Byte] =
     Option(heavyCache.getIfPresent(path)) match {
       case Some(found) =>

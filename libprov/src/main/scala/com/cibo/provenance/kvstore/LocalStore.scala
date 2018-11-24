@@ -21,7 +21,7 @@ case class LocalStore(basePath: String) extends KVStore {
     new File(absolutePath).exists()
   }
 
-  def putBytes(key: String, value: Array[Byte]): Unit = {
+  def putBytes(key: String, value: Array[Byte], contentTypeOption: Option[String] = None): Unit = {
     val path: String = getFullPathForRelativePath(key)
     val parentDir = new File(path).getParentFile
     if (!parentDir.exists)
@@ -46,8 +46,8 @@ case class LocalStore(basePath: String) extends KVStore {
       }
   }
 
-  def putBytesAsync(key: String, value: Array[Byte])(implicit ec: ExecutionContext): Future[Unit] =
-    Future { putBytes(key, value) }
+  def putBytesAsync(key: String, value: Array[Byte], contentTypeOption: Option[String] = None)(implicit ec: ExecutionContext): Future[Unit] =
+    Future { putBytes(key, value, contentTypeOption) }
 
   def getBytesAsync(key: String)(implicit ec: ExecutionContext): Future[Array[Byte]] =
     Future { getBytes(key) }

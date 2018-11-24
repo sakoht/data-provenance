@@ -53,14 +53,10 @@ object TestUtils extends LazyLogging with Matchers {
       case s3store: S3Store =>
         // The actual outputs are in S3.  To keep the logic simple below, sync it down to a temp dir and use that.
         val startPos = actualOutputDirPath.basePath.indexOf("://") + 3
-        val tmpStore = KVStore(f"/tmp/$user/" + actualOutputDirPath.basePath.substring(startPos))
-        tmpStore.getKeySuffixes()
+        val tmpStore = LocalStore(f"/tmp/$user/" + actualOutputDirPath.basePath.substring(startPos))
+        tmpStore.getKeySuffixes().foreach { key => tmpStore.remove(key) }
         val t1 = Instant.now
-        tmpStore.getKeySuffixes().foreach {
-          key =>
-            val path = key.substring(s3store.s3Path.length + 1)
-            tmpStore.putBytes(path, s3store.getBytes(path))
-        }
+        s3store.getKeySuffixes().foreach { key => tmpStore.putBytes(key, s3store.getBytes(key)) }
         val t2 = Instant.now
         val d = t2.toEpochMilli - t1.toEpochMilli
         logger.warn(s"Sync of $actualOutputDirPath completed in ${d}ms.")
@@ -81,7 +77,7 @@ object TestUtils extends LazyLogging with Matchers {
 
     import scala.sys.process._
     val newManifestBytes =
-      Seq("bash", "-c", s"cd $actualOutputLocalPath && (wc -c `find . -type f | grep -v codecs`)").!!
+      Seq("bash", "-c", s"cd $actualOutputLocalPath && (wc -c `find . -type f | grep -v codecs`); true").!!
     val newManifestString = normalize(new String(newManifestBytes))
 
     val rootSubdir = "src/test/resources/expected-output"

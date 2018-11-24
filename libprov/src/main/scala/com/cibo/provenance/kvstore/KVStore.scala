@@ -9,6 +9,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * KVStore is an abstraction over a key-value store used by ResultTrackers.
+  * 
   */
 
 trait KVStore {
@@ -22,11 +23,11 @@ trait KVStore {
 
   def exists(key: String): Boolean
 
-  def putBytes(key: String, value: Array[Byte]): Unit
+  def putBytes(key: String, value: Array[Byte], contentTypeOption: Option[String] = None): Unit
 
   def getBytes(key: String): Array[Byte]
 
-  def putBytesAsync(key: String, value: Array[Byte])(implicit ec: ExecutionContext): Future[Unit]
+  def putBytesAsync(key: String, value: Array[Byte], contentTypeOption: Option[String] = None)(implicit ec: ExecutionContext): Future[Unit]
 
   def getBytesAsync(key: String)(implicit ec: ExecutionContext): Future[Array[Byte]]
 
@@ -47,7 +48,7 @@ object KVStore {
     * @param s3         An implicit AmazonS3 to be used with S3 paths.
     * @return           A KVStore.
     */
-  def apply(basePath: String)(implicit s3: AmazonS3 = S3Store.s3Client): KVStore =
+  def apply(basePath: String)(implicit s3: AmazonS3 = S3Store.amazonS3): KVStore =
     basePath match {
       case p if p.startsWith("s3://") => new S3Store(p)(s3)
       case p if p.startsWith("/") => new LocalStore(p)

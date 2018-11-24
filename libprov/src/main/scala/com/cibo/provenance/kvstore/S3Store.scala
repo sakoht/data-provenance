@@ -1,6 +1,7 @@
 package com.cibo.provenance.kvstore
 
 import java.io.{BufferedInputStream, ByteArrayInputStream}
+import java.util
 import java.util.Collections
 import java.util.concurrent.{AbstractExecutorService, TimeUnit}
 
@@ -10,7 +11,7 @@ import com.amazonaws.regions.Regions
 import com.amazonaws.services.s3.AmazonS3
 import com.amazonaws.services.s3.iterable.S3Objects
 import com.amazonaws.services.s3.model._
-import com.cibo.provenance.{BuildInfoGit, BuildInfoGitSaved, CacheUtils, Codec}
+import com.cibo.provenance.{CacheUtils, Codec}
 import com.cibo.provenance.exceptions.{AccessErrorException, NotFoundException}
 import com.github.dwhjames.awswrap.s3.AmazonS3ScalaClient
 
@@ -19,7 +20,7 @@ import scala.util.{Failure, Try}
 import scala.util.control.NonFatal
 
 
-class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3Client) extends KVStore {
+class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.amazonS3) extends KVStore {
 
   require(!basePath.endsWith("/"), s"Found a trailing slash in $basePath")
   require(!basePath.substring(4).contains("//"), s"Found multiple consecutive slashes in $basePath")
@@ -53,104 +54,29 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3
     ).get
   }
 
-  def putBytes(key: String, value: Array[Byte]): Unit =
-    putBytesForAbsolutePath(getAbsolutePathForKey(key), value)
-
-  def getBytes(key: String): Array[Byte] =
-    getBytesForAbsolutePath(getAbsolutePathForKey(key))
-
-  def putBytesAsync(key: String, value: Array[Byte])(implicit ec: ExecutionContext): Future[Unit] =
-    putBytesForAbsolutePathAsync(getAbsolutePathForKey(key), value)
-
-  def getBytesAsync(key: String)(implicit ec: ExecutionContext): Future[Array[Byte]] =
-    getBytesForAbsolutePathAsync(getAbsolutePathForKey(key))
-
-  def getKeySuffixes(
-    keyPrefix: String = "",
-    delimiterOption: Option[String] = None
-  ): Iterable[String] = {
-    val fullPrefix = getAbsolutePathForKey(keyPrefix)
-    val offset: Int =
-      if (fullPrefix.endsWith("/"))
-        fullPrefix.length
-      else
-        fullPrefix.length + 1
-    getAbsolutePathsForRelativePrefix(keyPrefix, delimiterOption).map { fullPath =>
-      // This has more sanity checking that should be necessary, but one-off errors have crept in several times.
-      assert(fullPath.startsWith(fullPrefix), s"Full path '$fullPath' does not start with the expected prefix '$fullPrefix' (from $keyPrefix)")
-      fullPath
-        .substring(offset)
-        .ensuring(!_.startsWith("/"), s"Full path suffix should not start with a '/'")
-    }
-  }
-
-  private def getAbsolutePathsForRelativePrefix(relativePrefix: String, delimiterOption: Option[String] = Some("/")): Iterable[String] = {
-    val absolutePrefix = getAbsolutePathForKey(relativePrefix)
-    getAbsolutePathsForAbsolutePrefix(absolutePrefix, delimiterOption)
-  }
-
-  // the KVStore protected API
-
-  protected def getAbsolutePathForKey(key: String): String =
-    if (s3Path.nonEmpty) s3Path + "/" + key else key
-
-  protected def putBytesForAbsolutePath(absolutePath: String, value: Array[Byte]): Unit = {
-    logger.debug("putObject: checking bucket")
+  def putBytes(key: String, value: Array[Byte], contentTypeOption: Option[String] = None): Unit = {
+    val fullKey = getFullS3KeyForRelativeKey(key)
     createBucketIfMissing
-
-    logger.debug(s"putObject: saving to $absolutePath")
-
     val metadata = new ObjectMetadata()
-    metadata.setContentType("application/json")
+    contentTypeOption match {
+      case Some(contentType) => metadata.setContentType(contentType)
+      case None =>
+    }
     metadata.setContentLength(value.length.toLong)
-
     try {
-      amazonS3.putObject(s3Bucket, absolutePath, new ByteArrayInputStream(value), metadata)
+      amazonS3.putObject(s3Bucket, fullKey, new ByteArrayInputStream(value), metadata)
     } catch {
       case e: Exception =>
-        logger.error(s"Failed to put byte array to s3://$s3Bucket/$absolutePath", e)
-        new AccessErrorException(s"Failed to put byte array to s3://$s3Bucket/$absolutePath")
+        logger.error(s"Failed to put byte array to s3://$s3Bucket/$fullKey", e)
+        new AccessErrorException(s"Failed to put byte array to s3://$s3Bucket/$fullKey")
     }
   }
 
-  protected def putBytesForAbsolutePathAsync(absolutePath: String, value: Array[Byte])(implicit ec: ExecutionContext): Future[Unit] = {
-    logger.debug("putObject: checking bucket")
-    createBucketIfMissing
-
-    logger.debug(s"putObject: saving to $absolutePath")
-
-    putObject(s3Bucket, absolutePath, value)
-      .transform(
-        identity[PutObjectResult],
-        e => {
-          logger.error(s"Failed to put byte array to s3://$s3Bucket/$absolutePath", e)
-          new AccessErrorException(s"Failed to put byte array to s3://$s3Bucket/$absolutePath")
-        }
-      ).map { _ => }
-  }
-
-
-  private def putObject(bucket: String, key: String, objContentBytes: Array[Byte])(implicit ec: ExecutionContext): Future[PutObjectResult] = {
-    val baInputStream = new ByteArrayInputStream(objContentBytes)
-    val metadata = new ObjectMetadata()
-    metadata.setContentType("application/json")
-    metadata.setContentLength(objContentBytes.length.toLong)
-
-    val putObjectRequest = new PutObjectRequest(bucket, key, baInputStream, metadata)
-
-    S3Store.richClient(ec).putObject(putObjectRequest).transform(
-      identity[PutObjectResult],
-      t => {
-        logger.error(s"Failed to write byte array to s3://$bucket/$key", t)
-        t
-      }
-    )
-  }
-
-  protected def getBytesForAbsolutePath(absolutePath: String): Array[Byte] = {
+  def getBytes(key: String): Array[Byte] = {
+    val fullKey = getFullS3KeyForRelativeKey(key)
     createBucketIfMissing
     try {
-      val obj: S3Object = amazonS3.getObject(s3Bucket, absolutePath)
+      val obj: S3Object = amazonS3.getObject(s3Bucket, fullKey)
       try {
         val bis: BufferedInputStream = new java.io.BufferedInputStream(obj.getObjectContent)
         val content: Array[Byte] = Stream.continually(bis.read).takeWhile(_ != -1).map(_.toByte).toArray
@@ -160,17 +86,46 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3
       }
     } catch {
       case e: AmazonS3Exception =>
-        logger.error(s"Failed to find object in bucket s3://$s3Bucket/$absolutePath!", e)
-        throw new NotFoundException(s"Failed to find object in bucket s3://$s3Bucket/$absolutePath!")
+        logger.error(s"Failed to find object in bucket s3://$s3Bucket/$fullKey!", e)
+        throw new NotFoundException(s"Failed to find object in bucket s3://$s3Bucket/$fullKey!")
       case e: Exception =>
-        logger.error(s"Error accessing s3://$s3Bucket/$absolutePath!", e)
-        throw new AccessErrorException(s"Error accessing s3://$s3Bucket/$absolutePath!")
+        logger.error(s"Error accessing s3://$s3Bucket/$fullKey!", e)
+        throw new AccessErrorException(s"Error accessing s3://$s3Bucket/$fullKey!")
     }
   }
 
-  protected def getBytesForAbsolutePathAsync(absolutePath: String)(implicit ec: ExecutionContext): Future[Array[Byte]] = {
+  def putBytesAsync(key: String, value: Array[Byte], contentTypeOption: Option[String])(implicit ec: ExecutionContext): Future[Unit] = {
+    val fullKey = getFullS3KeyForRelativeKey(key)
     createBucketIfMissing
-    S3Store.richClient(ec).getObject(s3Bucket, absolutePath).transform(
+    val baInputStream = new ByteArrayInputStream(value)
+    val metadata = new ObjectMetadata()
+    contentTypeOption match {
+      case Some(contentType) => metadata.setContentType(contentType)
+      case None =>
+    }
+    metadata.setContentLength(value.length.toLong)
+    val putObjectRequest = new PutObjectRequest(s3Bucket, fullKey, baInputStream, metadata)
+    val result = S3Store.amazonS3Scala(ec).putObject(putObjectRequest).transform(
+      identity[PutObjectResult],
+      t => {
+        logger.error(s"Failed to write byte array to s3://$s3Bucket/$fullKey", t)
+        t
+      }
+    )
+    result.transform(
+      identity[PutObjectResult],
+      e => {
+        logger.error(s"Failed to put byte array to s3://$s3Bucket/$fullKey", e)
+        new AccessErrorException(s"Failed to put byte array to s3://$s3Bucket/$fullKey")
+      }
+    ).map { _ => }
+  }
+
+
+  def getBytesAsync(key: String)(implicit ec: ExecutionContext): Future[Array[Byte]] = {
+    val fullKey = getFullS3KeyForRelativeKey(key)
+    createBucketIfMissing
+    S3Store.amazonS3Scala(ec).getObject(s3Bucket, fullKey).transform(
       {
         obj =>
           try {
@@ -184,27 +139,49 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3
       {
         {
           case e: AmazonS3Exception =>
-            logger.error(s"Failed to find object in bucket s3://$s3Bucket/$absolutePath!", e)
-            throw new NotFoundException(s"Failed to find object in bucket s3://$s3Bucket/$absolutePath!")
+            logger.error(s"Failed to find object in bucket s3://$s3Bucket/$fullKey!", e)
+            throw new NotFoundException(s"Failed to find object in bucket s3://$s3Bucket/$fullKey!")
           case e: Exception =>
-            logger.error(s"Error accessing s3://$s3Bucket/$absolutePath!", e)
-            throw new AccessErrorException(s"Error accessing s3://$s3Bucket/$absolutePath!")
+            logger.error(s"Error accessing s3://$s3Bucket/$fullKey!", e)
+            throw new AccessErrorException(s"Error accessing s3://$s3Bucket/$fullKey!")
         }
       }
     )
   }
 
-  protected def getAbsolutePathsForAbsolutePrefix(
-    absolutePath: String,
-    delimiterOption: Option[String] = Some("/")
+  def getKeySuffixes(
+    keyPrefix: String = "",
+    delimiterOption: Option[String] = None
   ): Iterable[String] = {
+    val fullPrefix = getFullS3KeyForRelativeKey(keyPrefix)
+    val offset: Int =
+      if (fullPrefix.endsWith("/"))
+        fullPrefix.length
+      else
+        fullPrefix.length + 1
+
     import scala.collection.JavaConverters._
-    S3Objects.withPrefix(amazonS3, s3Bucket, absolutePath).iterator().asScala.toList.map(_.getKey())
+    val fullKeys = S3Objects.withPrefix(amazonS3, s3Bucket, fullPrefix).iterator().asScala.toList.map(_.getKey())
+
+    fullKeys.map { fullPath =>
+      // This has more sanity checking that should be necessary, but one-off errors have crept in several times.
+      assert(fullPath.startsWith(fullPrefix), s"Full path '$fullPath' does not start with the expected prefix '$fullPrefix' (from $keyPrefix)")
+      fullPath
+        .substring(offset)
+        .ensuring(!_.startsWith("/"), s"Full path suffix should not start with a '/'")
+    }
   }
 
-  // private API
+  // protected API
 
-  private lazy val createBucketIfMissing: Unit = {
+  protected def getFullS3KeyForRelativeKey(key: String): String =
+    if (s3Path.nonEmpty) s3Path + "/" + key else key
+
+  protected[provenance] def remove(path: String): Unit = {
+    amazonS3.deleteObject(s3Bucket, s3Path  + "/" + path)
+  }
+
+  protected lazy val createBucketIfMissing: Unit = {
     // This is only done once.
     val exists = try amazonS3.doesBucketExistV2(s3Bucket) catch {
       case NonFatal(e) =>
@@ -221,15 +198,22 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3
       }
     }
   }
-
-  protected[provenance] def remove(path: String): Unit = {
-    amazonS3.deleteObject(s3Bucket, s3Path  + "/" + path)
-  }
 }
 
 object S3Store {
+  import io.circe._
 
-  def richClient(implicit ec: ExecutionContext): AmazonS3ScalaClient = richClientCache.get(ec)
+  implicit val encoder: Encoder[S3Store] =
+    Encoder.forProduct1("basePath") { obj => Tuple1(obj.basePath) }
+
+  implicit val decoder: Decoder[S3Store] =
+    Decoder.forProduct1("basePath") { basePath: String => new S3Store(basePath) }
+
+  implicit val codec: Codec[S3Store] = Codec(encoder, decoder)
+
+  lazy val amazonS3: AmazonS3 = amazonS3Scala(scala.concurrent.ExecutionContext.global).client
+
+  def amazonS3Scala(implicit ec: ExecutionContext): AmazonS3ScalaClient = richClientCache.get(ec)
 
   private val richClientCache =
     CacheUtils.mkLoadingCache(100) {
@@ -255,7 +239,7 @@ object S3Store {
             override def isShutdown = false
             override def isTerminated = false
             override def shutdown() = ()
-            override def shutdownNow() = Collections.emptyList[Runnable]
+            override def shutdownNow(): util.List[Runnable] = Collections.emptyList[Runnable]
             override def execute(runnable: Runnable): Unit = ec execute runnable
             override def reportFailure(t: Throwable): Unit = ec reportFailure t
             override def awaitTermination(length: Long, unit: TimeUnit): Boolean = false
@@ -270,24 +254,4 @@ object S3Store {
           executorService = executorService
         )
     }
-
-  // Note: All async methods that use an EC take it directly as an implicit parameter on the method, not the object.
-  // No synchronous operations use the EC, threads or futures.
-  // The sync client is made from the async one that is linked to the global EC for guaranteed symmetry,
-  // and to prevent code duplication.
-  lazy val s3Client: AmazonS3 = richClient(scala.concurrent.ExecutionContext.global).client
-
-  import io.circe._
-
-  private val encoder: Encoder[S3Store] =
-    Encoder.forProduct1("basePath") {
-      obj => Tuple1(obj.basePath)
-    }
-
-  private val decoder: Decoder[S3Store] =
-    Decoder.forProduct1("basePath") {
-      basePath: String => new S3Store(basePath)
-    }
-
-  implicit val codec: Codec[S3Store] = Codec(encoder, decoder)
 }

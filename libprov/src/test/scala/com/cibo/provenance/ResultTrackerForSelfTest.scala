@@ -1,11 +1,8 @@
 package com.cibo.provenance
 
-import java.io.File
-
 import com.cibo.provenance.kvstore.{KVStore, S3Store}
-
+import java.io.File
 import scala.concurrent.{Await, ExecutionContext}
-import com.cibo.provenance.kvstore._
 
 
 /**
