@@ -666,7 +666,7 @@ class ResultTrackerSimple(
 
   // async interface
 
-  protected def saveBytesAsync(path: String, bytes: Array[Byte])(implicit ec: ExecutionContext): Future[Unit] =
+  protected def saveBytesAsync(path: String, bytes: Array[Byte])(implicit ec: ExecutionContext): Future[_] =
     if (!writable) {
       throw new ReadOnlyTrackerException(f"Attempt to save to a read-only ResultTracker $this.")
     } else {
@@ -684,10 +684,10 @@ class ResultTrackerSimple(
               // Actually save.
               val future = storage.putBytesAsync(path, bytes)
               future.onComplete {
-                case s: Success[Unit] =>
+                case s: Success[_] =>
                   lightCache.put(path, Unit)
                   heavyCache.put(path, bytes)
-                case f: Failure[Unit] =>
+                case f: Failure[_] =>
                   logger.error(f"Failed to save data to $path!: ${f.exception.toString}")
               }
               future

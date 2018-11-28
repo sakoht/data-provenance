@@ -94,7 +94,7 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.am
     }
   }
 
-  def putBytesAsync(key: String, value: Array[Byte], contentTypeOption: Option[String])(implicit ec: ExecutionContext): Future[Unit] = {
+  def putBytesAsync(key: String, value: Array[Byte], contentTypeOption: Option[String])(implicit ec: ExecutionContext): Future[PutObjectResult] = {
     val fullKey = getFullS3KeyForRelativeKey(key)
     createBucketIfMissing
     val baInputStream = new ByteArrayInputStream(value)
@@ -105,20 +105,13 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.am
     }
     metadata.setContentLength(value.length.toLong)
     val putObjectRequest = new PutObjectRequest(s3Bucket, fullKey, baInputStream, metadata)
-    val result = S3Store.amazonS3Scala(ec).putObject(putObjectRequest).transform(
-      identity[PutObjectResult],
-      t => {
-        logger.error(s"Failed to write byte array to s3://$s3Bucket/$fullKey", t)
-        t
-      }
-    )
-    result.transform(
+    S3Store.amazonS3Scala(ec).putObject(putObjectRequest).transform(
       identity[PutObjectResult],
       e => {
         logger.error(s"Failed to put byte array to s3://$s3Bucket/$fullKey", e)
         new AccessErrorException(s"Failed to put byte array to s3://$s3Bucket/$fullKey")
       }
-    ).map { _ => }
+    )
   }
 
 

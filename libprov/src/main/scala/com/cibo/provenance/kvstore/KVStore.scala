@@ -30,7 +30,7 @@ trait KVStore {
 
   def getBytes(key: String): Array[Byte]
 
-  def putBytesAsync(key: String, value: Array[Byte], contentTypeOption: Option[String] = None)(implicit ec: ExecutionContext): Future[Unit]
+  def putBytesAsync(key: String, value: Array[Byte], contentTypeOption: Option[String] = None)(implicit ec: ExecutionContext): Future[Any]
 
   def getBytesAsync(key: String)(implicit ec: ExecutionContext): Future[Array[Byte]]
 
