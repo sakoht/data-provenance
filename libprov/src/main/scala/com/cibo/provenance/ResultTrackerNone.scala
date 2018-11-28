@@ -35,7 +35,8 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
   lazy val saveBuildInfo: Digest = {
     val bi = currentAppBuildInfo
-    val (bytes, digest) = Codec.serializeAndDigest(bi)
+    val bytes = Codec.serialize(bi)
+    val digest = Codec.digestBytes(bytes)
     digest
   }
 
