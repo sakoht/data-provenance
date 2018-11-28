@@ -2,7 +2,6 @@ package com.cibo.provenance
 
 import java.io.Serializable
 
-import com.cibo.provenance.Codec.logger
 import com.typesafe.scalalogging.LazyLogging
 import io.circe.{Decoder, Encoder, Json}
 
@@ -236,7 +235,7 @@ object Codec extends LazyLogging {
   def deserialize[T : Codec](bytes: Array[Byte]): T =
     implicitly[Codec[T]].deserialize(bytes)
 
-  def digestObject[T : Codec](value: T): Digest = {
+  def digestObject[T : Codec : ClassTag](value: T): Digest = {
     value match {
       case _: Array[Byte] =>
         //logger.warn("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
@@ -285,10 +284,9 @@ object Codec extends LazyLogging {
     obj
   }
 
-  def digestObjectRaw[T : Codec](value: T): Digest = {
+  def digestObjectRaw[T : Codec : ClassTag](value: T): Digest = {
     value match {
       case _: Array[Byte] =>
-        //logger.warn("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
         throw new RuntimeException("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
       case _ =>
         getBytesAndDigestRaw(value)._2

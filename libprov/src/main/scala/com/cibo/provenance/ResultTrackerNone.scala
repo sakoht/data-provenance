@@ -30,7 +30,7 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
   def saveOutputValue[T : Codec](obj: T)(implicit tt: universe.TypeTag[Codec[T]], ct: ClassTag[Codec[T]]): Digest = {
     // also a no-op that just calculates the ID and returns it
-    Codec.digestObject(obj)
+    Codec.digestObject(obj)(implicitly[Codec[T]], implicitly[Codec[T]].classTag)
   }
 
   lazy val saveBuildInfo: Digest = {
