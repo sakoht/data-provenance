@@ -27,13 +27,10 @@ sealed trait ValueWithProvenanceSerializable {
   def wrap[O]: ValueWithProvenanceDeflated[O]
 
   @transient
-  private def bytesAndDigest: (Array[Byte], Digest) = {
-    Codec.serializeAndDigest(this)
-  }
+  def toBytes: Array[Byte] = Codec.serialize(this)
 
-  def toBytes: Array[Byte] = bytesAndDigest._1
-
-  def toDigest: Digest = bytesAndDigest._2
+  @transient
+  def toDigest: Digest = Codec.digestBytes(toBytes)
 }
 
 
@@ -139,11 +136,10 @@ case class FunctionCallWithKnownProvenanceSerializableWithInputs(
 ) extends FunctionCallWithKnownProvenanceSerializable {
 
   @transient
-  lazy val inputGroupBytesAndDigest: (Array[Byte], Digest) = Codec.serializeAndDigest(inputValueDigests.map(_.id))
+  lazy val inputGroupBytes: Array[Byte] = Codec.serialize(inputValueDigests.map(_.id))
 
-  def inputGroupBytes: Array[Byte] = inputGroupBytesAndDigest._1
-
-  def inputGroupDigest: Digest = inputGroupBytesAndDigest._2
+  @transient
+  lazy val inputGroupDigest: Digest = Codec.digestBytes(inputGroupBytes)
 
   def unexpandInputs: FunctionCallWithKnownProvenanceSerializableWithoutInputs =
     FunctionCallWithKnownProvenanceSerializableWithoutInputs(
