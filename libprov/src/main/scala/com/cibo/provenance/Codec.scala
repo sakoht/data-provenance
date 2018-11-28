@@ -2,7 +2,6 @@ package com.cibo.provenance
 
 import java.io.Serializable
 
-import com.cibo.provenance.Codec.logger
 import com.typesafe.scalalogging.LazyLogging
 import io.circe.{Decoder, Encoder, Json}
 
@@ -22,7 +21,7 @@ trait Codec[T] extends Serializable {
   def classTag: ClassTag[T]
   def typeTag: TypeTag[T]
   def serializableClassName: String = Codec.classTagToSerializableName(classTag)
-  def serialize(obj: T, checkConsistency: Boolean = true): Array[Byte]
+  def serialize(obj: T): Array[Byte]
   def deserialize(bytes: Array[Byte]): T
 }
 
@@ -221,29 +220,28 @@ object Codec extends LazyLogging {
     * Note that this is more efficient than requesting them separately because each uses the other.
     *
     * @param obj              The object to serialize.
-    * @param checkConsistency A boolean flag set to true by default.
     * @tparam T
     * @return                 A byte array and a digest value.
     */
-  def serializeAndDigest[T : Codec](obj: T, checkConsistency: Boolean = true): (Array[Byte], Digest) = {
-    val bytes = serialize(obj, checkConsistency)
+  def serializeAndDigest[T : Codec](obj: T): (Array[Byte], Digest) = {
+    val bytes = serialize(obj)
     val digest = digestBytes(bytes)
     (bytes, digest)
   }
 
-  def serialize[T : Codec](obj: T, checkConsistency: Boolean = true): Array[Byte] =
-    implicitly[Codec[T]].serialize(obj, checkConsistency)
+  def serialize[T : Codec](obj: T): Array[Byte] =
+    implicitly[Codec[T]].serialize(obj)
 
   def deserialize[T : Codec](bytes: Array[Byte]): T =
     implicitly[Codec[T]].deserialize(bytes)
 
-  def digestObject[T : Codec](value: T): Digest = {
+  def digestObject[T : Codec : ClassTag](value: T): Digest = {
     value match {
       case _: Array[Byte] =>
         //logger.warn("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
         throw new RuntimeException("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
       case _ =>
-        serializeAndDigest(value)._2
+        digestBytes(serialize(value))
     }
   }
 
@@ -286,10 +284,9 @@ object Codec extends LazyLogging {
     obj
   }
 
-  def digestObjectRaw[T : Codec](value: T): Digest = {
+  def digestObjectRaw[T : Codec : ClassTag](value: T): Digest = {
     value match {
       case _: Array[Byte] =>
-        //logger.warn("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
         throw new RuntimeException("Attempt to digest a byte array.  Maybe you want to digest the bytes no the serialized object?")
       case _ =>
         getBytesAndDigestRaw(value)._2
@@ -301,4 +298,20 @@ object Codec extends LazyLogging {
 
   def clean[T : Codec](obj: T): T =
     Codec.deserializeRaw(Codec.serializeRawImpl(obj))
+
+  def checkConsistency[T : Codec](obj: T, bytes: Array[Byte], digest: Digest): Unit = {
+    try {
+      val obj2 = Codec.deserialize[T](bytes)
+      val bytes2 = Codec.serialize(obj2)
+      val digest2 = Codec.digestBytes(bytes2)
+      val data1 = new String(bytes, "UTF-8")
+      val data2 = new String(bytes2, "UTF-8")
+      if (data1 != data2)
+        throw new RuntimeException(f"Failure to serialize consistently!\n$obj\n$obj2\n$data2\n$data2")
+    } catch {
+      case e: Exception =>
+        logger.error(f"Failed to check that data deserialized and re-serializes identically for $obj!", e)
+        throw e
+    }
+  }
 }
