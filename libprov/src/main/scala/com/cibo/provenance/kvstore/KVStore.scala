@@ -27,6 +27,11 @@ object KVStore {
     basePath match {
       case p if p.startsWith("s3://") => new S3Store(p)(s3)
       case p if p.startsWith("/") => new LocalStore(p)
+      case other =>
+        throw new RuntimeException(
+          f"Failed to recognize $other as one of the default KVStore types!  " +
+          "Use either an \"s3://\" path or a fully qualified *nix path starting with \"/\".  " +
+          "Other subtypes of KVStore are not constructed automatically at this version.")
     }
 
   implicit val codec: Codec[KVStore] = Codec.createAbstractCodec[KVStore]()
