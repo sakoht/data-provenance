@@ -2,7 +2,7 @@
 organization := "com.cibo"
 name         := "provenance-example1"
 
-crossScalaVersions := Seq("2.12.6", "2.11.12")
+crossScalaVersions := Seq("2.12.7", "2.11.12")
 scalaVersion := crossScalaVersions.value.head
 
 scalacOptions ++= Seq("-unchecked", "-deprecation", "-Xfatal-warnings")
