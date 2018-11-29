@@ -57,9 +57,17 @@ case class LocalStore(val basePath: String) extends KVStore {
     val parentDir = new File(path).getParentFile
     if (!parentDir.exists)
       parentDir.mkdirs
-    val bos: BufferedOutputStream = new BufferedOutputStream(new FileOutputStream(path))
-    Stream.continually(bos.write(value))
-    bos.close()
+    val fos = new FileOutputStream(path)
+    try {
+      val bos: BufferedOutputStream = new BufferedOutputStream(fos)
+      try {
+        Stream.continually(bos.write(value))
+      } finally {
+        bos.close()
+      }
+    } finally {
+      fos.close()
+    }
   }
 
   protected def getBytesForAbsolutePath(absolutePath: String): Array[Byte] = {
