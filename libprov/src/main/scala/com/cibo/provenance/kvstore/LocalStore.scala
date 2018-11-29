@@ -1,6 +1,6 @@
 package com.cibo.provenance.kvstore
 
-import java.io.{BufferedOutputStream, File, FileOutputStream}
+import java.io.{BufferedOutputStream, File, FileNotFoundException, FileOutputStream}
 import java.nio.file.{Files, Paths}
 
 import com.cibo.provenance.exceptions.{AccessErrorException, NotFoundException}
@@ -74,9 +74,9 @@ case class LocalStore(val basePath: String) extends KVStore {
     val fullFsPathValue: String = getFsPathForAbsolutePath(absolutePath)
     val file = new File(fullFsPathValue)
     if (!file.exists()) {
-      throw new NotFoundException(s"Failed to find object at $absolutePath!")
+      val e = new FileNotFoundException(s"Failed to find object at $absolutePath!")
+      throw new NotFoundException(e.getMessage, e)
     } else
-
       try {
         Files.readAllBytes(Paths.get(fullFsPathValue))
       } catch {

@@ -59,10 +59,8 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3
     if (s3Path.nonEmpty) s3Path + "/" + key else key
 
   protected def putBytesForAbsolutePath(absolutePath: String, value: Array[Byte]): Unit = {
-    logger.debug("putObject: checking bucket")
+    logger.debug(s"putBytesForAbsolutePath: saving to $absolutePath")
     createBucketIfMissing
-
-    logger.debug(s"putObject: saving to $absolutePath")
 
     val metadata = new ObjectMetadata()
     metadata.setContentType("application/json")
@@ -72,23 +70,20 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3
       amazonS3.putObject(s3Bucket, absolutePath, new ByteArrayInputStream(value), metadata)
     } catch {
       case e: Exception =>
-        logger.error(s"Failed to put byte array to s3://$s3Bucket/$absolutePath", e)
-        val a = new AccessErrorException(s"Failed to put byte array to s3://$s3Bucket/$absolutePath", e)
-
+        throw new AccessErrorException(s"Failed to put byte array to s3://$s3Bucket/$absolutePath", e)
     }
   }
 
   protected def putBytesForAbsolutePathAsync(absolutePath: String, value: Array[Byte])(implicit ec: ExecutionContext): Future[Unit] = {
-    logger.debug("putObject: checking bucket")
+    logger.debug(s"putBytesForAbsolutePath: saving to $absolutePath")
     createBucketIfMissing
-
-    logger.debug(s"putObject: saving to $absolutePath")
 
     putObject(s3Bucket, absolutePath, value)
       .transform(
         identity[PutObjectResult],
-        e => {
-          throw new AccessErrorException(s"Failed to put byte array to s3://$s3Bucket/$absolutePath", e)
+        {
+            case e: Exception => new AccessErrorException(s"Failed to put byte array to s3://$s3Bucket/$absolutePath", e)
+            case other => other // Throwable, etc
         }
       ).map { _ => }
   }
@@ -104,9 +99,9 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3
 
     S3Store.richClient(ec).putObject(putObjectRequest).transform(
       identity[PutObjectResult],
-      t => {
-        logger.error(s"Failed to write byte array to s3://$bucket/$key", t)
-        t
+      {
+        case e: Exception => new AccessErrorException(s"Failed to write byte array to s3://$bucket/$key", e)
+        case other => other // Throwable, etc
       }
     )
   }
@@ -124,8 +119,7 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3
       }
     } catch {
       case e: AmazonS3Exception =>
-        logger.error(s"Failed to find object in bucket s3://$s3Bucket/$absolutePath!", e)
-        throw new NotFoundException(s"Failed to find object in bucket s3://$s3Bucket/$absolutePath!")
+        throw new NotFoundException(s"Failed to find object in bucket s3://$s3Bucket/$absolutePath!", e)
       case e: Exception =>
         throw new AccessErrorException(s"Error accessing s3://$s3Bucket/$absolutePath!", e)
     }
@@ -145,13 +139,9 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3
           }
       },
       {
-        {
-          case e: AmazonS3Exception =>
-            logger.error(s"Failed to find object in bucket s3://$s3Bucket/$absolutePath!", e)
-            throw new NotFoundException(s"Failed to find object in bucket s3://$s3Bucket/$absolutePath!")
-          case e: Exception =>
-            throw new AccessErrorException(s"Error accessing s3://$s3Bucket/$absolutePath!", e)
-        }
+        case e: AmazonS3Exception => throw new NotFoundException(s"Failed to find object in bucket s3://$s3Bucket/$absolutePath!", e)
+        case e: Exception => throw new AccessErrorException(s"Error accessing s3://$s3Bucket/$absolutePath!", e)
+        case other => other // Throwable, etc.
       }
     )
   }
@@ -169,17 +159,15 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3
   private lazy val createBucketIfMissing: Unit = {
     // This is only done once.
     val exists = try amazonS3.doesBucketExistV2(s3Bucket) catch {
-      case NonFatal(e) =>
-        logger.error(s"Error checking existence bucket $s3Bucket", e)
-        throw new RuntimeException(s"Error checking existence bucket $s3Bucket", e)
+      case e: Exception =>
+        throw new AccessErrorException(s"Error checking existence bucket $s3Bucket!", e)
     }
 
     if (!exists) {
-      logger.info(s"Bucket $s3Bucket not found. Creating it now.")
+      logger.warn(s"Bucket $s3Bucket not found. Creating it now.")
       try amazonS3.createBucket(s3Bucket) catch {
-        case NonFatal(e) =>
-          logger.error(s"Error creating bucket $s3Bucket", e)
-          throw new RuntimeException(s"Error creating bucket $s3Bucket", e)
+        case e: Exception =>
+          throw new RuntimeException(s"Error creating bucket $s3Bucket!", e)
       }
     }
   }
