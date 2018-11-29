@@ -73,7 +73,8 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3
     } catch {
       case e: Exception =>
         logger.error(s"Failed to put byte array to s3://$s3Bucket/$absolutePath", e)
-        new AccessErrorException(s"Failed to put byte array to s3://$s3Bucket/$absolutePath")
+        val a = new AccessErrorException(s"Failed to put byte array to s3://$s3Bucket/$absolutePath", e)
+
     }
   }
 
@@ -87,8 +88,7 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3
       .transform(
         identity[PutObjectResult],
         e => {
-          logger.error(s"Failed to put byte array to s3://$s3Bucket/$absolutePath", e)
-          new AccessErrorException(s"Failed to put byte array to s3://$s3Bucket/$absolutePath")
+          throw new AccessErrorException(s"Failed to put byte array to s3://$s3Bucket/$absolutePath", e)
         }
       ).map { _ => }
   }
@@ -127,8 +127,7 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3
         logger.error(s"Failed to find object in bucket s3://$s3Bucket/$absolutePath!", e)
         throw new NotFoundException(s"Failed to find object in bucket s3://$s3Bucket/$absolutePath!")
       case e: Exception =>
-        logger.error(s"Error accessing s3://$s3Bucket/$absolutePath!", e)
-        throw new AccessErrorException(s"Error accessing s3://$s3Bucket/$absolutePath!")
+        throw new AccessErrorException(s"Error accessing s3://$s3Bucket/$absolutePath!", e)
     }
   }
 
@@ -151,8 +150,7 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.s3
             logger.error(s"Failed to find object in bucket s3://$s3Bucket/$absolutePath!", e)
             throw new NotFoundException(s"Failed to find object in bucket s3://$s3Bucket/$absolutePath!")
           case e: Exception =>
-            logger.error(s"Error accessing s3://$s3Bucket/$absolutePath!", e)
-            throw new AccessErrorException(s"Error accessing s3://$s3Bucket/$absolutePath!")
+            throw new AccessErrorException(s"Error accessing s3://$s3Bucket/$absolutePath!", e)
         }
       }
     )

@@ -81,7 +81,7 @@ case class LocalStore(val basePath: String) extends KVStore {
         Files.readAllBytes(Paths.get(fullFsPathValue))
       } catch {
         case e: Exception =>
-          throw new AccessErrorException(s"Error accessing $absolutePath!")
+          throw new AccessErrorException(s"Error accessing $absolutePath!", e)
       }
   }
 
