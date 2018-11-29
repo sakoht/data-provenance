@@ -50,12 +50,10 @@ trait BuildInfo extends Serializable {
   def toEncoded: Json
 
   @transient
-  lazy val toBytesAndDigest: (Array[Byte], Digest) =
-    Codec.serialize(this)(BuildInfo.codec)
+  lazy val toBytes = BuildInfo.codec.serialize(this)
 
-  def toBytes = toBytesAndDigest._1
-
-  def toDigest = toBytesAndDigest._2
+  @transient
+  lazy val toDigest = Codec.digestBytes(toBytes)
 }
 
 
@@ -85,7 +83,7 @@ object BuildInfo {
   private val encoder: Encoder[BuildInfo] =
     Encoder.instance { _.toEncoded }
 
-  implicit def codec: Codec[BuildInfo] =
+  implicit def codec: CirceJsonCodec[BuildInfo] =
     Codec(encoder, decoder)
 }
 

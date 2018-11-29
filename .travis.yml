@@ -17,4 +17,4 @@ cache:
   - $HOME/.sbt/boot/
 
 script:
-  - cd provenance && sbt ++$TRAVIS_SCALA_VERSION test
+  - cd libprov && sbt ++$TRAVIS_SCALA_VERSION test
