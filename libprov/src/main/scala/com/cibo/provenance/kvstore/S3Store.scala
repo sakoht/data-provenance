@@ -67,8 +67,7 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.am
       amazonS3.putObject(s3Bucket, fullKey, new ByteArrayInputStream(value), metadata)
     } catch {
       case e: Exception =>
-        logger.error(s"Failed to put byte array to s3://$s3Bucket/$fullKey", e)
-        new AccessErrorException(s"Failed to put byte array to s3://$s3Bucket/$fullKey")
+        throw new AccessErrorException(s"Failed to put byte array to s3://$s3Bucket/$fullKey", e)
     }
   }
 
@@ -86,11 +85,9 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.am
       }
     } catch {
       case e: AmazonS3Exception =>
-        logger.error(s"Failed to find object in bucket s3://$s3Bucket/$fullKey!", e)
-        throw new NotFoundException(s"Failed to find object in bucket s3://$s3Bucket/$fullKey!")
+        throw new NotFoundException(s"Failed to find object in bucket s3://$s3Bucket/$fullKey!", e)
       case e: Exception =>
-        logger.error(s"Error accessing s3://$s3Bucket/$fullKey!", e)
-        throw new AccessErrorException(s"Error accessing s3://$s3Bucket/$fullKey!")
+        throw new AccessErrorException(s"Error accessing s3://$s3Bucket/$fullKey!", e)
     }
   }
 
@@ -107,9 +104,9 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.am
     val putObjectRequest = new PutObjectRequest(s3Bucket, fullKey, baInputStream, metadata)
     S3Store.amazonS3Scala(ec).putObject(putObjectRequest).transform(
       identity[PutObjectResult],
-      e => {
-        logger.error(s"Failed to put byte array to s3://$s3Bucket/$fullKey", e)
-        new AccessErrorException(s"Failed to put byte array to s3://$s3Bucket/$fullKey")
+      {
+        case e: Exception => new AccessErrorException(s"Error accessing s3://$s3Bucket/$fullKey!", e)
+        case other => other
       }
     )
   }
@@ -130,14 +127,9 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.am
           }
       },
       {
-        {
-          case e: AmazonS3Exception =>
-            logger.error(s"Failed to find object in bucket s3://$s3Bucket/$fullKey!", e)
-            throw new NotFoundException(s"Failed to find object in bucket s3://$s3Bucket/$fullKey!")
-          case e: Exception =>
-            logger.error(s"Error accessing s3://$s3Bucket/$fullKey!", e)
-            throw new AccessErrorException(s"Error accessing s3://$s3Bucket/$fullKey!")
-        }
+        case e: AmazonS3Exception => throw new NotFoundException(s"Failed to load object from s3://$s3Bucket/$fullKey!", e)
+        case e: Exception => throw new AccessErrorException(s"Error accessing s3://$s3Bucket/$fullKey!", e)
+        case other => other
       }
     )
   }
@@ -231,7 +223,7 @@ object S3Store {
             override def prepare(): ExecutionContext = ec
             override def isShutdown = false
             override def isTerminated = false
-            override def shutdown() = ()
+            override def shutdown(): Unit = ()
             override def shutdownNow(): util.List[Runnable] = Collections.emptyList[Runnable]
             override def execute(runnable: Runnable): Unit = ec execute runnable
             override def reportFailure(t: Throwable): Unit = ec reportFailure t

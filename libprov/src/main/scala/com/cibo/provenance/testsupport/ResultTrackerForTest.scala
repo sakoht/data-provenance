@@ -130,7 +130,7 @@ case class ResultTrackerForTest(outputStorage: KVStore, referenceStorage: KVStor
     } else {
       val cmd = Seq("aws", "s3", "sync", basePath, referenceDir)
       import scala.sys.process._
-      println(cmd)
+      logger.info(f"RUNNING: $cmd")
       cmd.!
     }
     clean()

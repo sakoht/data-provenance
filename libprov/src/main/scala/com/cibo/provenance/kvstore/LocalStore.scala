@@ -1,6 +1,6 @@
 package com.cibo.provenance.kvstore
 
-import java.io.{BufferedOutputStream, File, FileOutputStream}
+import java.io.{BufferedOutputStream, File, FileNotFoundException, FileOutputStream}
 import java.nio.file.{Files, Paths}
 
 import com.cibo.provenance.exceptions.{AccessErrorException, NotFoundException}
@@ -26,23 +26,31 @@ case class LocalStore(basePath: String) extends KVStore {
     val parentDir = new File(path).getParentFile
     if (!parentDir.exists)
       parentDir.mkdirs
-    val bos: BufferedOutputStream = new BufferedOutputStream(new FileOutputStream(path))
-    Stream.continually(bos.write(value))
-    bos.close()
-
+    val fos = new FileOutputStream(path)
+    try {
+      val bos: BufferedOutputStream = new BufferedOutputStream(fos)
+      try {
+        Stream.continually(bos.write(value))
+      } finally {
+        bos.close()
+      }
+    } finally {
+      fos.close()
+    }
   }
 
   def getBytes(key: String): Array[Byte] = {
     val fullFsPathValue: String = getFullPathForRelativePath(key)
     val file = new File(fullFsPathValue)
     if (!file.exists()) {
-      throw new NotFoundException(s"Failed to find object at $key!")
+      val e = new FileNotFoundException(s"Failed to find object at $key!")
+      throw new NotFoundException(e.getMessage, e)
     } else
       try {
         Files.readAllBytes(Paths.get(fullFsPathValue))
       } catch {
         case e: Exception =>
-          throw new AccessErrorException(s"Error accessing $key!")
+          throw new AccessErrorException(s"Error accessing $key!", e)
       }
   }
 

@@ -3,7 +3,6 @@ package com.cibo.provenance.kvstore
 import com.amazonaws.services.s3.AmazonS3
 import com.cibo.provenance.Codec
 import org.slf4j.{Logger, LoggerFactory}
-
 import scala.concurrent.{ExecutionContext, Future}
 
 
@@ -40,6 +39,8 @@ trait KVStore {
 
 object KVStore {
 
+  protected lazy val logger: Logger = LoggerFactory.getLogger(getClass)
+
   /**
     * The apply method constructs a KVStore of any of the default types based on the specified path String.
     * - S3Store
@@ -55,10 +56,15 @@ object KVStore {
     basePath match {
       case p if p.startsWith("s3://") => new S3Store(p)(s3)
       case p if p.startsWith("/") => new LocalStore(p)
+      case other =>
+        throw new RuntimeException(
+          f"Failed to recognize $other as one of the default KVStore types!  " +
+          "Use either an \"s3://\" path or a fully qualified *nix path starting with \"/\".  " +
+          "Other subtypes of KVStore are not constructed automatically at this version.")
     }
 
   /**
-    * All KVStore objects should be serializable.  This means they require a codec
+    * All KVStore objects should be serializable.  This means they require a codec.
     */
   implicit val codec: Codec[KVStore] = Codec.createAbstractCodec[KVStore]()
 }
