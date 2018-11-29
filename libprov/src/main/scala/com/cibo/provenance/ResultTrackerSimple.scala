@@ -1,6 +1,8 @@
 package com.cibo.provenance
 
 
+import com.cibo.provenance.kvstore.KVStore
+
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
@@ -39,32 +41,33 @@ import scala.concurrent.{ExecutionContext, Future}
   * commit/build.  When a provenance gets multiple inputs, the same is true, but the fault is in the inconsistent
   * serialization of the inputs, typically.
   *
-  * @param basePath           The destination for new results and default storage space for queries (s3:// or local)
-  * @param underlyingTracker  An optional other trackers that underly this one.
+  * @param storage                  A KVStore managing the path at which we save new results, find existing results (s3:// or local)
+  * @param underlyingTrackerOption  An optional other trackers that underly this one.
   */
 class ResultTrackerSimple(
-  val basePath: String,
+  val storage: KVStore,
   val writable: Boolean = true,
-  val underlyingTracker: Option[ResultTrackerSimple] = None
+  val underlyingTrackerOption: Option[ResultTrackerSimple] = None
 )(implicit val currentAppBuildInfo: BuildInfo) extends ResultTracker {
-  
+
   import com.cibo.provenance.exceptions.InconsistentVersionException
   import com.google.common.cache.Cache
-  import com.cibo.provenance.kvstore._
 
   import scala.reflect.ClassTag
   import scala.reflect.runtime.universe.TypeTag
   import scala.util.{Failure, Success, Try}
 
+  def basePath = storage.basePath
+
   @transient
   implicit lazy val vwpCodec: Codec[ValueWithProvenanceSerializable] = ValueWithProvenanceSerializable.codec
 
   def over(underlying: ResultTrackerSimple): ResultTrackerSimple = {
-    new ResultTrackerSimple(basePath, writable, Some(underlying))
+    new ResultTrackerSimple(storage, writable, Some(underlying))
   }
 
   def over(underlyingPath: String): ResultTrackerSimple = {
-    new ResultTrackerSimple(basePath, writable, Some(ResultTrackerSimple(underlyingPath, writable=false)))
+    new ResultTrackerSimple(storage, writable, Some(ResultTrackerSimple(underlyingPath, writable=false)))
   }
 
   def loadCallById(callId: Digest): Option[FunctionCallWithProvenanceDeflated[_]] =
@@ -591,9 +594,6 @@ class ResultTrackerSimple(
   def isLocal: Boolean = storage.isLocal
 
   @transient
-  lazy val storage: KVStore = KVStore(basePath)
-
-  @transient
   protected lazy val ioTimeout: FiniteDuration = 5.minutes
 
   /**
@@ -645,7 +645,6 @@ class ResultTrackerSimple(
       }
     }
 
-
   protected def loadBytes(path: String): Array[Byte] =
     Option(heavyCache.getIfPresent(path)) match {
       case Some(found) =>
@@ -658,7 +657,7 @@ class ResultTrackerSimple(
           bytes
         } catch {
           case e: Exception =>
-            underlyingTracker match {
+            underlyingTrackerOption match {
               case Some(underlying) => underlying.loadBytes(path)
               case None => throw e
             }
@@ -667,7 +666,7 @@ class ResultTrackerSimple(
 
   // async interface
 
-  protected def saveBytesAsync(path: String, bytes: Array[Byte])(implicit ec: ExecutionContext): Future[Unit] =
+  protected def saveBytesAsync(path: String, bytes: Array[Byte])(implicit ec: ExecutionContext): Future[_] =
     if (!writable) {
       throw new ReadOnlyTrackerException(f"Attempt to save to a read-only ResultTracker $this.")
     } else {
@@ -685,10 +684,10 @@ class ResultTrackerSimple(
               // Actually save.
               val future = storage.putBytesAsync(path, bytes)
               future.onComplete {
-                case s: Success[Unit] =>
+                case s: Success[_] =>
                   lightCache.put(path, Unit)
                   heavyCache.put(path, bytes)
-                case f: Failure[Unit] =>
+                case f: Failure[_] =>
                   logger.error(f"Failed to save data to $path!: ${f.exception.toString}")
               }
               future
@@ -708,7 +707,7 @@ class ResultTrackerSimple(
             heavyCache.put(path, obj)   // smaller, heavier, actually provides data
             obj
         }
-        underlyingTracker match {
+        underlyingTrackerOption match {
           case Some(underlying) => future.fallbackTo { underlying.loadBytesAsync(path) }
           case None => future
         }
@@ -716,7 +715,7 @@ class ResultTrackerSimple(
 
   protected def getListingRecursive(path: String): List[String] = {
     val listing1 = storage.getKeySuffixes(path)
-    underlyingTracker match {
+    underlyingTrackerOption match {
       case Some(underlying) =>
         // NOTE: It would be a performance improvment to make this a merge sort.
         // In practice all lists used here are tiny, though.
@@ -748,7 +747,7 @@ class ResultTrackerSimple(
               lightCache.put(path, Unit)
               true
             } else {
-              underlyingTracker match {
+              underlyingTrackerOption match {
                 case Some(under) =>
                   // We don't cache this because the underlying tracker will decide on that.
                   under.pathExists(path)
@@ -826,11 +825,17 @@ class ResultTrackerSimple(
 }
 
 object ResultTrackerSimple {
-  def apply(storageRoot: String, writable: Boolean)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
+  def apply(storageRoot: KVStore, writable: Boolean)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
     new ResultTrackerSimple(storageRoot, writable=writable)(currentAppBuildInfo)
 
-  def apply(storageRoot: String)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
+  def apply(storageRoot: KVStore)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
     new ResultTrackerSimple(storageRoot)(currentAppBuildInfo)
+
+  def apply(storageRoot: String, writable: Boolean)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
+    new ResultTrackerSimple(KVStore(storageRoot), writable=writable)(currentAppBuildInfo)
+
+  def apply(storageRoot: String)(implicit currentAppBuildInfo: BuildInfo): ResultTrackerSimple =
+    new ResultTrackerSimple(KVStore(storageRoot))(currentAppBuildInfo)
 }
 
 class ReadOnlyTrackerException(msg: String)

@@ -3,6 +3,7 @@ package com.cibo.provenance.testsupport
 import java.io.File
 
 import com.cibo.provenance._
+import com.cibo.provenance.kvstore.{KVStore, LocalStore, S3Store}
 import org.apache.commons.io.FileUtils
 import com.cibo.provenance.kvstore._
 
@@ -33,18 +34,22 @@ import com.cibo.provenance.kvstore._
   * It uses the "Rechecking" trait, which overrides resolve() and resolveAsync() to re-verify results that are already saved.
   * On the first test run with tests or software changes, it will automatically stage the new data.
   *
-  * @param outputPath           A path to a local empty tmp directory used just by this test.
-  * @param referencePath        A path to reference data.  For UT: src/main/resources/.  For IT s3://....
+  * @param outputStorage        A KVStore for to a local empty tmp directory used just by this test.
+  * @param referenceStorage     A KVStore for reference data.  For UT: src/main/resources/.  For IT s3://....
   * @param bi                   The current app build information should be implicitly available.
   */
-case class ResultTrackerForTest(outputPath: String, referencePath: String)(implicit val bi: BuildInfo)
+case class ResultTrackerForTest(outputStorage: KVStore, referenceStorage: KVStore)(implicit val bi: BuildInfo)
   extends ResultTrackerSimple(
-    outputPath,
+    outputStorage,
     writable = true,
-    Some(ResultTrackerSimple(referencePath, writable = false))
+    Some(ResultTrackerSimple(referenceStorage, writable = false))
   ) with Rechecking {
 
-  require(underlyingTracker.nonEmpty, "Refusing to clean() a ResultTracker that does not have an underlying tracker.")
+  def outputPath = outputStorage.basePath
+
+  def referencePath = referenceStorage.basePath
+
+  require(underlyingTrackerOption.nonEmpty, "Refusing to clean() a ResultTracker that does not have an underlying tracker.")
   require(storage.isLocal, "Refusing to clean() an S3 path.")
 
   /**
@@ -52,7 +57,7 @@ case class ResultTrackerForTest(outputPath: String, referencePath: String)(impli
     *
     * @return a ResultTrackerSimple
     */
-  def referenceTracker: ResultTrackerSimple = underlyingTracker.get
+  def referenceTracker: ResultTrackerSimple = underlyingTrackerOption.get
 
   /**
     * Remove all output data, leaving the reference data in place.
@@ -96,7 +101,7 @@ case class ResultTrackerForTest(outputPath: String, referencePath: String)(impli
   def checkForUnstagedResults(): Unit = {
     if (storage.getKeySuffixes().toList.nonEmpty) {
       val msg =
-        if (storage.isLocal && underlyingTracker.map(_.isLocal).getOrElse(throw new RuntimeException("Missing underlying tracker.")))
+        if (storage.isLocal && underlyingTrackerOption.map(_.isLocal).getOrElse(throw new RuntimeException("Missing underlying tracker.")))
           f"# New reference data! To stage it:\nrsync -av --progress ${basePath}/ ${referenceTracker.basePath}"
         else
           f"# New reference data! To stage it:\naws s3 sync ${basePath} ${referenceTracker.basePath}"
@@ -114,7 +119,7 @@ case class ResultTrackerForTest(outputPath: String, referencePath: String)(impli
     * It is called before check() when it is known that the test data needs to be regenerated.
     */
   def push(): Unit = {
-    val referenceDir = underlyingTracker.get.basePath
+    val referenceDir = underlyingTrackerOption.get.basePath
     if (isLocal && referenceTracker.isLocal) {
       if (new File(basePath).exists) {
         new File(referenceDir).getParentFile.mkdirs()
@@ -136,6 +141,7 @@ case class ResultTrackerForTest(outputPath: String, referencePath: String)(impli
 object ResultTrackerForTest {
   import io.circe._
   import com.cibo.provenance.BuildInfo.codec
+
   implicit private val buildInfoEncoder = codec.encoder
   implicit private val buildInfoDecoder = codec.decoder
   implicit private val e2 = new BinaryEncoder[ResultTrackerSimple]
@@ -149,7 +155,10 @@ object ResultTrackerForTest {
   implicit lazy val decoder: Decoder[ResultTrackerForTest] =
     Decoder.forProduct3[String, String, BuildInfo, ResultTrackerForTest](
       "localPath", "canonicalPath", "buildInfo")(
-        (localPath,canonicalPath,buildInfo) => new ResultTrackerForTest(localPath,canonicalPath)(buildInfo))
+        (localPath,canonicalPath,buildInfo) => ResultTrackerForTest(localPath, canonicalPath)(buildInfo))
+
+  def apply(outputPath: String, referencePath: String)(implicit buildInfo: BuildInfo): ResultTrackerForTest =
+    ResultTrackerForTest(KVStore(outputPath), KVStore(referencePath))(buildInfo)
 
   class UnstagedReferenceDataException(msg: String) extends RuntimeException(msg)
 }

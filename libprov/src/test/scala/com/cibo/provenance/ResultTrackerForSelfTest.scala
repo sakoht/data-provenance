@@ -1,8 +1,8 @@
 package com.cibo.provenance
 
+import com.cibo.provenance.kvstore.{KVStore, S3Store}
 import java.io.File
 import scala.concurrent.{Await, ExecutionContext}
-import com.cibo.provenance.kvstore._
 
 
 /**
@@ -15,8 +15,8 @@ import com.cibo.provenance.kvstore._
   */
 case class ResultTrackerForSelfTest(rootPath: String)(implicit bi: BuildInfo, ec: ExecutionContext = ExecutionContext.global)
   extends ResultTrackerDuplex(
-    new ResultTrackerSimple(rootPath + "/sync")(bi) with TestTrackingOverrides,
-    new ResultTrackerSimple(rootPath + "/async")(bi) with TestTrackingOverrides
+    new ResultTrackerSimple(KVStore(rootPath + "/sync"))(bi) with TestTrackingOverrides,
+    new ResultTrackerSimple(KVStore(rootPath + "/async"))(bi) with TestTrackingOverrides
   ) {
 
   import org.apache.commons.io.FileUtils

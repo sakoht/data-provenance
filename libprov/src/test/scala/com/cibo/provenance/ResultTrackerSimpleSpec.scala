@@ -232,7 +232,7 @@ class ResultTrackerForSelfTestSpec extends FunSpec with Matchers with LazyLoggin
 
       Add.runCount = 0
       val s4 = Add(r1, s2)
-      val r4 = s4.resolve                               // does not re-run s2
+      val r4 = s4.resolve                               // does not re-run s1 or s2
       val rc4 = Add.runCount
       rc4 shouldBe 1 * rt.countUnderlying
 

@@ -39,6 +39,6 @@ import com.typesafe.scalalogging.LazyLogging
 
 case class ResultTrackerForTestFactory(outputRoot: String, referenceRoot: String)(implicit bi: BuildInfo) extends LazyLogging {
   def apply(testName: String): ResultTrackerForTest =
-    new ResultTrackerForTest(outputRoot + "/" + testName, referenceRoot + "/" + testName)
+    ResultTrackerForTest(outputRoot + "/" + testName, referenceRoot + "/" + testName)
 }
 

@@ -3,6 +3,12 @@ package com.cibo.provenance
 import com.google.common.cache._
 import org.slf4j.{Logger, LoggerFactory}
 
+/**
+  * CacheUtils centralizes functions that create a Guava cache.
+  *
+  * This is a narrow use-case of the more general, flexible GCache used internally at CiBO.
+  * If that is released at some point, switch to that.
+  */
 object CacheUtils {
 
   private lazy val logger: Logger = LoggerFactory.getLogger(getClass)
