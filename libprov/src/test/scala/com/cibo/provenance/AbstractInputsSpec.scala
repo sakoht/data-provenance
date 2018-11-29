@@ -1,9 +1,6 @@
 package com.cibo.provenance
 
-import com.cibo.io.s3.SyncablePath
 import org.scalatest.{FunSpec, Matchers}
-import com.cibo.aws.AWSClient.Implicits.s3SyncClient
-import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
 
 class AbstractInputsSpec extends FunSpec with Matchers {
 
@@ -21,7 +18,7 @@ class AbstractInputsSpec extends FunSpec with Matchers {
     it("work with different subclasses of input") {
       val testSubdir = f"abstract-inputs"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(testDataDir)
       rt.wipe
 
       sayYourName(ruffers).resolve.output shouldBe "Ruffers"

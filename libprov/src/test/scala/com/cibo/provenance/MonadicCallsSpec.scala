@@ -2,8 +2,7 @@ package com.cibo.provenance
 
 import com.cibo.provenance.FunctionCallWithProvenance.TraversableCallExt
 import org.scalatest.{FunSpec, Matchers}
-import com.cibo.aws.AWSClient.Implicits.s3SyncClient
-import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
+
 
 
 /**
@@ -12,8 +11,7 @@ import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
 
 
 class MonadicCallsSpec extends FunSpec with Matchers {
-  import com.cibo.io.s3.SyncablePath
-  import com.cibo.provenance.monadics._
+    import com.cibo.provenance.monadics._
 
   val outputBaseDir: String = TestUtils.testOutputBaseDir
   implicit val buildInfo: BuildInfo = BuildInfoDummy
@@ -24,7 +22,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       val subDir = "monadic-calls"
       val testDataDir = f"$outputBaseDir/$subDir"
       
-      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(testDataDir)
       rt.wipe
 
       val a: MakeDummyOutputList.Call = MakeDummyOutputList() // (11, 22, 33, 44)
@@ -87,7 +85,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       val subDir = "mappable-calls-are-dry"
       val testDataDir = f"$outputBaseDir/$subDir"
 
-      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(testDataDir)
       rt.wipe
 
       MakeDummyOutputList.runCount = 0
@@ -134,7 +132,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
     it("maps efficiently") {
       val subDir = "mappable-results-map"
       val testDataDir = f"$outputBaseDir/$subDir"
-      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(testDataDir)
       rt.wipe
 
       MakeDummyOutputList.runCount = 0
@@ -189,7 +187,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
     it("handles `scatter` with efficient pass-through to the underling implementation") {
       val subDir = "mappable-results-scatter"
       val testDataDir = f"$outputBaseDir/$subDir"
-      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(testDataDir)
       rt.wipe
 
       MakeDummyOutputList.runCount = 0
@@ -223,7 +221,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
     it("works implicitly, and keeps history") {
       val subDir = "gather"
       val testDataDir = f"$outputBaseDir/$subDir"
-      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(testDataDir)
       rt.wipe
 
       // Make a list with a variety of tracked objects, all returning an Int.

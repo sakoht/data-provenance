@@ -5,7 +5,6 @@ import io.circe._
 import io.circe.generic.semiauto._
 import org.scalatest._
 
-import com.cibo.io.s3.SyncablePath
 import com.cibo.provenance.oo._
 import com.cibo.provenance.implicits._
 
@@ -21,7 +20,7 @@ class ObjectAccessorForProductsSpec extends FunSpec with Matchers {
     it("work with provenance tracking") {
       val testSubdir = "accessors"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt: ResultTrackerForSelfTest = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt: ResultTrackerForSelfTest = ResultTrackerForSelfTest(testDataDir)
       rt.wipe()
 
       val obj = Fizz.withProvenance(123, 9.87)

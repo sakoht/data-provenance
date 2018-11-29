@@ -2,39 +2,30 @@ package com.cibo.provenance
 
 import java.time.Instant
 
-import com.cibo.io.s3.SyncablePath
+import com.amazonaws.services.s3.iterable.S3Objects
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.commons.io.FileUtils
 import org.scalatest.Matchers
-import com.cibo.aws.AWSClient.Implicits.s3SyncClient
-import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
+import scala.collection.JavaConverters._
+import com.cibo.provenance.kvstore._
 
 object TestUtils extends LazyLogging with Matchers {
   import java.io.File
   import java.nio.file.{Files, Paths}
-
-  import com.cibo.io.Shell.getOutputAsBytes
 
   // The this is the BuildInfo _object_ for this library.
   // Not to be confused with the BuildInfo base trait use for all apps with provenance tracking.
   val libBuildInfo: BuildInfo = com.cibo.provenance.internal.BuildInfo
 
   // Use the scala version for the library in this test, cross-compiled tests can run in parallel.
-  val subdir =
-    sys.env.getOrElse("USER", "anonymous-" + com.cibo.provenance.internal.BuildInfo.buildId.toString) +
-      f"/data-provenance-test-output-${libBuildInfo.scalaVersion}"
+  val user = sys.env.getOrElse("USER", "anonymous-" + com.cibo.provenance.internal.BuildInfo.buildId.toString)
+  val subdir = f"data-provenance-test-output-${libBuildInfo.scalaVersion}"
 
-  val localTestOutputBaseDir: String =
-    f"/tmp/" + subdir
-
-  val remoteTestOutputBaseDir: String =
-    f"s3://com-cibo-user/" + subdir
 
   // Set this env var
   val testOutputBaseDir =
     sys.env.get("PROVENANCE_TEST_REMOTE") match {
-      case Some(value) => remoteTestOutputBaseDir
-      case None => localTestOutputBaseDir
+      case Some(value) => value + subdir
+      case None => f"/tmp/$user/" + subdir
     }
 
   def diffOutputSubdir(subdir: String) = {
@@ -51,20 +42,28 @@ object TestUtils extends LazyLogging with Matchers {
       else
         throw new RuntimeException(f"Unexpected scala version $libBuildInfo.scalaVersion")
 
-    val actualOutputDirPath = SyncablePath(f"$testOutputBaseDir/$subdir")
-    if (actualOutputDirPath.isRemote) {
-      val f = actualOutputDirPath.toFile
-      logger.info(s"Syncing $actualOutputDirPath to local disk...")
-      FileUtils.deleteDirectory(f)
-      val t1 = Instant.now
-      actualOutputDirPath.syncFromS3()
-      val t2 = Instant.now
-      val d = t2.toEpochMilli - t1.toEpochMilli
-      logger.warn(s"Sync of $actualOutputDirPath completed in ${d}ms.")
+    val actualOutputDirPath = KVStore(f"$testOutputBaseDir/$subdir")
 
+    val actualOutputLocalPath: String = actualOutputDirPath match {
+      case localStore: LocalStore =>
+        // The actual outputs are local files.  Just use the path directly.
+        localStore.basePath
+      case s3store: S3Store =>
+        // The actual outputs are in S3.  To keep the logic simple below, sync it down to a temp dir and use that.
+        val startPos = actualOutputDirPath.basePath.indexOf("://") + 3
+        val tmpStore = KVStore(f"/tmp/$user/" + actualOutputDirPath.basePath.substring(startPos))
+        tmpStore.getKeySuffixes()
+        val t1 = Instant.now
+        tmpStore.getKeySuffixes().foreach {
+          key =>
+            val path = key.substring(s3store.s3Path.length + 1)
+            tmpStore.putBytes(path, s3store.getBytes(path))
+        }
+        val t2 = Instant.now
+        val d = t2.toEpochMilli - t1.toEpochMilli
+        logger.warn(s"Sync of $actualOutputDirPath completed in ${d}ms.")
+        tmpStore.basePath
     }
-
-    val actualOutputLocalPath = actualOutputDirPath.localPath
 
     def normalize(in: String): String = {
       val lines = in.split("\n")
@@ -78,8 +77,9 @@ object TestUtils extends LazyLogging with Matchers {
       lines.map(_.stripPrefix(leftMargin)).sortBy(rightColumn).mkString("\n") + "\n"
     }
 
+    import scala.sys.process._
     val newManifestBytes =
-      getOutputAsBytes(s"cd $actualOutputLocalPath && (wc -c `find . -type f | grep -v codecs`)")
+      Seq("bash", "-c", s"cd $actualOutputLocalPath && (wc -c `find . -type f | grep -v codecs`)").!!
     val newManifestString = normalize(new String(newManifestBytes))
 
     val rootSubdir = "src/test/resources/expected-output"
@@ -126,10 +126,8 @@ object TestUtils extends LazyLogging with Matchers {
         expectedManifestFile.delete()
         Files.write(Paths.get(expectedManifestFile.getAbsolutePath), newManifestString.getBytes("UTF-8"))
         throw e
-      case ee: Exception =>
-        println(ee)
-        throw ee
     }
+    logger.debug(f"Diff successful for $actualOutputLocalPath.")
   }
 
   lazy val testResourcesDir: String = {

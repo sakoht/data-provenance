@@ -30,7 +30,7 @@ trait ResultTracker extends Serializable {
   import scala.util.{Failure, Success, Try}
 
   @transient
-  lazy val logger = com.typesafe.scalalogging.Logger(LoggerFactory.getLogger(getClass.getName))
+  lazy val logger: org.slf4j.Logger = LoggerFactory.getLogger(getClass.getName)
 
   /**
     * The .resolve method is the core function of a ResultTracker.

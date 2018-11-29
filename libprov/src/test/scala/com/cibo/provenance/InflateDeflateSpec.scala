@@ -1,10 +1,8 @@
 package com.cibo.provenance
 
-import com.cibo.io.s3.SyncablePath
 import com.cibo.provenance.monadics.MapWithProvenance
 import org.scalatest.{FunSpec, Matchers}
-import com.cibo.aws.AWSClient.Implicits.s3SyncClient
-import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
+
 
 /**
   * Created by ssmith on 10/26/17.
@@ -19,7 +17,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
     it("work on simple calls.") {
       val testDataDir = f"$outputBaseDir/save-simple"
       implicit val bi: BuildInfo = BuildInfoDummy
-      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(testDataDir)
       rt.wipe
 
       val call1: mult2.Call = mult2(2, 2)
@@ -33,7 +31,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
     it("allows a call to partially or fully load") {
       val testDataDir = f"$outputBaseDir/save-reload"
       implicit val bi: BuildInfo = BuildInfoDummy
-      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(testDataDir)
       rt.wipe
 
       val call1: mult2.Call = mult2(2, 2)
@@ -52,7 +50,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
     it("works on nested calls") {
       val testDataDir = f"$outputBaseDir/save-nested"
       implicit val bi: BuildInfo = BuildInfoDummy
-      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(testDataDir)
       rt.wipe
 
       val c1 = add2(2, 2)
@@ -81,7 +79,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
     it("work on functions") {
       val testDataDir = f"$outputBaseDir/save-functions"
       implicit val bi: BuildInfo = BuildInfoDummy
-      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(testDataDir)
       rt.wipe
 
       val u1: UnknownProvenance[mult2.type] = UnknownProvenance(mult2)
@@ -100,7 +98,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
     it("work on functions as inputs") {
       val testDataDir = f"$outputBaseDir/save-functions-taking-functions"
       implicit val bi: BuildInfo = BuildInfoDummy
-      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(testDataDir)
       rt.wipe
 
       val unknownList = UnknownProvenance(List(100, 200, 300))
@@ -155,7 +153,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
     it("works with functions as output") {
       val testDataDir = f"$outputBaseDir/save-returning-functions"
       implicit val bi: BuildInfo = BuildInfoDummy
-      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(testDataDir)
       rt.wipe
 
       val loaded1: fmaker.Call = fmaker()
@@ -171,7 +169,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
     it("works with no type information") {
       val testDataDir = f"$outputBaseDir/save-reload-unknown-type"
       implicit val bi: BuildInfo = BuildInfoDummy
-      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(testDataDir)
       rt.wipe
 
       val digest = createCallAndSaveCallAndReturnOnlyIds(rt)

@@ -5,7 +5,6 @@ import io.circe._
 import io.circe.generic.semiauto._
 import org.scalatest._
 
-import com.cibo.io.s3.SyncablePath
 import com.cibo.provenance.oo._
 
 class ObjectMethodSpec extends FunSpec with Matchers {
@@ -19,7 +18,7 @@ class ObjectMethodSpec extends FunSpec with Matchers {
     it("work with provenance tracking") {
       val testSubdir = "methods"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt: ResultTrackerForSelfTest = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt: ResultTrackerForSelfTest = ResultTrackerForSelfTest(testDataDir)
       rt.wipe()
 
       val obj = Boo.withProvenance(2)

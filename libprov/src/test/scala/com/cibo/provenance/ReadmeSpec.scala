@@ -1,10 +1,8 @@
 package com.cibo.provenance
 
 
-import com.cibo.io.s3.SyncablePath
 import org.scalatest.{FunSpec, Matchers}
-import com.cibo.aws.AWSClient.Implicits.s3SyncClient
-import com.cibo.io.s3.SyncablePathBaseDir.Implicits.default
+
 
 class ReadmeSpec extends FunSpec with Matchers {
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir
@@ -14,7 +12,7 @@ class ReadmeSpec extends FunSpec with Matchers {
     it("runs") {
       val testSubdir = f"readme-short"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(testDataDir)
       rt.wipe
 
       myApp1.main(Array[String](testDataDir))
@@ -25,7 +23,7 @@ class ReadmeSpec extends FunSpec with Matchers {
     it("runs") {
       val testSubdir = f"readme-long"
       val testDataDir = f"$testOutputBaseDir/$testSubdir"
-      implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+      implicit val rt = ResultTrackerForSelfTest(testDataDir)
       rt.wipe
 
       myApp2.main(Array[String](testDataDir))
@@ -55,7 +53,7 @@ object myApp1 extends App {
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir
   val testSubdir = "readme-long"
   val testDataDir = f"$testOutputBaseDir/$testSubdir"
-  implicit val rt = ResultTrackerForSelfTest(SyncablePath(testDataDir))
+  implicit val rt = ResultTrackerForSelfTest(testDataDir)
   rt.wipe
 
   import io.circe.generic.auto._
