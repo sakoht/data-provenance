@@ -307,6 +307,33 @@ trait ResultTracker extends Serializable {
     }
   }
 
+  /**
+    * Query Interface
+    *
+    */
+
+  // Functions
+
+  def findFunctionNames: Iterable[String]
+
+  def findFunctionVersions(functionName: String): Iterable[Version]
+
+  // Calls
+
+  def findCalls: Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs]
+
+  def findCalls(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs]
+
+  def findCalls(functionName: String, version: Version): Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs]
+
+
+  // Results
+
+  def findResults: Iterable[FunctionCallResultWithKnownProvenanceSerializable]
+
+  def findResults(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable]
+
+  def findResults(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable]
 
   /**
     * An UnresolvedVersionException is thrown if the system attempts to deflate a call with an unresolved version.

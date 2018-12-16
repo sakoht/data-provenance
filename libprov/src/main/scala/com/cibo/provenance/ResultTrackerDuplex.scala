@@ -155,6 +155,63 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
     aa.get
   }
 
+  def findFunctionNames: Iterable[String] = {
+    val aa = Try(a.findFunctionNames)
+    val bb = Try(b.findFunctionNames)
+    cmp(aa, bb, s"findFunctionNames")
+    aa.get
+  }
+
+  def findFunctionVersions(functionName: String): Iterable[Version] = {
+    val aa = Try(a.findFunctionVersions(functionName))
+    val bb = Try(b.findFunctionVersions(functionName))
+    cmp(aa, bb, s"findFunctionVersions for $functionName")
+    aa.get
+  }
+
+  def findCalls: Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs] = {
+    val aa = Try(a.findCalls)
+    val bb = Try(b.findCalls)
+    cmp(aa, bb, s"findCalls")
+    aa.get
+  }
+
+  def findCalls(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs] = {
+    val aa = Try(a.findCalls(functionName))
+    val bb = Try(b.findCalls(functionName))
+    cmp(aa, bb, s"findCalls for $functionName")
+    aa.get
+  }
+
+  def findCalls(functionName: String, version: Version): Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs] = {
+    val aa = Try(a.findCalls(functionName, version))
+    val bb = Try(b.findCalls(functionName, version))
+    cmp(aa, bb, s"findCalls for $functionName and $version")
+    aa.get
+  }
+
+  def findResults: Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
+    val aa = Try(a.findResults)
+    val bb = Try(b.findResults)
+    cmp(aa, bb, s"findResults")
+    aa.get
+  }
+
+  def findResults(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
+    val aa = Try(a.findResults(functionName))
+    val bb = Try(b.findResults(functionName))
+    cmp(aa, bb, s"findResults for $functionName")
+    aa.get
+  }
+
+  def findResults(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
+    val aa = Try(a.findResults(functionName, version))
+    val bb = Try(b.findResults(functionName, version))
+    cmp(aa, bb, s"findResults for $functionName and $version")
+    aa.get
+  }
+  
+
   // Compare two Try[T] and require that they match.
   // Try[T] does not by default support ==.
   private def cmp[T](a: Try[T], b: Try[T], msg: String): Unit = {

@@ -82,6 +82,23 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
   def loadCodecByClassNameAndCodecDigest[T: ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]) = ???
 
   def loadCodecsByValueDigest[T: ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]) = ???
+
+  def findFunctionNames: Iterable[String] = Iterable.empty
+
+  def findFunctionVersions(functionName: String): Iterable[Version] = Iterable.empty
+
+  def findCalls: Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs] = Iterable.empty
+
+  def findCalls(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs] = Iterable.empty
+
+  def findCalls(functionName: String, version: Version): Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs] = Iterable.empty
+
+  def findResults: Iterable[FunctionCallResultWithKnownProvenanceSerializable] = Iterable.empty
+
+  def findResults(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = Iterable.empty
+
+  def findResults(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = Iterable.empty
+
 }
 
 
