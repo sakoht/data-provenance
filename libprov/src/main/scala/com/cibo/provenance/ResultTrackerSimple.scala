@@ -822,9 +822,12 @@ class ResultTrackerSimple(
     resultCache.invalidateAll()
   }
 
-  /**
-    * Query Interface
-    */
+  /*
+   * Query Interface: Basic
+   *
+   * These implement the required query interface in the base trait.
+   *
+   */
 
   // Functions
 
@@ -908,7 +911,14 @@ class ResultTrackerSimple(
     FunctionCallResultWithKnownProvenanceSerializable(call, Digest(inputId), Digest(outputId), commitId, buildId)
   }
 
-  // Deeper Dive...
+  /*
+   * Query Interface: Extended
+   *
+   * These methods are not in the base ResultTracker trait.  They provide additioal information that is
+   * readily available in the default ResultTrackerSimple, but might not necessarily be available in alternate trackers.
+   */
+
+  // Results
 
   def findResultsByOutput(outputDigest: Digest): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
     storage.getKeySuffixes(s"data-provenance/${outputDigest.id}").map {

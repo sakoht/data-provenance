@@ -267,6 +267,59 @@ The `BuildInfo` object used should be created by the `SbtBuildInfo` plugin.  Eac
 The package name used in the configuration should be in a namespace that is unique for the app/lib.  If an organization namespace is used by a wide variety of apps, make a sub-namespace for each component that is independently built and put the `BuildInfo` there, even if it is the only thing there.
 
 
+Querying
+--------
+
+The `ResultTracker` provides a query interface to find:
+- all data ever used as input or an output 
+- any previous "result" that links an output to its build information to the inputs and their history
+- any previous "call" behind any of the results, and the full graph of input history
+
+Each FunctionWithProvenance has the following API:
+```
+
+```
+
+
+The underlying ResultTracker API:
+````
+  def findFunctionNames: Iterable[String]
+
+  def findFunctionVersions(functionName: String): Iterable[Version]
+
+  
+  def findCalls: Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs]
+
+  def findCalls(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs]
+
+  def findCalls(functionName: String, version: Version): Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs]
+
+
+  def findResults: Iterable[FunctionCallResultWithKnownProvenanceSerializable]
+
+  def findResults(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable]
+
+  def findResults(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable]
+```
+
+
+Because a software library will change over time, it is possible that values retrieved from a ResultTracker
+were made at a time when the software structure was very different.  It is possible that the objects will no longer fully vivify.
+Also, the history may cross libraries, and some classes might not be instantiatable from the application doing the query.
+
+Because of this, all queries return a form of the object that is intentionally degenerate.  Class names are represented 
+as Strings instead of real types.  Metadata is available, but the object is not "functional".  
+
+By calling the `.load` method on the degenerate object, the full object attempts to vivify.  
+
+
+
+Query Interface Example:
+```
+
+```
+
+
 Shorter Example
 ---------------
 

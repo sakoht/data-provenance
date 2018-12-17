@@ -1,8 +1,10 @@
 package com.cibo.provenance
 
 import io.circe.generic.auto._
+
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe.TypeTag
+import scala.util.Try
 
 /**
   * ValueWithProvenanceSerializable is a companion to the ValueWithProvenance sealed trait hierarchy.
@@ -23,6 +25,12 @@ import scala.reflect.runtime.universe.TypeTag
   */
 sealed trait ValueWithProvenanceSerializable {
   def load(implicit rt: ResultTracker): ValueWithProvenance[_]
+
+  def tryLoad(implicit rt: ResultTracker): Try[ValueWithProvenance[_]] =
+    Try(load)
+
+  def tryLoadAs[VWP](implicit rt: ResultTracker) =
+    tryLoad.map(_.asInstanceOf[VWP])
 
   def wrap[O]: ValueWithProvenanceDeflated[O]
 
