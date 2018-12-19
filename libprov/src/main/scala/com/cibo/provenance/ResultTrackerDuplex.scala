@@ -210,7 +210,13 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
     cmp(aa, bb, s"findResults for $functionName and $version")
     aa.get
   }
-  
+
+  def findResultDataByOutput(outputDigest: Digest): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
+    val aa = Try(a.findResultDataByOutput(outputDigest))
+    val bb = Try(b.findResultDataByOutput(outputDigest))
+    cmp(aa, bb, s"findResults for $outputDigest")
+    aa.get
+  }
 
   // Compare two Try[T] and require that they match.
   // Try[T] does not by default support ==.

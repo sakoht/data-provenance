@@ -925,6 +925,21 @@ class ResultTrackerSimple(
       buildId
     )
   }
+
+  def findResultDataByOutput(outputDigest: Digest): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    storage.getSubKeysRecursive(s"data-provenance/${outputDigest.id}").map(_.split("/").toList).flatMap {
+      case
+        "as" :: className ::
+          "from" :: functionName :: version ::
+          "with-inputs" :: inputGroupId ::
+          "with-provenance" :: callId ::
+          "at" :: commitId :: buildId ::
+          Nil
+      =>
+        Some(findResultDataImpl(outputDigest.id, inputGroupId, callId, commitId, buildId))
+      case _ =>
+        None
+    }
 }
 
 object ResultTrackerSimple {

@@ -380,6 +380,28 @@ trait ResultTracker extends Serializable {
     */
   def findResultData(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable]
 
+  // Results by output
+
+  def findResultDataByOutput(outputDigest: Digest): Iterable[FunctionCallResultWithKnownProvenanceSerializable]
+
+  def findResultDataByOutput[O : Codec](output: O): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
+    val codec = implicitly[Codec[O]]
+    val bytes = codec.serialize(output)
+    val digest = Codec.digestBytes(bytes)
+    findResultDataByOutput(digest)
+  }
+
+  def findResultsByOutput(outputDigest: Digest): Iterable[FunctionCallResultWithProvenance[_]] =
+    findResultDataByOutput(outputDigest).map(_.load(this))
+
+  def findResultsByOutput[O : Codec](output: O): Iterable[FunctionCallResultWithProvenance[O]] = {
+    val codec = implicitly[Codec[O]]
+    val bytes = codec.serialize(output)
+    val digest = Codec.digestBytes(bytes)
+    findResultsByOutput(digest).map(_.asInstanceOf[FunctionCallResultWithProvenance[O]])
+  }
+
+
   /**
     * An UnresolvedVersionException is thrown if the system attempts to deflate a call with an unresolved version.
     * The version is typically static, but if it is not, the call cannot be saved until it is resolved.

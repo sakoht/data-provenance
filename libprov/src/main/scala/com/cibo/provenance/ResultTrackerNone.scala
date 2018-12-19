@@ -99,9 +99,8 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
   def findResultData(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = Iterable.empty
 
+  def findResultDataByOutput(outputDigest: Digest): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = Iterable.empty
 }
 
-
 class UnavailableData(msg: String) extends RuntimeException(f"Unavailable for ResultTrackerNone: $msg")
-
 
