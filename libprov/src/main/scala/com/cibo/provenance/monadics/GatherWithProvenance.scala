@@ -21,7 +21,7 @@ import java.io.Serializable
 import scala.language.higherKinds
 import scala.language.implicitConversions
 import io.circe.{Decoder, Encoder}
-import com.cibo.provenance._
+import com.cibo.provenance.{Result, _}
 import com.cibo.provenance.implicits.Traversable
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -144,7 +144,14 @@ class GatherWithProvenance[S[_], E](
   }
 
   case class Result(override val call: Call, override val outputAsVirtualValue: VirtualValue[S[E]])(implicit bi: BuildInfo)
-    extends FunctionCallResultWithProvenance[S[E]](call, outputAsVirtualValue, bi)
+    extends FunctionCallResultWithProvenance[S[E]](call, outputAsVirtualValue, bi) {
+
+    def normalize(implicit rt: ResultTracker): Result =
+      Result(call.unresolve, outputAsVirtualValue.resolveDigest)(bi.abbreviate)
+
+    def expandBuildInfo(implicit rt: ResultTracker): Result =
+      Result(call, outputAsVirtualValue)(rt.loadBuildInfoOption(bi.commitId, bi.buildId).get)
+  }
 
   implicit private def convertCall(call: Call): Call =
     Call(call.gatheredInputs, call.version)

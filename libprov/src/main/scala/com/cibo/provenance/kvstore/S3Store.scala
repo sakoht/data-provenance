@@ -134,10 +134,13 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.am
     )
   }
 
-  def getKeySuffixes(
-    keyPrefix: String = "",
-    delimiterOption: Option[String] = None
-  ): Iterable[String] = {
+  def getSubKeys(keyPrefix: String = ""): Iterable[String] =
+    getKeys(keyPrefix, recursive = false)
+
+  def getSubKeysRecursive(keyPrefix: String = ""): Iterable[String] =
+    getKeys(keyPrefix, recursive = true)
+
+  protected def getKeys(keyPrefix: String = "", recursive: Boolean = true): Iterable[String] = {
     val fullPrefix = getFullS3KeyForRelativeKey(keyPrefix)
     val offset: Int =
       if (fullPrefix.endsWith("/"))
@@ -146,7 +149,9 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.am
         fullPrefix.length + 1
 
     import scala.collection.JavaConverters._
-    val fullKeys = S3Objects.withPrefix(amazonS3, s3Bucket, fullPrefix).iterator().asScala.toList.map(_.getKey())
+    val o: S3Objects = S3Objects.withPrefix(amazonS3, s3Bucket, fullPrefix)
+    if (recursive) o else o.withDelimiter("/")
+    val fullKeys = o.iterator().asScala.toList.map(_.getKey())
 
     fullKeys.map { fullPath =>
       // This has more sanity checking that should be necessary, but one-off errors have crept in several times.

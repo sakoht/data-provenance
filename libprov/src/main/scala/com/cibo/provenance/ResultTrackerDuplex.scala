@@ -169,44 +169,44 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
     aa.get
   }
 
-  def findCalls: Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs] = {
-    val aa = Try(a.findCalls)
-    val bb = Try(b.findCalls)
+  def findCallData: Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] = {
+    val aa = Try(a.findCallData)
+    val bb = Try(b.findCallData)
     cmp(aa, bb, s"findCalls")
     aa.get
   }
 
-  def findCalls(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs] = {
-    val aa = Try(a.findCalls(functionName))
-    val bb = Try(b.findCalls(functionName))
+  def findCallData(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] = {
+    val aa = Try(a.findCallData(functionName))
+    val bb = Try(b.findCallData(functionName))
     cmp(aa, bb, s"findCalls for $functionName")
     aa.get
   }
 
-  def findCalls(functionName: String, version: Version): Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs] = {
-    val aa = Try(a.findCalls(functionName, version))
-    val bb = Try(b.findCalls(functionName, version))
+  def findCallData(functionName: String, version: Version): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] = {
+    val aa = Try(a.findCallData(functionName, version))
+    val bb = Try(b.findCallData(functionName, version))
     cmp(aa, bb, s"findCalls for $functionName and $version")
     aa.get
   }
 
-  def findResults: Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
-    val aa = Try(a.findResults)
-    val bb = Try(b.findResults)
+  def findResultData: Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
+    val aa = Try(a.findResultData)
+    val bb = Try(b.findResultData)
     cmp(aa, bb, s"findResults")
     aa.get
   }
 
-  def findResults(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
-    val aa = Try(a.findResults(functionName))
-    val bb = Try(b.findResults(functionName))
+  def findResultData(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
+    val aa = Try(a.findResultData(functionName))
+    val bb = Try(b.findResultData(functionName))
     cmp(aa, bb, s"findResults for $functionName")
     aa.get
   }
 
-  def findResults(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
-    val aa = Try(a.findResults(functionName, version))
-    val bb = Try(b.findResults(functionName, version))
+  def findResultData(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
+    val aa = Try(a.findResultData(functionName, version))
+    val bb = Try(b.findResultData(functionName, version))
     cmp(aa, bb, s"findResults for $functionName and $version")
     aa.get
   }

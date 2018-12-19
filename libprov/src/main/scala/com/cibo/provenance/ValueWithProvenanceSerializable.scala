@@ -7,30 +7,44 @@ import scala.reflect.runtime.universe.TypeTag
 import scala.util.Try
 
 /**
-  * ValueWithProvenanceSerializable is a companion to the ValueWithProvenance sealed trait hierarchy.
+  * ValueWithProvenanceSerializable seale trait.
+  * The hierarchy is a companion to the ValueWithProvenance sealed trait hierarchy.
   *
   * Each class in the tree is paired with another in the ValueWithProvenance tree,
-  * but is structured to be serialized:
-  * - type information is translated into values
+  * but is structured to be serialized, and also deserialized in applications that do not
+  * have access to the original softare classes.
+  *
+  * This means:
+  * - type information is translated into String values
   * - nested values are serialized recursively, then referenced by storage ID rather than software reference
   * - storage IDs come from a digest of the consistently serialized data
   *
-  * Each case class serializes as JSON.
+  * Each class in the hierarchy is a simple case class serializes as JSON.
   *
-  * The companion object has an save() method that takes the related class and makes the *Saved class,
-  * along with an implicit ResultTracker, and actually "saves".
+  * The companion object has an save() method that takes the related class and makes the *Serializable class,
+  * along with an implicit ResultTracker, and actually "saves" deconstructs the object into pieces in storage.
   *
-  * A matching load() method does the converse and turns a saved stub into a full object.
+  * A matching load() method does the converse and turns a saved stub into a full object.  This will only
+  * work in an application that has acces to the appropriate class, and in which the class has not
+  * changed dramatically since it was saved.
+  *
+  * See also the *Deflated subclasses of ValueWithProvenance, which work in a library where the output
+  * class is available, so the type is known, but it otherwise wraps these objects and defers deeper
+  * instantiation. These allow for working with data where the output type is available but the inputs
+  * only exist in a foreign library, or have been deleted/changed in the current library.
   *
   */
 sealed trait ValueWithProvenanceSerializable {
   def load(implicit rt: ResultTracker): ValueWithProvenance[_]
 
+  def loadAs[T <: ValueWithProvenance[_]](implicit rt: ResultTracker): T =
+    load(rt).asInstanceOf[T]
+
   def tryLoad(implicit rt: ResultTracker): Try[ValueWithProvenance[_]] =
     Try(load)
 
-  def tryLoadAs[VWP](implicit rt: ResultTracker) =
-    tryLoad.map(_.asInstanceOf[VWP])
+  def tryLoadAs[T <: ValueWithProvenance[_]](implicit rt: ResultTracker): Try[T] =
+    tryLoad.map(_.asInstanceOf[T])
 
   def wrap[O]: ValueWithProvenanceDeflated[O]
 
@@ -196,7 +210,7 @@ object FunctionCallWithKnownProvenanceSerializableWithInputs {
                 dresult.data
               case u: UnknownProvenance[_] =>
                 FunctionCallWithUnknownProvenanceSerializable.save(u)(rt)
-              case u: UnknownProvenanceValue[_] =>
+              case u: UnknownProvenanceResolved[_] =>
                 FunctionCallResultWithUnknownProvenanceSerializable.save(u)(rt)
               case kcall: FunctionCallWithProvenance[_] =>
                 FunctionCallWithKnownProvenanceSerializableWithInputs.save(kcall)(rt).unexpandInputs
@@ -287,7 +301,7 @@ case class FunctionCallResultWithKnownProvenanceSerializable(
     assert(ct == cd.classTag)
     val bi = BuildInfoBrief(commitId, buildId)
     val output: T = rt.loadValue[T](outputDigest)
-    call.newResult(VirtualValue(output)(cd))(bi)
+    call.newResult(VirtualValue(Some(output), Some(outputDigest), None)(cd))(bi)
   }
 }
 

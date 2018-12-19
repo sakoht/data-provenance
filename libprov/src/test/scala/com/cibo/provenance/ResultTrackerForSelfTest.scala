@@ -53,7 +53,7 @@ case class ResultTrackerForSelfTest(rootPath: String)(implicit bi: BuildInfo, ec
           if (!rootPath.contains(user))
             throw new RuntimeException(f"Refusing to delete a test a directory that does not contain the current user's name: $user not in ${rootPath}")
           val bothStores: S3Store = new S3Store(rootPath)(a.storage.asInstanceOf[S3Store].amazonS3)
-          bothStores.getKeySuffixes().foreach(bothStores.remove)
+          bothStores.getSubKeysRecursive().foreach(bothStores.remove)
         case None =>
           throw new RuntimeException(
             "Failed to determine the current user." +

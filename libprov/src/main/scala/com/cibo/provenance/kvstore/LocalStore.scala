@@ -60,10 +60,14 @@ case class LocalStore(basePath: String) extends KVStore {
   def getBytesAsync(key: String)(implicit ec: ExecutionContext): Future[Array[Byte]] =
     Future { getBytes(key) }
 
-  def getKeySuffixes(
-    keyPrefix: String = "",
-    delimiterOption: Option[String] = None
-  ): Iterable[String] = {
+  def getSubKeys(keyPrefix: String = ""): Iterable[String] = {
+    require(!keyPrefix.endsWith("/"), f"The $keyPrefix should not end in a slash!: $keyPrefix")
+    val fullPrefix = getFullPathForRelativePath(keyPrefix)
+    val dir = new File(fullPrefix)
+    dir.list().toIterable
+  }
+
+  def getSubKeysRecursive(keyPrefix: String = ""): Iterable[String] = {
     require(!keyPrefix.endsWith("/"), f"The $keyPrefix should not end in a slash!: $keyPrefix")
 
     val fullPrefix = getFullPathForRelativePath(keyPrefix)

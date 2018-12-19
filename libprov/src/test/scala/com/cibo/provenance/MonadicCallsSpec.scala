@@ -260,7 +260,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       // the input to that is a constant 200
       val lastInputInputInput: ValueWithProvenance[_] = lastInputInput.resolve.call.inputs.head
       lastInputInputInput.asInstanceOf[ValueWithProvenance[Int]]
-      lastInputInputInput.asInstanceOf[UnknownProvenanceValue[Int]]
+      lastInputInputInput.asInstanceOf[UnknownProvenanceResolved[Int]]
 
       // Be sure everything can reveal its intermediate values
       lastInputInputInput.resolve.output shouldBe 200           // UnknownProvenance(200)

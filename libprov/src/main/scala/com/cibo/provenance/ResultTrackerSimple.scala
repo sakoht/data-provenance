@@ -1,9 +1,10 @@
 package com.cibo.provenance
 
 import com.cibo.provenance.kvstore.{KVStore, LocalStore}
-import io.circe.{Decoder, Json}
+import io.circe.{Decoder, DecodingFailure, Json}
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Left, Right}
 
 /**
   * Created by ssmith on 5/16/17.
@@ -339,11 +340,13 @@ class ResultTrackerSimple(
   def hasOutputForCall[O](call: FunctionCallWithProvenance[O]): Boolean =
     loadOutputIdsForCallOption(call).nonEmpty
 
-  def loadResultByCallOption[O](call: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] =
-    loadOutputIdsForCallOption(call).map {
+  def loadResultByCallOption[O](call: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] = {
+    val callWithResolvedInputs = call.resolveInputs(this) // This is not required but will be more efficient.
+    loadOutputIdsForCallOption(callWithResolvedInputs).map {
       case (outputId, commitId, buildId) =>
-        createResultFromPreviousCallOutput(call, outputId, commitId, buildId)
+        createResultFromPreviousCallOutput(callWithResolvedInputs, outputId, commitId, buildId)
     }
+  }
 
   def loadResultByCallOptionAsync[O](call: FunctionCallWithProvenance[O])(implicit ec: ExecutionContext): Future[Option[FunctionCallResultWithProvenance[O]]] = {
     loadOutputIdsForCallOptionAsync(call).map {
@@ -713,7 +716,7 @@ class ResultTrackerSimple(
     }
 
   protected def getListingRecursive(path: String): List[String] = {
-    val listing1 = storage.getKeySuffixes(path)
+    val listing1 = storage.getSubKeysRecursive(path)
     underlyingTrackerOption match {
       case Some(underlying) =>
         // NOTE: It would be a performance improvment to make this a merge sort.
@@ -832,44 +835,47 @@ class ResultTrackerSimple(
   // Functions
 
   def findFunctionNames: Iterable[String] =
-    storage.getKeySuffixes("functions", delimiterOption = Some("/"))
+    storage.getSubKeys("functions")
 
   def findFunctionVersions(functionName: String): Iterable[Version] =
-    storage.getKeySuffixes(f"functions/$functionName", delimiterOption = Some("/")).map(Version.apply)
+    storage.getSubKeys(f"functions/$functionName").map(Version.apply)
 
 
   // Calls
 
-  def findCalls: Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs] =
-    storage.getKeySuffixes("calls").map { id => loadCallByIdRaw(Digest(id)) }
+  def findCallData: Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
+    storage.getSubKeysRecursive("calls").map { id => loadCallDataByIdRaw(Digest(id)) }
 
-  def findCalls(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs] =
-    storage.getKeySuffixes(f"functions/$functionName").map {
+  def findCallData(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
+    storage.getSubKeysRecursive(f"functions/$functionName").flatMap {
       suffix =>
-        val p = suffix.split("/")
-        val (version, _calls, callId) = (p(0), p(1), p(2))
-        loadCallByIdRaw(Digest(callId))
+        suffix.split("/").toList match {
+          case version :: "calls" :: callId :: Nil =>
+            Some(loadCallDataByIdRaw(Digest(callId)))
+          case _ =>
+            None
+        }
     }
 
-  def findCalls(functionName: String, version: Version): Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs] =
-    storage.getKeySuffixes(f"functions/$functionName/${version.id}/calls").map {
-      id => loadCallByIdRaw(Digest(id))
+  def findCallData(functionName: String, version: Version): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
+    storage.getSubKeysRecursive(f"functions/$functionName/${version.id}/calls").map {
+      id => loadCallDataByIdRaw(Digest(id))
     }
 
 
   // Results
 
-  def findResults: Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
-    storage.getKeySuffixes("results").map { id => loadResultByIdRaw(Digest(id)) }
+  def findResultData: Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    storage.getSubKeysRecursive("results").map { id => loadResultDataByIdRaw(Digest(id)) }
 
-  def findResults(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+  def findResultData(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
     findFunctionVersions(functionName).flatMap {
-      v => findResults(functionName, v)
+      v => findResultData(functionName, v)
     }
 
-  def findResults(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
+  def findResultData(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
     val outputBuildInfo: Map[String, (String, String)] =
-      storage.getKeySuffixes(f"function/$functionName/${version.id}/inputs-to-outputs").map(_.split("/")).map {
+      storage.getSubKeysRecursive(f"functions/$functionName/${version.id}/inputs-to-output").map(_.split("/")).map {
         vals =>
           val inputId = vals(0)
           val outputId = vals(1)
@@ -878,209 +884,46 @@ class ResultTrackerSimple(
           outputId -> (commitId, buildId)
       }.toMap
 
-    storage.getKeySuffixes(f"function/$functionName/${version.id}/output-to-provenance").map(_.split("/")).map {
-      vals =>
-        val outputId = vals(0)
-        val inputId = vals(1)
-        val callId = vals(2)
-        val bi = outputBuildInfo(outputId)
-        findResultsImpl(outputId, inputId, callId, bi._1, bi._2)
-    }
+    val resultsByOutput =
+      storage.getSubKeysRecursive(f"functions/$functionName/${version.id}/output-to-provenance").map(_.split("/")).map {
+        vals =>
+          val outputId = vals(0)
+          val inputId = vals(1)
+          val callId = vals(2)
+          val bi = outputBuildInfo(outputId)
+          findResultDataImpl(outputId, inputId, callId, bi._1, bi._2)
+      }
+    require(outputBuildInfo.keys.size == resultsByOutput.map(_.outputDigest).toVector.distinct.size, "Failed to find one result per output!")
+    resultsByOutput
   }
 
-  protected def loadCallByIdRaw(callDigest: Digest): FunctionCallWithKnownProvenanceSerializableWithoutInputs = {
+  protected def loadCallDataByIdRaw(callDigest: Digest): FunctionCallWithKnownProvenanceSerializableWithInputs = {
     val bytes: Array[Byte] = loadBytes(f"calls/${callDigest.id}")
-    Codec.deserialize(bytes)(ValueWithProvenanceSerializable.codec)
-      .asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithoutInputs]
+    val o = Codec.deserialize(bytes)(ValueWithProvenanceSerializable.codec)
+    o.asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
   }
 
-  protected def loadResultByIdRaw(resultDigest: Digest): FunctionCallResultWithKnownProvenanceSerializable = {
+  protected def loadResultDataByIdRaw(resultDigest: Digest): FunctionCallResultWithKnownProvenanceSerializable = {
     val bytes: Array[Byte] = loadBytes(f"results/${resultDigest.id}")
     Codec.deserialize(bytes)(ValueWithProvenanceSerializable.codec)
       .asInstanceOf[FunctionCallResultWithKnownProvenanceSerializable]
   }
 
-  protected def findResultsImpl(
+  protected def findResultDataImpl(
     outputId: String,
     inputId: String,
     callId: String,
     commitId: String,
     buildId: String
   ): FunctionCallResultWithKnownProvenanceSerializable = {
-    val call = loadCallByIdRaw(Digest(callId))
-    FunctionCallResultWithKnownProvenanceSerializable(call, Digest(inputId), Digest(outputId), commitId, buildId)
-  }
-
-  /*
-   * Query Interface: Extended
-   *
-   * These methods are not in the base ResultTracker trait.  They provide additioal information that is
-   * readily available in the default ResultTrackerSimple, but might not necessarily be available in alternate trackers.
-   */
-
-  // Results
-
-  def findResultsByOutput(outputDigest: Digest): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
-    storage.getKeySuffixes(s"data-provenance/${outputDigest.id}").map {
-      suffix =>
-        val p = suffix.split("/")
-        val (
-          _as, className,
-          _from, functionName, version,
-          _withInputs, inputGroupId,
-          _withProvenance, resultId,
-          _at, commitId, buildId
-          ) = (
-          p(0), p(1),
-          p(2), p(3), p(4),
-          p(5), p(6),
-          p(7), p(8),
-          p(9), p(10), p(11)
-        )
-        loadResultByIdRaw(Digest(resultId))
-          //.asInstanceOf[FunctionCallResultWithKnownProvenanceSerializable]
-    }
-
-  // Inputs
-
-  def findInputsForOutput(outputDigest: Digest): Iterable[Seq[ValueWithProvenanceSerializable]] = {
-    // NOTE: We could shortcut straight to the inputs and be more efficient.  Just more complicated code.
-    findResultsByOutput(outputDigest).map {
-      result =>
-        result.call.expandInputs(this).inputList
-    }
-  }
-
-  // Outputs
-
-  def findValueClassNames: Iterable[String] =
-    storage.getKeySuffixes("codecs", delimiterOption = Some("/"))
-
-  def findValueIds: Iterable[Digest] =
-    storage.getKeySuffixes("data").map(id => Digest(id))
-
-  def findValueIdsClassNamesAndCodecDigests: Iterable[(Digest, String, Digest)] = {
-    storage.getKeySuffixes("data-codecs").flatMap {
-      ids =>
-        ids.split("/").toList match {
-          case valueId :: dataClassName :: codecId :: Nil =>
-            Some((Digest(valueId), dataClassName, Digest(codecId)))
-          case other =>
-            throw new RuntimeException(f"Unexpected suffix in data-codecs: $other")
-        }
-    }
-  }
-
-  def findValueIdsAndCodecs(className: String): Iterable[(Digest,Option[Codec[_]])] = {
-    storage.getKeySuffixes("data-codecs").flatMap {
-      ids =>
-        ids.split("/").toList match {
-          case valueId :: dataClassName :: codecId :: Nil =>
-            ???
-            /*
-            if (dataClassName == className) {
-              def withClass[T](clazz: Class[T]): Option[(Digest, Codec[T])] = {
-                val codecOption: Option[Codec[T]] =
-                  Try(loadCodecByClassNameAndCodecDigest[T](dataClassName, Digest(codecId))).toOption
-                Some((Digest(valueId), codecOption))
-              }
-              val clazz = Class.forName(dataClassName)
-              withClass(clazz)
-            } else {
-              None
-            }
-            */
-          case other =>
-            throw new RuntimeException(f"Unexpected suffix in data-codecs: $other")
-        }
-    }
-  }
-
-  def findValueClassNamesAndCodecs(dataDigest: Digest): Iterable[(String, Option[Codec[_]])] = {
-    storage.getKeySuffixes(s"data/${dataDigest.id}").map {
-      suffix =>
-        val p = suffix.split("/")
-        val (className: String, codecId: String) = (p(0), p(1))
-        (className, findCodecForClassNameAndCodecId(className, codecId))
-    }
-  }
-
-  def findValue(digest: Digest): Any = {
-    val pairs = findValueClassNamesAndCodecs(digest)
-    if (pairs.isEmpty)
-      throw new RuntimeException(f"Failed to find any codecs for $digest!")
-    val usable = pairs.filter(_._2.nonEmpty).toList
-    if (usable.isEmpty)
-      throw new RuntimeException(f"No usable codecs among classes for digest $digest: ${pairs.map(_._1).toVector.distinct}")
-    if (usable.length > 1)
-      logger.warn(f"Found multiple usable codecs for $digest: ${usable.map(_._1).toVector.distinct}")
-    val codec: Codec[_] = usable.head._2.get
-    loadValue(digest)(codec)
-  }
-
-
-  // BuildInfo
-
-  def findCommitIds: Iterable[String] =
-    storage.getKeySuffixes("commits", delimiterOption = Some("/"))
-
-  def findBuildIds: Iterable[String] =
-    storage.getKeySuffixes("commits").map(_.split("/")(2))
-
-  def findBuildIds(commitId: String): Iterable[String] =
-    storage.getKeySuffixes(f"commits/$commitId")
-
-  def findBuildInfos(commitIdOption: Option[String], buildIdOption: Option[String]): Iterable[BuildInfo] = {
-    commitIdOption match {
-      case None =>
-        storage.getKeySuffixes("commits").flatMap(findBuildInfoImpl)
-      case Some(commitId) =>
-        buildIdOption match {
-          case Some(buildId) => Seq(loadBuildInfoOption(commitId, buildId)).flatten.toIterable
-          case None =>
-            storage.getKeySuffixes(f"commits/$commitId").map(commitId + "/" + _).flatMap(findBuildInfoImpl)
-        }
-    }
-  }
-
-  protected def findBuildInfoImpl(suffix: String): Option[BuildInfo] = {
-    val p = suffix.split("/")
-    val (commitId, _build, buildId, buildInfoId) = (p(0), p(1), p(2), p(3))
-    loadBuildInfoOption(commitId, buildId)
-  }
-
-  // Codecs
-
-  def findTypeNames: List[String] =
-    storage.getKeySuffixes("codecs").toList
-
-  def findCodecs: List[Codec[_]] =
-    storage.getKeySuffixes("codecs").toList.flatMap(findCodecImpl)
-
-  def findCodecs(className: String): Iterable[Codec[_]] =
-    storage.getKeySuffixes(s"codecs/$className").map(className + "/" + _).flatMap(findCodecImpl)
-
-  def findCodec[T : ClassTag]: Codec[T] = findCodecs(implicitly[ClassTag[T]].toString).head.asInstanceOf[Codec[T]]
-
-  protected def findCodecImpl(suffix: String): Option[Codec[_]] = {
-    val p = suffix.split("/")
-    val (className, codecId) = (p(0), p(1))
-    findCodecForClassNameAndCodecId(className, codecId)
-  }
-
-  protected def findCodecForClassNameAndCodecId(className: String, codecId: String): Option[Codec[_]] = {
-    import io.circe.parser._
-    val bytes = loadBytes(f"codecs/$className/$codecId")
-    val string = new String(bytes, "UTF-8")
-    val json: Json = parse(string) match {
-      case Left(error) =>
-        throw error
-      case Right(obj) =>
-        obj
-    }
-    def getObj(bytes: Array[Byte], length: Int): Codec[_] = Codec.deserializeRaw(bytes)
-    val dec: Decoder[Codec[_]] =  Decoder.forProduct2("bytes", "length")(getObj)
-    dec.decodeJson(json).toOption
+    val call = loadCallDataByIdRaw(Digest(callId))
+    FunctionCallResultWithKnownProvenanceSerializable(
+      call.unexpandInputs,
+      Digest(inputId),
+      Digest(outputId),
+      commitId,
+      buildId
+    )
   }
 }
 

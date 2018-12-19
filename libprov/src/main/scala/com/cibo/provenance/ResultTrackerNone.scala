@@ -87,17 +87,17 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
   def findFunctionVersions(functionName: String): Iterable[Version] = Iterable.empty
 
-  def findCalls: Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs] = Iterable.empty
+  def findCallData: Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] = Iterable.empty
 
-  def findCalls(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs] = Iterable.empty
+  def findCallData(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] = Iterable.empty
 
-  def findCalls(functionName: String, version: Version): Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs] = Iterable.empty
+  def findCallData(functionName: String, version: Version): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] = Iterable.empty
 
-  def findResults: Iterable[FunctionCallResultWithKnownProvenanceSerializable] = Iterable.empty
+  def findResultData: Iterable[FunctionCallResultWithKnownProvenanceSerializable] = Iterable.empty
 
-  def findResults(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = Iterable.empty
+  def findResultData(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = Iterable.empty
 
-  def findResults(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = Iterable.empty
+  def findResultData(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = Iterable.empty
 
 }
 

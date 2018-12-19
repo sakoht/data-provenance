@@ -33,7 +33,9 @@ trait KVStore {
 
   def getBytesAsync(key: String)(implicit ec: ExecutionContext): Future[Array[Byte]]
 
-  def getKeySuffixes(keyPrefix: String = "", delimiterOption: Option[String] = None): Iterable[String]
+  def getSubKeys(keyPrefix: String = ""): Iterable[String]
+
+  def getSubKeysRecursive(keyPrefix: String = ""): Iterable[String]
 }
 
 

@@ -99,7 +99,7 @@ case class ResultTrackerForTest(outputStorage: KVStore, referenceStorage: KVStor
     * Note: Calling push() will also stage it automatically.
     */
   def checkForUnstagedResults(): Unit = {
-    if (storage.getKeySuffixes().toList.nonEmpty) {
+    if (storage.getSubKeysRecursive().toList.nonEmpty) {
       val msg =
         if (isLocal && underlyingTrackerOption.map(_.isLocal).getOrElse(throw new RuntimeException("Missing underlying tracker.")))
           "# New reference data! To stage it:\nrsync -av --progress \"" + outputPath + "/\" \"" + referencePath + "\""

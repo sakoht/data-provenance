@@ -310,30 +310,75 @@ trait ResultTracker extends Serializable {
   /**
     * Query Interface
     *
+    * The low-level interface on the ResultTracker returns data even if the types are not
+    * fully instantiatable in the current application.
+    *
+    * To fully vivify an object, call .load to get a fully typified object.
     */
 
   // Functions
 
+  /**
+    * Return the names of all functions with results tracked in this tracker.
+    *
+    * @return  The fully-qualified names of the functions.
+    */
   def findFunctionNames: Iterable[String]
 
+  /**
+    * Return all versions of a given function with calls or results in storage.
+    *
+    * @param functionName
+    * @return
+    */
   def findFunctionVersions(functionName: String): Iterable[Version]
 
   // Calls
 
-  def findCalls: Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs]
+  /**
+    * Return all calls for which there is data in storage.
+    *
+    * @return An iterable of calls.
+    */
+  def findCallData: Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs]
 
-  def findCalls(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs]
+  /**
+    * Return all calls for which there is data in storage for a given function name.
+    *
+    * @return An iterable of calls.
+    */
+  def findCallData(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs]
 
-  def findCalls(functionName: String, version: Version): Iterable[FunctionCallWithKnownProvenanceSerializableWithoutInputs]
+  /**
+    * Return all calls for which there is data in storage for a given function name and verison number.
+    *
+    * @return An iterable of calls.
+    */
+  def findCallData(functionName: String, version: Version): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs]
 
 
   // Results
 
-  def findResults: Iterable[FunctionCallResultWithKnownProvenanceSerializable]
+  /**
+    * Return all results for which there is data in storage.
+    *
+    * @return An iterable of results.
+    */
+  def findResultData: Iterable[FunctionCallResultWithKnownProvenanceSerializable]
 
-  def findResults(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable]
+  /**
+    * Return all calls for which there is data in storage for a given function name.
+    *
+    * @return An iterable of results.
+    */
+  def findResultData(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable]
 
-  def findResults(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable]
+  /**
+    * Return all calls for which there is data in storage for a given function name and version.
+    *
+    * @return An iterable of results.
+    */
+  def findResultData(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable]
 
   /**
     * An UnresolvedVersionException is thrown if the system attempts to deflate a call with an unresolved version.
