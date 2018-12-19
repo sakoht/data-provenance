@@ -9,11 +9,11 @@ import com.amazonaws.ClientConfiguration
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain
 import com.amazonaws.regions.Regions
 import com.amazonaws.services.s3.AmazonS3
-import com.amazonaws.services.s3.iterable.S3Objects
 import com.amazonaws.services.s3.model._
 import com.cibo.provenance.{CacheUtils, Codec}
 import com.cibo.provenance.exceptions.{AccessErrorException, NotFoundException}
 import com.github.dwhjames.awswrap.s3.AmazonS3ScalaClient
+import com.typesafe.scalalogging.LazyLogging
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService, Future}
 import scala.util.{Failure, Try}
@@ -142,23 +142,24 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.am
 
   protected def getKeys(keyPrefix: String = "", recursive: Boolean = true): Iterable[String] = {
     val fullPrefix = getFullS3KeyForRelativeKey(keyPrefix)
-    val offset: Int =
-      if (fullPrefix.endsWith("/"))
-        fullPrefix.length
-      else
-        fullPrefix.length + 1
 
-    import scala.collection.JavaConverters._
-    val o: S3Objects = S3Objects.withPrefix(amazonS3, s3Bucket, fullPrefix)
-    if (recursive) o else o.withDelimiter("/")
-    val fullKeys = o.iterator().asScala.toList.map(_.getKey())
+    val fullPrefixWithSeparator =
+      if (fullPrefix.endsWith("/"))
+        fullPrefix
+      else
+        fullPrefix + "/"
+
+    val offset: Int = fullPrefixWithSeparator.length
+    val delimit = if (recursive) None else Some("/")
+    val fullKeys = S3KeyIterator(s3Bucket, fullPrefixWithSeparator, delimit)(amazonS3).toList
 
     fullKeys.map { fullPath =>
       // This has more sanity checking that should be necessary, but one-off errors have crept in several times.
-      assert(fullPath.startsWith(fullPrefix), s"Full path '$fullPath' does not start with the expected prefix '$fullPrefix' (from $keyPrefix)")
+      assert(fullPath.startsWith(fullPrefixWithSeparator), s"Full path '$fullPath' does not start with the expected prefix '$fullPrefixWithSeparator' (from $keyPrefix)")
       fullPath
-        .substring(offset)
+        .substring(offset).stripSuffix("/")
         .ensuring(!_.startsWith("/"), s"Full path suffix should not start with a '/'")
+        .ensuring(!_.endsWith("/"), s"Full path suffix should not end with a '/'")
     }
   }
 
@@ -189,6 +190,7 @@ class S3Store(val basePath: String)(implicit val amazonS3: AmazonS3 = S3Store.am
     }
   }
 }
+
 
 object S3Store {
   import io.circe._
@@ -245,3 +247,96 @@ object S3Store {
         )
     }
 }
+
+
+private object S3KeyIterator {
+  def apply(bucketName: String, prefix: String, delimitOption: Option[String])(implicit s3Client: AmazonS3): S3KeyIterator =
+    new S3KeyIterator({
+      val req = new ListObjectsRequest
+      req.setBucketName(bucketName)
+      req.setPrefix(prefix)
+      delimitOption match {
+        case Some(delimit) => req.setDelimiter(delimit)
+        case None =>
+      }
+      req
+    })
+}
+
+
+private class S3KeyIterator(req: ListObjectsRequest)(implicit s3client: AmazonS3) extends Iterator[String] {
+  val pageIterator = new S3PageIterator(req)
+
+  // Note: mutable
+  private var nextKeys: List[String] = getNextPageKeys
+
+  private def getNextPageKeys: List[String] = {
+    if (pageIterator.hasNext) {
+      val result = pageIterator.next()
+      import scala.collection.JavaConverters._
+      val keys = (result.getObjectSummaries.asScala.map(_.getKey) ++ result.getCommonPrefixes.asScala).toList
+      keys
+    }
+    else {
+      List.empty[String]
+    }
+  }
+
+  override def hasNext: Boolean = nextKeys.nonEmpty || pageIterator.hasNext
+
+  override def next(): String = {
+    if (nextKeys.isEmpty)
+      nextKeys = getNextPageKeys
+    val next = nextKeys.head
+    nextKeys = nextKeys.tail
+    next
+  }
+}
+
+
+class S3PageIterator(req: ListObjectsRequest)(implicit s3client: AmazonS3) extends Iterator[ObjectListing] with LazyLogging {
+  private var nextObjectListing: Option[ObjectListing] =
+    Some(
+      try s3client.listObjects(req) catch {
+        case NonFatal(e) =>
+          logger.error(s"Error listing objects in s3://${req.getBucketName}/${req.getPrefix}", e)
+          throw e
+      }
+    )
+
+  override def hasNext: Boolean =
+    nextObjectListing match {
+      case None => false
+      case Some(_) => true
+    }
+
+  override def next(): ObjectListing = {
+    nextObjectListing match {
+      case Some(list) =>
+        val nextMarker = list.getNextMarker
+        if (nextMarker != null) {
+          val newRequest = new ListObjectsRequest(
+            req.getBucketName,
+            req.getPrefix,
+            list.getNextMarker,
+            req.getDelimiter,
+            req.getMaxKeys
+          )
+          val nextFutureList: ObjectListing =
+            try s3client.listObjects(newRequest) catch {
+              case NonFatal(e) =>
+                logger.error(s"Error checking existence of in s3://${newRequest.getBucketName}/${newRequest.getPrefix}", e)
+                throw e
+            }
+          nextObjectListing = Some(nextFutureList)
+        }
+        else {
+          nextObjectListing = None
+        }
+        list
+      case None =>
+        throw new java.util.NoSuchElementException("next on empty iterator")
+    }
+  }
+}
+
