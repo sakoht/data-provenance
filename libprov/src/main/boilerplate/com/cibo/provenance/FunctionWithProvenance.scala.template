@@ -228,7 +228,7 @@ abstract class Function0WithProvenance[O : Codec] extends FunctionWithProvenance
   def deserializeCall(s: FunctionCallWithProvenanceSerializable)(implicit rt: ResultTracker): Call = {
     val ss = s.asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
     val i = ss.inputList.toVector
-    Call(ss.functionVersion)
+    Call(UnknownProvenance(ss.functionVersion).resolve)
   }
 
   object Call {
@@ -320,115 +320,122 @@ abstract class Function0WithProvenance[O : Codec] extends FunctionWithProvenance
     * Return all versions of this function that have data in a given (implicit) ResultTracker.
     *
     * @param rt   The implicit ResultTracker.
-    * @return     An Iterator[Version].
+    * @return     An Iterable[Version].
     */
-  def findVersions(implicit rt: ResultTracker): Iterator[Version] =
+  def findVersions(implicit rt: ResultTracker): Iterable[Version] =
     rt.findFunctionVersions(self.name)
 
   /**
     * Return all calls of this function that have data in a given (implicit) ResultTracker.
     *
-    * Note: Some calls might not instantiate if the class has changed.  Use findCallsHistorical
+    * Note: Some calls might not instantiate if the class has changed.  Use findCallData
     * for a degenerate form that will always return.
     *
     * @param rt   The implicit ResultTracker.
-    * @return     An Iterator[Version].
+    * @return     An Iterable[Version].
     */
-  def findCalls()(implicit rt: ResultTracker): Iterator[Call] =
-    rt.findCalls(self.name).flatMap(_.tryLoadAs[Call].toOption)
+  def findCalls()(implicit rt: ResultTracker): Iterable[Call] =
+    rt.findCallData(self.name).flatMap(_.tryLoadAs[Call].toOption).map(_.unresolveInputs)
 
   /**
     * Return all calls of this function that have data in a given (implicit) ResultTracker.
     *
-    * Note: Some calls might not instantiate if the class has changed.  Use findCallsHistorical
+    * Note: Some calls might not instantiate if the class has changed.  Use findCallData
     * for a degenerate form that will always return.
     *
     * @param version  Limit results to the specified version of the function.
     * @param rt       The implicit ResultTracker.
-    * @return         An Iterator[Version].
+    * @return         An Iterable[Version].
     */
-  def findCalls(version: Version)(implicit rt: ResultTracker): Iterator[Call] =
-    rt.findCalls(self.name, version).flatMap(_.tryLoadAs[Call])
+  def findCalls(version: Version)(implicit rt: ResultTracker): Iterable[Call] =
+    rt.findCallData(self.name, version).flatMap(_.tryLoadAs[Call].toOption).map(_.unresolveInputs)
 
   /**
     * Return all results of this function that have data in a given (implicit) ResultTracker.
     *
-    * Note: Some calls might not instantiate if the class has changed.  Use findCallsHistorical
+    * Note: Some calls might not instantiate if the class has changed.  Use findCallData
     * for a degenerate form that will always return.
     *
     * @param rt   The implicit ResultTracker.
-    * @return     An Iterator[Version].
+    * @return     An Iterable[Version].
     */
-  def findResults()(implicit rt: ResultTracker): Iterator[Result] =
-    rt.findResults(self.name).flatMap(_.tryLoadAs[Result].toOption)
+  def findResults()(implicit rt: ResultTracker): Iterable[Result] =
+    rt.findResultData(self.name).flatMap(_.tryLoadAs[Result].toOption)
 
   /**
     * Return all results of this function that have data in a given (implicit) ResultTracker.
     *
-    * Note: Some calls might not instantiate if the class has changed.  Use findCallsHistorical
+    * Note: Some calls might not instantiate if the class has changed.  Use findCallData
     * for a degenerate form that will always return.
     *
     * @param version  Limit results to the specified version of the function.
     * @param rt       The implicit ResultTracker.
-    * @return         An Iterator[Version].
+    * @return         An Iterable[Version].
     */
-  def findResults(version: Version)(implicit rt: ResultTracker): Iterator[Result] =
-    rt.findResults(self.name, version).flatMap(_.tryLoadAs[Result].toOption)
+  def findResults(version: Version)(implicit rt: ResultTracker): Iterable[Result] =
+    rt.findResultData(self.name, version).flatMap(_.tryLoadAs[Result].toOption)
+
+  /**
+    * Return all calls of this function that have data in a given (implicit) ResultTracker.
+    *
+    * This returns a degenerate form of the calls with types expressed as strings by name.
+    * The data from this is durable across changes in the codebase.  
+    * 
+    * Calling the .load method vififies the data as a fully typed value.
+    *
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[Version].
+    */
+  def findCallData()(implicit rt: ResultTracker): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
+    rt.findCallData(self.name)
 
   /**
     * Return all calls of this function that have data in a given (implicit) ResultTracker.
     *
     * This returns a degenerate form of the calls with types expressed as strings by name.
     * The data from this is durable across changes in the codebase.
-    *
-    * @param rt   The implicit ResultTracker.
-    * @return     An Iterator[Version].
-    */
-  def findCallsHistorical()(implicit rt: ResultTracker): Iterator[FunctionCallWithKnownProvenanceSerializableWithoutInputs] =
-    rt.findCalls(self.name)
-
-  /**
-    * Return all calls of this function that have data in a given (implicit) ResultTracker.
-    *
-    * This returns a degenerate form of the calls with types expressed as strings by name.
-    * The data from this is durable across changes in the codebase.
+    * 
+    * Calling the .load method vififies the data as a fully typed value.
     *
     * @param version  Limit results to the specified version of the function.
     * @param rt   The implicit ResultTracker.
-    * @return     An Iterator[Version].
+    * @return     An Iterable[Version].
     */
-  def findCallsHistorical(version: Version)(implicit rt: ResultTracker): Iterator[FunctionCallWithKnownProvenanceSerializableWithoutInputs] =
-    rt.findCalls(self.name, version)
+  def findCallData(version: Version)(implicit rt: ResultTracker): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
+    rt.findCallData(self.name, version)
 
   /**
     * Return all results of this function that have data in a given (implicit) ResultTracker.
     *
     * This returns a degenerate form of the results with types expressed as strings by name.
     * The data from this is durable across changes in the codebase.
+    * 
+    * Calling the .load method vififies the data as a fully typed value.
     *
     * @param rt   The implicit ResultTracker.
-    * @return     An Iterator[Version].
+    * @return     An Iterable[Version].
     */  
-  def findResultsHistorical()(implicit rt: ResultTracker): Iterator[FunctionCallResultWithKnownProvenanceSerializable] =
-    rt.findResults(self.name)
+  def findResultData()(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    rt.findResultData(self.name)
 
   /**
     * Return all results of this function that have data in a given (implicit) ResultTracker.
     *
     * This returns a degenerate form of the results with types expressed as strings by name.
     * The data from this is durable across changes in the codebase.
+    * 
+    * Calling the .load method vififies the data as a fully typed value.
     *
     * @param version  Limit results to the specified version of the function.
     * @param rt   The implicit ResultTracker.
-    * @return     An Iterator[Version].
+    * @return     An Iterable[Version].
     */  
-  def findResultsHistorical(version: Version)(implicit rt: ResultTracker): Iterator[FunctionCallResultWithKnownProvenanceSerializable] =
-    rt.findResults(self.name, version)
+  def findResultData(version: Version)(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    rt.findResultData(self.name, version)
 }
 
 
 [1..21#
-
 /**
   * A Function1 with per-function versioning, and intermediate `.Call` and `.Result` tracking.
   *
@@ -525,7 +532,7 @@ abstract class Function1WithProvenance[[#I1#], O](
   def deserializeCall(s: FunctionCallWithProvenanceSerializable)(implicit rt: ResultTracker): Call = {
     val ss = s.asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
     val i = ss.inputList.toVector
-    Call([#i(0).load.asInstanceOf[ValueWithProvenance[I1]]#], ss.functionVersion)
+    Call([#i(0).load.asInstanceOf[ValueWithProvenance[I1]]#], UnknownProvenance(ss.functionVersion).resolve)
   }
 
   object Call {
@@ -623,9 +630,9 @@ abstract class Function1WithProvenance[[#I1#], O](
     * Return all versions of this function that have data in a given (implicit) ResultTracker.
     *
     * @param rt   The implicit ResultTracker.
-    * @return     An Iterator[Version].
+    * @return     An Iterable[Version].
     */
-  def findVersions(implicit rt: ResultTracker): Iterator[Version] =
+  def findVersions(implicit rt: ResultTracker): Iterable[Version] =
     rt.findFunctionVersions(self.name)
 
   /**
@@ -635,10 +642,10 @@ abstract class Function1WithProvenance[[#I1#], O](
     * for a degenerate form that will always return.
     *
     * @param rt   The implicit ResultTracker.
-    * @return     An Iterator[Version].
+    * @return     An Iterable[Version].
     */
-  def findCalls()(implicit rt: ResultTracker): Iterator[Call] =
-    rt.findCalls(self.name).flatMap(s => Try(s.load.asInstanceOf[Call]).toOption)
+  def findCalls()(implicit rt: ResultTracker): Iterable[Call] =
+    rt.findCallData(self.name).flatMap(s => Try(s.load.asInstanceOf[Call]).toOption).map(_.unresolve)
 
   /**
     * Return all calls of this function that have data in a given (implicit) ResultTracker.
@@ -648,10 +655,10 @@ abstract class Function1WithProvenance[[#I1#], O](
     *
     * @param version  Limit results to the specified version of the function.
     * @param rt       The implicit ResultTracker.
-    * @return         An Iterator[Version].
+    * @return         An Iterable[Version].
     */
-  def findCalls(version: Version)(implicit rt: ResultTracker): Iterator[Call] =
-    rt.findCalls(self.name, version).flatMap(s => Try(s.load.asInstanceOf[Call]).toOption)
+  def findCalls(version: Version)(implicit rt: ResultTracker): Iterable[Call] =
+    rt.findCallData(self.name, version).flatMap(s => Try(s.load.asInstanceOf[Call]).toOption).map(_.unresolve)
 
   /**
     * Return all results of this function that have data in a given (implicit) ResultTracker.
@@ -660,10 +667,10 @@ abstract class Function1WithProvenance[[#I1#], O](
     * for a degenerate form that will always return.
     *
     * @param rt   The implicit ResultTracker.
-    * @return     An Iterator[Version].
+    * @return     An Iterable[Version].
     */
-  def findResults()(implicit rt: ResultTracker): Iterator[Result] =
-    rt.findResults(self.name).flatMap(s => Try(s.load.asInstanceOf[Result]).toOption)
+  def findResults()(implicit rt: ResultTracker): Iterable[Result] =
+    rt.findResultData(self.name).flatMap(s => Try(s.load.asInstanceOf[Result]).toOption)
 
   /**
     * Return all results of this function that have data in a given (implicit) ResultTracker.
@@ -673,10 +680,10 @@ abstract class Function1WithProvenance[[#I1#], O](
     *
     * @param version  Limit results to the specified version of the function.
     * @param rt       The implicit ResultTracker.
-    * @return         An Iterator[Version].
+    * @return         An Iterable[Version].
     */
-  def findResults(version: Version)(implicit rt: ResultTracker): Iterator[Result] =
-    rt.findResults(self.name, version).flatMap(s => Try(s.load.asInstanceOf[Result]).toOption)
+  def findResults(version: Version)(implicit rt: ResultTracker): Iterable[Result] =
+    rt.findResultData(self.name, version).flatMap(s => Try(s.load.asInstanceOf[Result]).toOption)
 
 
   /**
@@ -686,10 +693,10 @@ abstract class Function1WithProvenance[[#I1#], O](
     * The data from this is durable across changes in the codebase.
     *
     * @param rt   The implicit ResultTracker.
-    * @return     An Iterator[Version].
+    * @return     An Iterable[Version].
     */
-  def findCallsHistorical()(implicit rt: ResultTracker): Iterator[FunctionCallWithKnownProvenanceSerializableWithoutInputs] =
-    rt.findCalls(self.name)
+  def findCallData()(implicit rt: ResultTracker): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
+    rt.findCallData(self.name)
 
   /**
     * Return all calls of this function that have data in a given (implicit) ResultTracker.
@@ -699,10 +706,10 @@ abstract class Function1WithProvenance[[#I1#], O](
     *
     * @param version  Limit results to the specified version of the function.
     * @param rt   The implicit ResultTracker.
-    * @return     An Iterator[Version].
+    * @return     An Iterable[Version].
     */
-  def findCallsHistorical(version: Version)(implicit rt: ResultTracker): Iterator[FunctionCallWithKnownProvenanceSerializableWithoutInputs] =
-    rt.findCalls(self.name, version)
+  def findCallData(version: Version)(implicit rt: ResultTracker): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
+    rt.findCallData(self.name, version)
 
   /**
     * Return all results of this function that have data in a given (implicit) ResultTracker.
@@ -711,10 +718,10 @@ abstract class Function1WithProvenance[[#I1#], O](
     * The data from this is durable across changes in the codebase.
     *
     * @param rt   The implicit ResultTracker.
-    * @return     An Iterator[Version].
+    * @return     An Iterable[Version].
     */
-  def findResultsHistorical()(implicit rt: ResultTracker): Iterator[FunctionCallResultWithKnownProvenanceSerializable] =
-    rt.findResults(self.name)
+  def findResultData()(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    rt.findResultData(self.name)
 
   /**
     * Return all results of this function that have data in a given (implicit) ResultTracker.
@@ -724,10 +731,10 @@ abstract class Function1WithProvenance[[#I1#], O](
     *
     * @param version  Limit results to the specified version of the function.
     * @param rt   The implicit ResultTracker.
-    * @return     An Iterator[Version].
+    * @return     An Iterable[Version].
     */
-  def findResultsHistorical(version: Version)(implicit rt: ResultTracker): Iterator[FunctionCallResultWithKnownProvenanceSerializable] =
-    rt.findResults(self.name, version)
+  def findResultData(version: Version)(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    rt.findResultData(self.name, version)
 
 }#
 ]
