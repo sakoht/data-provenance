@@ -11,7 +11,7 @@ package com.cibo.provenance
   *         UnknownProvenance                         case class derived from Function0CallWithProvenance
   *     Result                                        sealed trait
   *       FunctionCallResultWithProvenance            abstract class with N abstract subclasses
-  *         UnknownProvenanceValue                    case class derived from Function0CallResultWithProvenance
+  *         UnknownProvenanceResolved                 case class derived from Function0CallResultWithProvenance
   *
   * A secondary hierarchy allowing for "deflated" objects:
   *
@@ -231,7 +231,12 @@ abstract class FunctionCallWithProvenance[O : Codec](var vv: ValueWithProvenance
   def load(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     this
 
-  def normalize(implicit rt: ResultTracker): FunctionCallWithProvenance[O] = unresolve(rt)
+  def normalize(implicit rt: ResultTracker): FunctionCallWithProvenance[O] = {
+    val o = unresolve(rt)
+
+    o
+  }
+
 }
 
 

@@ -1,8 +1,5 @@
 package com.cibo.provenance
 
-import com.amazonaws.services.s3.iterable.S3Objects
-import com.amazonaws.services.s3.model.{AmazonS3Exception, ListObjectsV2Request, S3KeyFilter}
-import com.cibo.provenance.kvstore.{S3KeyIterator, S3Store}
 import org.scalatest.{FunSpec, Matchers}
 
 class FindSpec extends FunSpec with Matchers {
@@ -63,7 +60,6 @@ class FindSpec extends FunSpec with Matchers {
       rt.findResultsByOutput(result3.output).toSet shouldEqual Set(result3)
     }
   }
-
 }
 
 case class BreadLoaf(slices: Int)

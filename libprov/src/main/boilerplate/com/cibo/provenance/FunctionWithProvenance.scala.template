@@ -228,7 +228,7 @@ abstract class Function0WithProvenance[O : Codec] extends FunctionWithProvenance
   def deserializeCall(s: FunctionCallWithProvenanceSerializable)(implicit rt: ResultTracker): Call = {
     val ss = s.asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
     val i = ss.inputList.toVector
-    Call(UnknownProvenance(ss.functionVersion).resolve)
+    Call(UnknownProvenance(ss.functionVersion))
   }
 
   object Call {
@@ -267,7 +267,7 @@ abstract class Function0WithProvenance[O : Codec] extends FunctionWithProvenance
       Result(this, output)(bi)
 
     def duplicate(vv: ValueWithProvenance[Version]): Call =
-      copy(v)
+      copy(vv)
 
     //
 
@@ -544,8 +544,18 @@ abstract class Function1WithProvenance[[#I1#], O](
 
   def deserializeCall(s: FunctionCallWithProvenanceSerializable)(implicit rt: ResultTracker): Call = {
     val ss = s.asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
-    val i = ss.inputList.toVector
-    Call([#i(0).load.asInstanceOf[ValueWithProvenance[I1]]#], UnknownProvenance(ss.functionVersion).resolve)
+    val i = ss.inputList.toVector.map(_.load)
+
+    // If any inputs are resolved, also pass a resolved version.
+    // This keeps the reloaded version symmetrical with the other data.
+    val inputsResolved = i.filter { case _: com.cibo.provenance.Result[_] => true; case _ => false }
+
+    val v = if (inputsResolved.nonEmpty)
+              UnknownProvenance(ss.functionVersion).resolve
+            else
+              UnknownProvenance(ss.functionVersion)
+
+    Call([#i(0).asInstanceOf[ValueWithProvenance[I1]]#], v)
   }
 
   object Call {

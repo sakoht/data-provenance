@@ -1,13 +1,10 @@
 package com.cibo.provenance
 
-import com.cibo.provenance.monadics.MapWithProvenance
 import org.scalatest.{FunSpec, Matchers}
-
 
 /**
   * Created by ssmith on 10/26/17.
   */
-
 
 class InflateDeflateSpec extends FunSpec with Matchers {
   val outputBaseDir: String = TestUtils.testOutputBaseDir
@@ -18,7 +15,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       val testDataDir = f"$outputBaseDir/save-simple"
       implicit val bi: BuildInfo = BuildInfoDummy
       implicit val rt = ResultTrackerForSelfTest(testDataDir)
-      rt.wipe
+      rt.wipe()
 
       val call1: mult2.Call = mult2(2, 2)
       val _ = call1.resolve
@@ -32,7 +29,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       val testDataDir = f"$outputBaseDir/save-reload"
       implicit val bi: BuildInfo = BuildInfoDummy
       implicit val rt = ResultTrackerForSelfTest(testDataDir)
-      rt.wipe
+      rt.wipe()
 
       val call1: mult2.Call = mult2(2, 2)
       val _ = call1.resolve
@@ -51,7 +48,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
       val testDataDir = f"$outputBaseDir/save-nested"
       implicit val bi: BuildInfo = BuildInfoDummy
       implicit val rt = ResultTrackerForSelfTest(testDataDir)
-      rt.wipe
+      rt.wipe()
 
       val c1 = add2(2, 2)
       val c2 = add2(5, 7)
@@ -162,6 +159,7 @@ class InflateDeflateSpec extends FunSpec with Matchers {
 
       val saved1 = loaded1.save
       val loaded2 = saved1.load
+
 
       loaded2 shouldEqual loaded1
     }
