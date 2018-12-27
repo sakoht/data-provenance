@@ -227,14 +227,14 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
           case Success(bvalue) =>
             require(avalue == bvalue, msg)
           case Failure(berror) =>
-            throw new RuntimeException(s"Result a succeeeded but b failed! $avalue vs $berror")
+            throw new RuntimeException(s"$msg: Result a succeeded but b failed! $avalue vs $berror")
         }
       case Failure(aerror) =>
         b match {
           case Success(bvalue) =>
-            throw new RuntimeException(s"Result a failed but b succeeded! $aerror vs $bvalue")
+            throw new RuntimeException(s"$msg: Result a failed but b succeeded! $aerror vs $bvalue")
           case Failure(berror) =>
-            require(aerror == berror, msg)
+            require(aerror.toString == berror.toString, s"$msg: Both failed with different messages: $aerror vs $berror")
         }
     }
   }
