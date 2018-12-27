@@ -64,7 +64,10 @@ case class LocalStore(basePath: String) extends KVStore {
     require(!keyPrefix.endsWith("/"), f"The $keyPrefix should not end in a slash!: $keyPrefix")
     val fullPrefix = getFullPathForRelativePath(keyPrefix)
     val dir = new File(fullPrefix)
-    dir.list().toIterable
+    if (dir.exists())
+      dir.list().toIterable
+    else
+      Iterable.empty[String]
   }
 
   def getSubKeysRecursive(keyPrefix: String = ""): Iterable[String] = {
