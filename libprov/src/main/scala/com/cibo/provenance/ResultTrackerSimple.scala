@@ -70,19 +70,23 @@ class ResultTrackerSimple(
   }
 
   def loadCallById(callId: Digest): Option[FunctionCallWithProvenanceDeflated[_]] =
+    loadCallDataByIdOption(callId).map(_.wrap)
+
+  def loadResultById(resultId: Digest): Option[FunctionCallResultWithProvenanceDeflated[_]] =
+    loadResultDataByIdOption(resultId).map(_.wrap)
+
+  def loadCallDataByIdOption(callId: Digest): Option[FunctionCallWithProvenanceSerializable] =
     loadBytesOption(s"calls/${callId.id}").map {
       bytes =>
         Codec.deserialize(bytes)(ValueWithProvenanceSerializable.codec)
           .asInstanceOf[FunctionCallWithProvenanceSerializable]
-          .wrap
     }
 
-  def loadResultById(resultId: Digest): Option[FunctionCallResultWithProvenanceDeflated[_]] =
+  def loadResultDataByIdOption(resultId: Digest): Option[FunctionCallResultWithProvenanceSerializable] =
     loadBytesOption(s"results/${resultId.id}").map {
       bytes =>
         Codec.deserialize(bytes)(ValueWithProvenanceSerializable.codec)
           .asInstanceOf[FunctionCallResultWithProvenanceSerializable]
-          .wrap
     }
 
   // These methods can be overridden to selectively do additional checking.

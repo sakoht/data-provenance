@@ -116,11 +116,21 @@ trait ResultTracker extends Serializable {
     * The deflated version uses IDs to reference its inputs (also deflated, recursively), and
     * as such is a light-weight pointer into the complete history of the call.
     *
-    * @param callInSerializableForm:  The call to save.
-    * @tparam O:    The output type of the call and returned deflated call.
-    * @return       The deflated call created during saving.
+    * @param callSerializable   The call to save.
+    * @tparam O:                The output type of the call and returned deflated call.
+    * @return                   The deflated call created during saving.
     */
-  def saveCallSerializable[O](callInSerializableForm: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O]
+  def saveCallSerializable[O](callSerializable: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O]
+
+  /**
+    * Save an UnknownProvenance call.  This is mostly a no-op, since there was no trackable call that generated the data.
+    * The ResultTracker indexes this call so that it can track forward to its usage.
+    *
+    * @param callSerializable   The call to save.
+    * @tparam O                 The output type of the call and returned deflated call.
+    * @return                   The deflated call created during the save process.
+    */
+  def saveCallSerializable[O](callSerializable: FunctionCallWithUnknownProvenanceSerializable): FunctionCallWithProvenanceDeflated[O]
 
   /**
     * Write out one `FunctionCallResultWithProvenanceSaved`.
@@ -216,7 +226,6 @@ trait ResultTracker extends Serializable {
     }
   }
 
-  //def loadValueWithCodec[T : ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): (T, Codec[T]) = {
   def loadValueWithCodec[T : ClassTag](valueDigest: Digest)(implicit cct: Codec[Codec[T]]): (T, Codec[T]) = {
     val allCodecs: List[Codec[T]] = loadCodecsByValueDigest[T](valueDigest: Digest).toList
     val workingCodecValuePairs = allCodecs.flatMap {
@@ -259,7 +268,6 @@ trait ResultTracker extends Serializable {
 
   def loadBuildInfoOption(commitId: String, buildId: String): Option[BuildInfo]
 
-
   /**
     * A type-agnostic version of loadValueSerializedDataOption.  This works with a class string as text.
     *
@@ -295,9 +303,6 @@ trait ResultTracker extends Serializable {
     * @return         An Option of T that is Some[T] if the digest ID is found in storage.
     */
   def loadValue[T : Codec](digest: Digest): T = {
-    //val ct = implicitly[ClassTag[T]]
-    //val className = Util.classToName[T]
-    //val clazz = Class.forName(className)
     loadValueOption[T](digest) match {
       case Some(obj) =>
         obj
@@ -336,21 +341,21 @@ trait ResultTracker extends Serializable {
   // Calls
 
   /**
-    * Return all calls for which there is data in storage.
+    * Return all call data for which there is data in storage.
     *
     * @return An iterable of calls.
     */
   def findCallData: Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs]
 
   /**
-    * Return all calls for which there is data in storage for a given function name.
+    * Return all call data for which there is data in storage for a given function name.
     *
     * @return An iterable of calls.
     */
   def findCallData(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs]
 
   /**
-    * Return all calls for which there is data in storage for a given function name and verison number.
+    * Return all call data for which there is data in storage for a given function name and verison number.
     *
     * @return An iterable of calls.
     */
@@ -360,21 +365,21 @@ trait ResultTracker extends Serializable {
   // Results
 
   /**
-    * Return all results for which there is data in storage.
+    * Return all result data for which there is data in storage.
     *
     * @return An iterable of results.
     */
   def findResultData: Iterable[FunctionCallResultWithKnownProvenanceSerializable]
 
   /**
-    * Return all calls for which there is data in storage for a given function name.
+    * Return all result data for which there is data in storage for a given function name.
     *
     * @return An iterable of results.
     */
   def findResultData(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable]
 
   /**
-    * Return all calls for which there is data in storage for a given function name and version.
+    * Return all result data for which there is data in storage for a given function name and version.
     *
     * @return An iterable of results.
     */
@@ -382,8 +387,21 @@ trait ResultTracker extends Serializable {
 
   // Results by output
 
+  /**
+    * Return all result data (unvivified) that returns an output with the specified digest.
+    *
+    * @param outputDigest   The digest of to search for.
+    * @return               An iterable of results, un-vivified.
+    */
   def findResultDataByOutput(outputDigest: Digest): Iterable[FunctionCallResultWithKnownProvenanceSerializable]
 
+  /**
+    * Return all result data (unvivified) that returns a given output value.
+    *
+    * @param output         The output value to search for.
+    * @tparam O             The type of the output value (implicit Codec required),
+    * @return               An iterable of results, un-vivified.
+    */
   def findResultDataByOutput[O : Codec](output: O): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
     val codec = implicitly[Codec[O]]
     val bytes = codec.serialize(output)
@@ -391,9 +409,22 @@ trait ResultTracker extends Serializable {
     findResultDataByOutput(digest)
   }
 
+  /**
+    * Return results for a given output digest.
+    *
+    * @param outputDigest   The digest of to search for.
+    * @return               An iterable of fully vivified results.
+    */
   def findResultsByOutput(outputDigest: Digest): Iterable[FunctionCallResultWithProvenance[_]] =
     findResultDataByOutput(outputDigest).map(_.load(this))
 
+  /**
+    * Return results for a given output value.
+    *
+    * @param output         The output value to search for.
+    * @tparam O             The type of the output value (implicit Codec required),
+    * @return               An iterable of fully vivified results.
+    */
   def findResultsByOutput[O : Codec](output: O): Iterable[FunctionCallResultWithProvenance[O]] = {
     val codec = implicitly[Codec[O]]
     val bytes = codec.serialize(output)
