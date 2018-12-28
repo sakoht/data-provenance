@@ -32,3 +32,48 @@ case class CirceJsonCodec[T : ClassTag : TypeTag](encoder: Encoder[T], decoder: 
     }
 }
 
+object CirceJsonCodec {
+
+  /**
+    * The simplest encoder, call some function on the object to turn it into a String.
+    *
+    * Example:
+    *   case class Foo(id: String)
+    *
+    *   object Foo {
+    *     implicit val encoder: Encoder[Foo] = CirceJsonCodec.mkStringEncoder[Foo](_.id)
+    *   }
+    *
+    * @param f    Some function which, when applied to T, returns a string.
+    * @tparam T   The type to encode
+    * @return     A Circe JSON Encoder.
+    */
+  def mkStringEncoder[T](f: (T) => String): Encoder[T] =
+    Encoder.instance {
+      (obj: T) =>
+        val id = f(obj)
+        Encoder.encodeString.apply(id)
+    }
+
+  /**
+    * The a companion to the simplest encoder, turn a string back into the object.
+    *
+    * Example:
+    *   case class Foo(id: String)
+    *
+    *   object Foo {
+    *     implicit val decoder: Decoder[Foo] = CirceJsonCodec.mkStringDecoder[Foo](Foo.apply)
+    *   }
+    *
+    * @param f    Some function which, when applied to an encoded string, returns a new T.
+    * @tparam T   The type to decoder
+    * @return     A Circe JSON Decoder.
+    */
+  def mkStringDecoder[T](f: (String) => T): Decoder[T] =
+    Decoder.instance {
+      (c: HCursor) =>
+        val obj: T = f(c.value.asString.get)
+        Right(obj).asInstanceOf[Either[DecodingFailure, T]]
+    }
+}
+

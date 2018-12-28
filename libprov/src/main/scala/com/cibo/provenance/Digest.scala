@@ -13,18 +13,7 @@ case class Digest(id: String)
 
 object Digest {
   import io.circe._
-
-  implicit val encoder: Encoder[Digest] = Encoder.instance {
-    (obj: Digest) =>
-      val id = unapply(obj).get
-      Encoder.encodeString.apply(id)
-  }
-
-  implicit val decoder: Decoder[Digest] = Decoder.instance {
-    (c: HCursor) =>
-      val obj: Digest = apply(c.value.asString.get)
-      Right(obj).asInstanceOf[Either[DecodingFailure, Digest]]
-  }
-
+  implicit val encoder: Encoder[Digest] = CirceJsonCodec.mkStringEncoder[Digest](_.id)
+  implicit val decoder: Decoder[Digest] = CirceJsonCodec.mkStringDecoder(Digest.apply)
   implicit val codec: Codec[Digest] = Codec(encoder, decoder)
 }
