@@ -131,7 +131,9 @@ object FunctionCallWithUnknownProvenanceSerializable {
     implicit val outputTypeTag: TypeTag[O] = outputCodec.typeTag
     val outputClassName = Codec.classTagToSerializableName(outputClassTag)
     val valueDigest: Digest = rt.saveOutputValue(call.value)
-    FunctionCallWithUnknownProvenanceSerializable(outputClassName, valueDigest)
+    val callSerializable = FunctionCallWithUnknownProvenanceSerializable(outputClassName, valueDigest)
+    rt.saveCallSerializable(callSerializable)
+    callSerializable
   }
 }
 

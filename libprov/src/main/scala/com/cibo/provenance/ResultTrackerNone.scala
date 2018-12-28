@@ -25,8 +25,11 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
     FunctionCallResultWithProvenanceDeflated(resultInSaveableForm)
   }
 
-  def saveCallSerializable[O](v: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O] =
-    FunctionCallWithProvenanceDeflated(v)
+  def saveCallSerializable[O](callSerializable: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O] =
+    FunctionCallWithProvenanceDeflated(callSerializable)
+
+  def saveCallSerializable[O](callSerializable: FunctionCallWithUnknownProvenanceSerializable): FunctionCallWithProvenanceDeflated[O] =
+    FunctionCallWithProvenanceDeflated(callSerializable)
 
   def saveOutputValue[T : Codec](obj: T)(implicit tt: universe.TypeTag[Codec[T]], ct: ClassTag[Codec[T]]): Digest = {
     // also a no-op that just calculates the ID and returns it
@@ -100,6 +103,8 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
   def findResultData(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = Iterable.empty
 
   def findResultDataByOutput(outputDigest: Digest): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = Iterable.empty
+
+  def findUsesOfResultWithIndex(functionName: String, version: Version, resultDigest: Digest): Iterable[(FunctionCallResultWithProvenanceSerializable, Int)] = Iterable.empty
 }
 
 class UnavailableData(msg: String) extends RuntimeException(f"Unavailable for ResultTrackerNone: $msg")

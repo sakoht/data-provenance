@@ -432,6 +432,95 @@ trait ResultTracker extends Serializable {
     findResultsByOutput(digest).map(_.asInstanceOf[FunctionCallResultWithProvenance[O]])
   }
 
+  // Use
+
+  /**
+    * Find all places a given value is used as an input, including where the value had no
+    * prior provenance tracking, and where it was an output of something with tracking.
+    *
+    * @param value      The value to search for.
+    * @tparam O         The value type, which must have an implicit Codec.
+    * @return           An iterable of un-vivified results that use the value as an input.
+    */
+  def findUsesOfValue[O : Codec](value: O): Iterable[FunctionCallResultWithProvenanceSerializable] = {
+    val knownProvenance = findResultDataByOutput(value).flatMap(findUsesOfResult)
+    val unknownProvenance = findUsesOfResult(UnknownProvenance(value).resolve(this))
+    unknownProvenance ++ knownProvenance
+  }
+
+  /**
+    * Find all places a given result is used as an input.
+    *
+    * @param result     The value to search for.
+    * @return           An iterable of un-vivified results that use the value as an input.
+    */
+  def findUsesOfResult(result: FunctionCallResultWithProvenance[_]): Iterable[FunctionCallResultWithProvenanceSerializable] =
+    findUsesOfResultWithIndex(result).map(_._1)
+
+  /**
+    * Find all places a given result is used as an input, specified by serialized result data.
+    *
+    * @param result     The value to search for.
+    * @return           An iterable of un-vivified results that use the value as an input.
+    */
+  def findUsesOfResult(result: FunctionCallResultWithProvenanceSerializable): Iterable[FunctionCallResultWithProvenanceSerializable] =
+    findUsesOfResultWithIndex(result).map(_._1)
+
+  /**
+    * Find all places a given result is used as an input.
+    *
+    * @param result     The value to search for.
+    * @return           An iterable of un-vivified results that use the value as an input,
+    *                   with the index position of the value in the inputs of each output result.
+    */
+  def findUsesOfResultWithIndex(result: FunctionCallResultWithProvenance[_]): Iterable[(FunctionCallResultWithProvenanceSerializable, Int)] = {
+    val resultAsData = FunctionCallResultWithProvenanceSerializable.save(result)(this)
+    findUsesOfResultWithIndex(resultAsData)
+  }
+
+  /**
+    * Find all places a given result is used as an input, specifying the input result as unvivified data.
+    *
+    * @param result     The value to search for.
+    * @return           An iterable of un-vivified results that use the value as an input,
+    *                   with the index position of the value in the inputs of each output result.
+    */
+  def findUsesOfResultWithIndex(result: FunctionCallResultWithProvenanceSerializable): Iterable[(FunctionCallResultWithProvenanceSerializable, Int)] =
+    result.call match {
+      case k: FunctionCallWithKnownProvenanceSerializableWithoutInputs =>
+        findUsesOfResultWithIndex(k.functionName, k.functionVersion, result.toDigest)
+      case u: FunctionCallWithUnknownProvenanceSerializable =>
+        findUsesOfResultWithIndex(f"UnknownProvenance[${u.outputClassName}]", NoVersion, u.valueDigest)
+      case other =>
+        throw new RuntimeException(f"Unexpected call type: $other")
+    }
+
+  /**
+    * Find all places a given result is used as an input.
+    *
+    * @param functionName     The name of the function that produced the value to search for.
+    * @param version          The version of the function that produced the value to search for.
+    * @param resultDigest     The value to search for, expressed as a digest.
+    * @return                 An iterable of un-vivified results that use the value as an input,
+    *                         with the index position of the value in the inputs of each output result.
+    */
+  def findUsesOfResultWithIndex(functionName: String, version: Version, resultDigest: Digest): Iterable[(FunctionCallResultWithProvenanceSerializable, Int)]
+
+  /**
+    * Copy results from one storage to another.
+    *
+    * This can also be used to upgrade the storage tree if the structure of storage has changed,
+    * presuming the old FunctionCallResultWithKnownProvenanceSerializable still deserializable by its codec.
+    *
+    */
+  def copyResultsFrom(otherResultTracker: ResultTracker): Iterable[Try[FunctionCallResultWithKnownProvenanceSerializable]] =
+    otherResultTracker.findResultData.map {
+      resultAsData =>
+        Try {
+          val result = resultAsData.load(otherResultTracker)
+          FunctionCallResultWithKnownProvenanceSerializable.save(result)(this)
+        }
+    }
 
   /**
     * An UnresolvedVersionException is thrown if the system attempts to deflate a call with an unresolved version.

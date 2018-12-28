@@ -169,23 +169,34 @@ class ResultTrackerSimple(
 
     saveBytes(f"results/${resultDigest.id}", resultBytes)
 
-    inputResultsAlreadySaved.indices.map {
+    inputResultsAlreadySaved.indices.foreach {
       n =>
+        // For each input, append a "result-uses" link indicating that it was used here, as the nth argument.
+        // The link in the upstream looks like this:
+        // functions/$inFuncName/$inFuncVersion/result-uses/$thisResult/used-by/$thisFuncName/$thisFuncVersion/as-arg/$n/from-inputs/$thisInputGroupId/with-result/$thisResultId
+
         val inputResultSaved: FunctionCallResultWithProvenanceSerializable = inputResultsAlreadySaved(n)
+        val inputResultDigest = inputResultSaved.toDigest
         val inputCallSaved: FunctionCallWithProvenanceSerializable = inputResultSaved.call
-        inputCallSaved match {
-          case i: FunctionCallWithKnownProvenanceSerializableWithoutInputs =>
-            val inputCallDigest = i.digestOfEquivalentWithInputs
-            val path =
-              f"functions/${i.functionName}/${i.functionVersion.id}/output-uses/" +
-                f"${inputResultSaved.outputDigest.id}/from-input-group/$inputGroupId/with-prov/${inputCallDigest.id}/" +
-                f"went-to/$functionName/$functionVersionId/input-group/$inputGroupId/arg/$n"
-            saveLinkPath(path)
-          case _: FunctionCallWithUnknownProvenanceSerializable =>
-            // Don't link values with unknown provenance to everywhere they are used.
-          case other =>
-            throw new FailedSaveException(f"Unexpected input type $other.  Cannot save result $resultSerializable!")
-        }
+
+        val usagePathPrefix =
+          inputCallSaved match {
+            case i: FunctionCallWithKnownProvenanceSerializableWithoutInputs =>
+              f"functions/${i.functionName}/${i.functionVersion.id}/result-uses/${inputResultDigest.id}"
+            case u: FunctionCallWithUnknownProvenanceSerializable =>
+              // NOTE: Since we don't save a result for values with unknown provenance, we use the digest of the value itself as the ID.
+              f"functions/UnknownProvenance[${u.outputClassName}]/-/result-uses/${u.valueDigest.id}"
+            case other =>
+              throw new FailedSaveException(f"Unexpected input type $other.  Cannot save result $resultSerializable!")
+          }
+
+        val usagePath = usagePathPrefix +
+          f"/used-by/" + f"$functionName/$functionVersion" +
+          f"/as-arg/$n" +
+          f"/from-inputs/$inputGroupId" +
+          f"/with-result/${resultDigest.id}"
+
+        saveLinkPath(usagePath)
     }
 
     /*
@@ -289,7 +300,16 @@ class ResultTrackerSimple(
     FunctionCallWithProvenanceDeflated(callSerializable)
   }
 
-  //def saveOutputValue[T : Codec](obj: T)(implicit tt: TypeTag[Codec[T]], ct: ClassTag[Codec[T]]): Digest = {
+  def saveCallSerializable[O](callSerializable: FunctionCallWithUnknownProvenanceSerializable): FunctionCallWithProvenanceDeflated[O] = {
+    // For values with unknown provenance, the "call" is just an empty shell.
+    // We don't save that, but we do save a single entry in the data-provenance/ tree indicating the value was used this way.
+    val s = callSerializable
+    saveLinkPath(
+      f"data-provenance/${s.valueDigest.id}/as/${s.outputClassName}/from/UnknownProvenance[${s.outputClassName}]/-"
+    )
+    FunctionCallWithProvenanceDeflated(callSerializable)
+  }
+
   def saveOutputValue[T: Codec](obj: T)(implicit cdcd: Codec[Codec[T]]): Digest = {
     val bytes = Codec.serialize(obj)
     val digest = Codec.digestBytes(bytes)
@@ -939,11 +959,24 @@ class ResultTrackerSimple(
           "with-provenance" :: callId ::
           "at" :: commitId :: buildId ::
           Nil
-      =>
-        Some(findResultDataImpl(outputDigest.id, inputGroupId, callId, commitId, buildId))
-      case _ =>
-        None
+        => Some(findResultDataImpl(outputDigest.id, inputGroupId, callId, commitId, buildId))
+      case _ => None
     }
+
+  // Uses
+
+  def findUsesOfResultWithIndex(functionName: String, version: Version, resultDigest: Digest): Iterable[(FunctionCallResultWithProvenanceSerializable, Int)] = {
+    storage.getSubKeysRecursive(f"functions/$functionName/${version.id}/result-uses/${resultDigest.id}").map(_.split("/").toList).flatMap {
+      case "used-by" :: functionName2 :: versionId2 ::
+          "as-arg" :: argN ::
+          "from-inputs" :: inputGroupId2 ::
+          "with-result" :: resultId2 ::
+          Nil
+        => loadResultDataByIdOption(Digest(resultId2)).map( result => (result, argN.toInt))
+      case _
+        => None
+    }
+  }
 }
 
 object ResultTrackerSimple {

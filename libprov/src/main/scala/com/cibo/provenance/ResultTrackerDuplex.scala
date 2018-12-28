@@ -49,10 +49,17 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
     aa.get
   }
 
-  def saveCallSerializable[O](callInSerializableForm: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O] = {
-    val aa = Try(a.saveCallSerializable[O](callInSerializableForm))
-    val bb = Try(b.saveCallSerializable[O](callInSerializableForm))
-    cmp(aa, bb, s"saveCallSerializable for $callInSerializableForm returned different values for sync vs. async: $aa vs $bb")
+  def saveCallSerializable[O](callSerializable: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O] = {
+    val aa = Try(a.saveCallSerializable[O](callSerializable))
+    val bb = Try(b.saveCallSerializable[O](callSerializable))
+    cmp(aa, bb, s"saveCallSerializable for $callSerializable returned different values for sync vs. async: $aa vs $bb")
+    aa.get
+  }
+
+  def saveCallSerializable[O](callSerializable: FunctionCallWithUnknownProvenanceSerializable): FunctionCallWithProvenanceDeflated[O] = {
+    val aa = Try(a.saveCallSerializable[O](callSerializable))
+    val bb = Try(b.saveCallSerializable[O](callSerializable))
+    cmp(aa, bb, s"saveCallSerializable for $callSerializable returned different values for sync vs. async: $aa vs $bb")
     aa.get
   }
 
@@ -172,49 +179,56 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
   def findCallData: Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] = {
     val aa = Try(a.findCallData)
     val bb = Try(b.findCallData)
-    cmp(aa, bb, s"findCalls")
+    cmp(aa, bb, s"findCallData")
     aa.get
   }
 
   def findCallData(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] = {
     val aa = Try(a.findCallData(functionName))
     val bb = Try(b.findCallData(functionName))
-    cmp(aa, bb, s"findCalls for $functionName")
+    cmp(aa, bb, s"findCallData for $functionName")
     aa.get
   }
 
   def findCallData(functionName: String, version: Version): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] = {
     val aa = Try(a.findCallData(functionName, version))
     val bb = Try(b.findCallData(functionName, version))
-    cmp(aa, bb, s"findCalls for $functionName and $version")
+    cmp(aa, bb, s"findCallData for $functionName and $version")
     aa.get
   }
 
   def findResultData: Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
     val aa = Try(a.findResultData)
     val bb = Try(b.findResultData)
-    cmp(aa, bb, s"findResults")
+    cmp(aa, bb, s"findResultData")
     aa.get
   }
 
   def findResultData(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
     val aa = Try(a.findResultData(functionName))
     val bb = Try(b.findResultData(functionName))
-    cmp(aa, bb, s"findResults for $functionName")
+    cmp(aa, bb, s"findResultData for $functionName")
     aa.get
   }
 
   def findResultData(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
     val aa = Try(a.findResultData(functionName, version))
     val bb = Try(b.findResultData(functionName, version))
-    cmp(aa, bb, s"findResults for $functionName and $version")
+    cmp(aa, bb, s"findResultData for $functionName and $version")
     aa.get
   }
 
   def findResultDataByOutput(outputDigest: Digest): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
     val aa = Try(a.findResultDataByOutput(outputDigest))
     val bb = Try(b.findResultDataByOutput(outputDigest))
-    cmp(aa, bb, s"findResults for $outputDigest")
+    cmp(aa, bb, s"findResultDataByOutput for $outputDigest")
+    aa.get
+  }
+
+  def findUsesOfResultWithIndex(functionName: String, version: Version, resultDigest: Digest): Iterable[(FunctionCallResultWithProvenanceSerializable, Int)] = {
+    val aa = Try(a.findUsesOfResultWithIndex(functionName, version, resultDigest))
+    val bb = Try(b.findUsesOfResultWithIndex(functionName, version, resultDigest))
+    cmp(aa, bb, s"findUsesOfResultWithIndex for $functionName, $version, $resultDigest")
     aa.get
   }
 
