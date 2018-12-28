@@ -12,6 +12,7 @@ package com.cibo.provenance
 
 import io.circe.{Decoder, Encoder}
 import java.io.Serializable
+import java.time.Instant
 
 import scala.util.Try
 import scala.language.existentials
@@ -99,7 +100,7 @@ abstract class FunctionWithProvenance[O : Codec] extends Serializable {
   }
 
   /**
-    *
+    * The fully qualified name of a function.
     */
   lazy val name: String =
     if (typeParameterTypeNames.isEmpty)
@@ -108,6 +109,90 @@ abstract class FunctionWithProvenance[O : Codec] extends Serializable {
       baseName+ "[" + typeParameterTypeNames.mkString(",") + "]"
 
   override def toString = f"$name@$currentVersion"
+
+
+  /**
+    * Return all calls of this function that have data in a given (implicit) ResultTracker.
+    *
+    * This returns a degenerate form of the calls with types expressed as strings by name.
+    * The data from this is durable across changes in the codebase.
+    *
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs].
+    */
+  def findCallData()(implicit rt: ResultTracker): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
+    rt.findCallData(name)
+
+  /**
+    * Return all calls of this function that have data in a given (implicit) ResultTracker.
+    *
+    * This returns a degenerate form of the calls with types expressed as strings by name.
+    * The data from this is durable across changes in the codebase.
+    *
+    * @param version  Limit results to the specified version of the function.
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs].
+    */
+  def findCallData(version: Version)(implicit rt: ResultTracker): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
+    rt.findCallData(name, version)
+
+  /**
+    * Return all results of this function that have data in a given (implicit) ResultTracker.
+    *
+    * This returns a degenerate form of the results with types expressed as strings by name.
+    * The data from this is durable across changes in the codebase.
+    *
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
+    */
+  def findResultData()(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    rt.findResultData(name)
+
+  /**
+    * Return all results of this function that have data in a given (implicit) ResultTracker.
+    *
+    * This returns a degenerate form of the results with types expressed as strings by name.
+    * The data from this is durable across changes in the codebase.
+    *
+    * @param version  Limit results to the specified version of the function.
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
+    */
+  def findResultData(version: Version)(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    rt.findResultData(name, version)
+
+  /**
+    * Return all results tagged with the specified tag.
+    *
+    * This returns a degenerate form of the results with types expressed as strings by name.
+    * The data from this is durable across changes in the codebase.
+    *
+    * @param text The text of the tag to search for.
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
+    */
+  def findResultDataByTag(tagText: String)(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    findResultDataByTag(tag = Tag(tagText))
+
+  /**
+    * Return all results tagged with the specified text string.
+    *
+    * This returns a degenerate form of the results with types expressed as strings by name.
+    * The data from this is durable across changes in the codebase.
+    *
+    * @param tag  A Tag of text string annotation.
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
+    */
+  def findResultDataByTag(tag: Tag)(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    rt.findByTag(tag).filter(
+      _.call.asInstanceOf[FunctionCallWithKnownProvenanceSerializable].functionName == name
+    ).map(_.asInstanceOf[FunctionCallResultWithKnownProvenanceSerializable])
+
+  def findTagResultData(implicit rt: ResultTracker): Iterable[(FunctionCallResultWithProvenanceSerializable, Tag, Instant)] =
+    rt.findTagApplicationsByResultFunctionName(name)
+
+  def findTags(implicit rt: ResultTracker): Iterable[Tag] = findTagResultData.map(_._2)
 
   class ReflectionException(msg: String) extends RuntimeException(msg)
 }
@@ -141,6 +226,7 @@ object FunctionWithProvenance {
 
   def getByName(name: String): FunctionWithProvenance[_] =
     Codec.objectFromSerializableName[FunctionWithProvenance[_]](name)
+
 }
 
 
@@ -203,6 +289,7 @@ abstract class Function0WithProvenance[O : Codec] extends FunctionWithProvenance
       throwInvalidVersionException(v)
     impl()
   }
+
   /**
     * This method is "pulled-up" from Call.run() into the wrapping function so it can be overridden
     * by provenance library infrastructural functions.
@@ -389,62 +476,44 @@ abstract class Function0WithProvenance[O : Codec] extends FunctionWithProvenance
     rt.findResultData(self.name, version).flatMap(_.tryLoadAs[Result].toOption)
 
   /**
-    * Return all calls of this function that have data in a given (implicit) ResultTracker.
+    * Return all results tagged with the specified tag.
     *
-    * This returns a degenerate form of the calls with types expressed as strings by name.
-    * The data from this is durable across changes in the codebase.  
-    * 
-    * Calling the .load method vififies the data as a fully typed value.
+    * Note: Some calls might not instantiate if the class has changed.
+    * Use findResultDataByTag for a degenerate form of result that will always materialize.
     *
+    * @param tag  A Tag of text string annotation.
     * @param rt   The implicit ResultTracker.
-    * @return     An Iterable[Version].
+    * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
     */
-  def findCallData()(implicit rt: ResultTracker): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
-    rt.findCallData(self.name)
+  def findResultsByTag(tagText: String)(implicit rt: ResultTracker): Iterable[Result] =
+    findResultsByTag(Tag(tagText))
 
   /**
-    * Return all calls of this function that have data in a given (implicit) ResultTracker.
+    * Return all results tagged with the specified text string.
     *
-    * This returns a degenerate form of the calls with types expressed as strings by name.
-    * The data from this is durable across changes in the codebase.
-    * 
-    * Calling the .load method vififies the data as a fully typed value.
+    * Note: Some calls might not instantiate if the class has changed.
+    * Use findResultDataByTag for a degenerate form of result that will always materialize.
     *
-    * @param version  Limit results to the specified version of the function.
+    * @param tag  A Tag of text string annotation.
     * @param rt   The implicit ResultTracker.
-    * @return     An Iterable[Version].
+    * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
     */
-  def findCallData(version: Version)(implicit rt: ResultTracker): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
-    rt.findCallData(self.name, version)
+  def findResultsByTag(tag: Tag)(implicit rt: ResultTracker): Iterable[Result] =
+    findResultDataByTag(tag).flatMap(_.tryLoadAs[Result].toOption)
 
   /**
-    * Return all results of this function that have data in a given (implicit) ResultTracker.
+    * Return all tagged results with the associated tag and timestamp.
     *
-    * This returns a degenerate form of the results with types expressed as strings by name.
-    * The data from this is durable across changes in the codebase.
-    * 
-    * Calling the .load method vififies the data as a fully typed value.
+    * Note: Some calls might not instantiate if the class has changed.
+    * Use findTagResultData for a degenerate form of result that will always materialize.
     *
-    * @param rt   The implicit ResultTracker.
-    * @return     An Iterable[Version].
-    */  
-  def findResultData()(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
-    rt.findResultData(self.name)
+    */
+  def findTagResults(implicit rt: ResultTracker): Iterable[(Result, Tag, Instant)] =
+    findTagResultData.flatMap {
+      case (subject, tag, ts) =>
+        Try { (subject.load.asInstanceOf[Result], tag, ts) }.toOption
+    }
 
-  /**
-    * Return all results of this function that have data in a given (implicit) ResultTracker.
-    *
-    * This returns a degenerate form of the results with types expressed as strings by name.
-    * The data from this is durable across changes in the codebase.
-    * 
-    * Calling the .load method vififies the data as a fully typed value.
-    *
-    * @param version  Limit results to the specified version of the function.
-    * @param rt   The implicit ResultTracker.
-    * @return     An Iterable[Version].
-    */  
-  def findResultData(version: Version)(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
-    rt.findResultData(self.name, version)
 }
 
 
@@ -718,56 +787,44 @@ abstract class Function1WithProvenance[[#I1#], O](
   def findResults(version: Version)(implicit rt: ResultTracker): Iterable[Result] =
     rt.findResultData(self.name, version).flatMap(s => Try(s.load.asInstanceOf[Result]).toOption)
 
+  /**
+    * Return all results tagged with the specified tag.
+    *
+    * Note: Some calls might not instantiate if the class has changed.
+    * Use findResultDataByTag for a degenerate form of result that will always materialize.
+    *
+    * @param tag  A Tag of text string annotation.
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
+    */
+  def findResultsByTag(tagText: String)(implicit rt: ResultTracker): Iterable[Result] =
+    findResultsByTag(Tag(tagText))
 
   /**
-    * Return all calls of this function that have data in a given (implicit) ResultTracker.
+    * Return all results tagged with the specified text string.
     *
-    * This returns a degenerate form of the calls with types expressed as strings by name.
-    * The data from this is durable across changes in the codebase.
+    * Note: Some calls might not instantiate if the class has changed.
+    * Use findResultDataByTag for a degenerate form of result that will always materialize.
     *
+    * @param tag  A Tag of text string annotation.
     * @param rt   The implicit ResultTracker.
-    * @return     An Iterable[Version].
+    * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
     */
-  def findCallData()(implicit rt: ResultTracker): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
-    rt.findCallData(self.name)
+  def findResultsByTag(tag: Tag)(implicit rt: ResultTracker): Iterable[Result] =
+    findResultDataByTag(tag).flatMap(_.tryLoadAs[Result].toOption)
 
   /**
-    * Return all calls of this function that have data in a given (implicit) ResultTracker.
+    * Return all tagged results with the associated tag and timestamp.
     *
-    * This returns a degenerate form of the calls with types expressed as strings by name.
-    * The data from this is durable across changes in the codebase.
+    * Note: Some calls might not instantiate if the class has changed.
+    * Use findTagResultData for a degenerate form of result that will always materialize.
     *
-    * @param version  Limit results to the specified version of the function.
-    * @param rt   The implicit ResultTracker.
-    * @return     An Iterable[Version].
     */
-  def findCallData(version: Version)(implicit rt: ResultTracker): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
-    rt.findCallData(self.name, version)
-
-  /**
-    * Return all results of this function that have data in a given (implicit) ResultTracker.
-    *
-    * This returns a degenerate form of the results with types expressed as strings by name.
-    * The data from this is durable across changes in the codebase.
-    *
-    * @param rt   The implicit ResultTracker.
-    * @return     An Iterable[Version].
-    */
-  def findResultData()(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
-    rt.findResultData(self.name)
-
-  /**
-    * Return all results of this function that have data in a given (implicit) ResultTracker.
-    *
-    * This returns a degenerate form of the results with types expressed as strings by name.
-    * The data from this is durable across changes in the codebase.
-    *
-    * @param version  Limit results to the specified version of the function.
-    * @param rt   The implicit ResultTracker.
-    * @return     An Iterable[Version].
-    */
-  def findResultData(version: Version)(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
-    rt.findResultData(self.name, version)
+  def findTagResults(implicit rt: ResultTracker): Iterable[(Result, Tag, Instant)] =
+    findTagResultData.flatMap {
+      case (subject, tag, ts) =>
+        Try { (subject.load.asInstanceOf[Result], tag, ts) }.toOption
+    }
 
 }#
 ]

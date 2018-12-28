@@ -115,6 +115,9 @@ object ValueWithProvenance {
     val call = gatherer(seq)
     call
   }
+
+  implicit class TaggabeValueWithProvenance[T : Codec](subject: ValueWithProvenance[T])
+    extends TagImplicits.Taggable[T](subject)
 }
 
 

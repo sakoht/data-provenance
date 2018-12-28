@@ -1,5 +1,8 @@
 package com.cibo.provenance
 
+import java.time.Instant
+
+import scala.collection.immutable
 import scala.concurrent.{ExecutionContext, Future}
 
 
@@ -521,6 +524,83 @@ trait ResultTracker extends Serializable {
           FunctionCallResultWithKnownProvenanceSerializable.save(result)(this)
         }
     }
+
+  // Find tags
+
+  def findTagApplications: Iterable[(FunctionCallResultWithProvenanceSerializable, Tag, Instant)] = {
+    findFunctionNames.filter(_.startsWith("com.cibo.provenance.ApplyTag[")).flatMap {
+      applyTagFunctioName =>
+        findResultData(applyTagFunctioName).flatMap {
+          _.call match {
+            case n: FunctionCallWithKnownProvenanceSerializableWithoutInputs
+                if n.functionName.startsWith("com.cibo.provenance.ApplyTag[") =>
+              implicit val rt: ResultTracker = this
+              n.expandInputs(this).inputList match {
+                case subject :: tag :: ts :: Nil =>
+                  Some(
+                    subject.asInstanceOf[FunctionCallResultWithProvenanceSerializable],
+                    tag.loadAs[FunctionCallResultWithProvenance[Tag]].output,
+                    ts.loadAs[FunctionCallResultWithProvenance[Instant]].output
+                  )
+                case other => throw new RuntimeException(f"Unexpected: input to a result is not resolved? $other")
+              }
+            case other =>
+              None
+          }
+        }
+    }
+  }
+
+  def findTagApplicationsByOutputType(outputClassName: String): Iterable[(FunctionCallResultWithProvenanceSerializable, Tag, Instant)] =
+    findTagApplications.filter {
+      case (subject, tag, ts) =>
+        subject.call.outputClassName == outputClassName
+    }
+
+  def findTagApplicationsByResultFunctionName(functionName: String): Iterable[(FunctionCallResultWithProvenanceSerializable, Tag, Instant)] =
+    findTagApplications.filter {
+      case (subject, tag, ts) =>
+        subject match {
+          case k: FunctionCallResultWithKnownProvenanceSerializable =>
+            k.call.functionName == functionName
+          case u: FunctionCallResultWithUnknownProvenanceSerializable =>
+            f"UnknownProvenance[${u.call.outputClassName}]" == functionName
+        }
+    }
+
+  def findTags: Iterable[Tag] =
+    findTagApplications.toVector.sortBy(_._3).reverseIterator.toIterable.map(_._2)
+
+  def findTagsByOutputType(outputClassName: String): Iterable[Tag] =
+    findTagApplicationsByOutputType(outputClassName).map(_._2)
+
+  def findTagsByResultFunctionName(functionName: String): Iterable[Tag] =
+    findTagApplicationsByResultFunctionName(functionName).map(_._2)
+
+
+  // Find results by tag
+
+  def findByTag(text: String): Iterable[FunctionCallResultWithProvenanceSerializable] =
+    findByTag(Tag(text))
+
+  def findByTag(tag: Tag): Iterable[FunctionCallResultWithProvenanceSerializable] = {
+    // Find all places the tag is used as an input.
+    findUsesOfValue(tag).flatMap {
+      // Limit to where it is used as an input to ApplyTag[...]
+      _.call match {
+        case n: FunctionCallWithKnownProvenanceSerializableWithoutInputs
+            if n.functionName.startsWith("com.cibo.provenance.ApplyTag[") =>
+          // The first input is the subject.
+          n.expandInputs(this).inputList.head match {
+            case k: FunctionCallResultWithKnownProvenanceSerializable => Some(k)
+            case u: FunctionCallResultWithUnknownProvenanceSerializable => Some(u)
+            case other => throw new RuntimeException(f"Unexpected: input to a result is not resolved? $other")
+          }
+        case other =>
+          None
+      }
+    }
+  }
 
   /**
     * An UnresolvedVersionException is thrown if the system attempts to deflate a call with an unresolved version.
