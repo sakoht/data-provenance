@@ -116,8 +116,11 @@ object ValueWithProvenance {
     call
   }
 
-  implicit class TaggabeValueWithProvenance[T : Codec](subject: ValueWithProvenance[T])
-    extends TagImplicits.Taggable[T](subject)
+  implicit class TaggabeCallWithProvenance[T : Codec](subject: Call[T])
+    extends TagImplicits.TaggableCall[T](subject)
+
+  implicit class TaggabeResultWithProvenance[T : Codec](subject: Result[T])(implicit rt: ResultTracker)
+    extends TagImplicits.TaggableResult[T](subject)
 }
 
 

@@ -318,6 +318,25 @@ val resuts2 = resultsRaw.map(_.load)
 assert(results2 == results)
 ```
 
+Tags
+---------------
+Any result can be tagged with a text String annotation.  Tags are similar to tags in source control,
+except the same tag name can be applied to multiple things.
+
+```
+// Tag a result
+val call1 = MyCall(...)
+val result1 = call1.resolve
+val tag1 = result1.addTag(Tag("tag 2")
+
+// Tag a call
+val call1 = MyCall(...)
+val tag1 = call1.addTag(Tag("tag 1")
+
+
+
+
+```
 
 Shorter Example
 ---------------

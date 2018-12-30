@@ -18,19 +18,22 @@ object Tag {
 /**
   * This function applies a text string Tag to a given call/result.
   * 
-  * @param cd   The codec for the type of data to which the function will apply.
   * @tparam S   The type of data to which the tag will apply.
   */
-class AddTag[S](implicit cd: Codec[S]) extends Function3WithProvenance[S, Tag, Instant, S] {
+class AddTag[T : Codec, S : Codec] extends Function3WithProvenance[S, T, Instant, S] {
   val currentVersion = Version("0.1")
-  def impl(obj: S, tag: Tag, timestamp: Instant): S = obj
-  override lazy val typeParameterTypeNames: Seq[String] = Seq(Codec.classTagToSerializableName(cd.classTag))
+  def impl(obj: S, tag: T, timestamp: Instant): S = obj
+  override lazy val typeParameterTypeNames: Seq[String] =
+    Seq(
+      Codec.classTagToSerializableName(implicitly[Codec[T]].classTag),
+      Codec.classTagToSerializableName(implicitly[Codec[S]].classTag)
+    )
 }
 
 object AddTag {
-  def apply[S : Codec]: AddTag[S] = {
+  def apply[T: Codec, S : Codec]: AddTag[T, S] = {
     implicit val instantCodec = TagImplicits.instantCodec
-    new AddTag[S]
+    new AddTag[T, S]
   }
 }
 
@@ -40,19 +43,22 @@ object AddTag {
   * Because the storage of calls is append-only, we don't delete things,
   * but this nullifies a previous application.
   *
-  * @param cd   The codec for the type of data to which the function will apply.
   * @tparam S   The type of data to which the tag will apply.
   */
-class RemoveTag[S](implicit cd: Codec[S]) extends Function3WithProvenance[S, Tag, Instant, S] {
+class RemoveTag[T : Codec, S : Codec] extends Function3WithProvenance[S, T, Instant, S] {
   val currentVersion = Version("0.1")
-  def impl(obj: S, tag: Tag, timestamp: Instant): S = obj
-  override lazy val typeParameterTypeNames: Seq[String] = Seq(Codec.classTagToSerializableName(cd.classTag))
+  def impl(obj: S, tag: T, timestamp: Instant): S = obj
+  override lazy val typeParameterTypeNames: Seq[String] =
+    Seq(
+      Codec.classTagToSerializableName(implicitly[Codec[T]].classTag),
+      Codec.classTagToSerializableName(implicitly[Codec[S]].classTag)
+    )
 }
 
 object RemoveTag {
-  def apply[S : Codec]: RemoveTag[S] = {
+  def apply[T : Codec, S : Codec]: RemoveTag[T, S] = {
     implicit val instantCodec = TagImplicits.instantCodec
-    new RemoveTag[S]
+    new RemoveTag[T, S]
   }
 }
 
@@ -67,17 +73,17 @@ object TagImplicits {
     * @param subject  Some call or result.
     * @tparam S       The output type of the subject.
     */
-  implicit class Taggable[S : Codec](subject: ValueWithProvenance[S]) {
+  implicit class TaggableResult[S : Codec](subject: Result[S])(implicit rt: ResultTracker) {
     /**
       * Add a tag to the subject.
       *
       * @param tag  The tag to add.
       * @return     An AddTag[T]#Call that will save the tag when resolved.
       */
-    def addTag(tag: ValueWithProvenance[_ <: Tag]): AddTag[S]#Call = {
-      val applyTagForType = new AddTag[S]
+    def addTag[T : Codec](tag: ValueWithProvenance[_ <: T]): AddTag[T, S]#Result = {
+      val applyTagForType = new AddTag[T, S]
       val ts = UnknownProvenance(Instant.now)
-      applyTagForType(subject, tag, ts)
+      applyTagForType(subject, tag, ts).resolve
     }
 
     /**
@@ -86,7 +92,7 @@ object TagImplicits {
       * @param text The tag to add.
       * @return     An AddTag[T]#Call that will save the tag when resolved.
       */
-    def addTag(text: String): AddTag[S]#Call = {
+    def addTag(text: String): AddTag[Tag, S]#Result = {
       val tag = UnknownProvenance(Tag(text))
       addTag(tag)
     }
@@ -97,8 +103,56 @@ object TagImplicits {
       * @param tag  The tag to remove.
       * @return     An RemoveTag[T]#Call that will save the tag when resolved.
       */
-    def removeTag(tag: ValueWithProvenance[_ <: Tag]): RemoveTag[S]#Call = {
-      val applyTagForType = new RemoveTag[S]
+    def removeTag[T : Codec](tag: ValueWithProvenance[_ <: T]): RemoveTag[T, S]#Result = {
+      val applyTagForType = new RemoveTag[T, S]
+      val ts = UnknownProvenance(Instant.now)
+      applyTagForType(subject, tag, ts).resolve
+    }
+
+    /**
+      * Remove a tag from the subject by specifying the text String content.
+      *
+      * @param text The tag to remove.
+      * @return     An RemoveTag[T]#Call that will save the tag when resolved.
+      */
+    def removeTag(text: String): RemoveTag[Tag, S]#Result = {
+      val tag = UnknownProvenance(Tag(text))
+      removeTag(tag)
+    }    
+  }
+
+  implicit class TaggableCall[S : Codec](subject: Call[S]) {
+    /**
+      * Add a tag to the subject.
+      *
+      * @param tag  The tag to add.
+      * @return     An AddTag[T]#Call that will save the tag when resolved.
+      */
+    def addTag[T : Codec](tag: ValueWithProvenance[_ <: T]): AddTag[T, S]#Call = {
+      val applyTagForType = new AddTag[T, S]
+      val ts = UnknownProvenance(Instant.now)
+      applyTagForType(subject, tag, ts)
+    }
+
+    /**
+      * Add a tag to the subject by specifying the text String content.
+      *
+      * @param text The tag to add.
+      * @return     An AddTag[T]#Call that will save the tag when resolved.
+      */
+    def addTag(text: String): AddTag[Tag, S]#Call = {
+      val tag = UnknownProvenance(Tag(text))
+      addTag(tag)
+    }
+
+    /**
+      * Remove a tag from the subject.
+      *
+      * @param tag  The tag to remove.
+      * @return     An RemoveTag[T]#Call that will save the tag when resolved.
+      */
+    def removeTag[T : Codec](tag: ValueWithProvenance[_ <: T]): RemoveTag[T, S]#Call = {
+      val applyTagForType = new RemoveTag[T, S]
       val ts = UnknownProvenance(Instant.now)
       applyTagForType(subject, tag, ts)
     }
@@ -109,10 +163,10 @@ object TagImplicits {
       * @param text The tag to remove.
       * @return     An RemoveTag[T]#Call that will save the tag when resolved.
       */
-    def removeTag(text: String): RemoveTag[S]#Call = {
+    def removeTag(text: String): RemoveTag[Tag, S]#Call = {
       val tag = UnknownProvenance(Tag(text))
       removeTag(tag)
-    }    
+    }
   }
 }
 

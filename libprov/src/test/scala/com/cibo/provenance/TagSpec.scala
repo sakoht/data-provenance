@@ -23,37 +23,43 @@ class TagSpec extends FunSpec with Matchers {
     val r3 = c3.resolve
 
     val c4 = cubeDouble(2.34)
-    c4.resolve
+    val r4 = c4.resolve
 
-    val t1 = c1.addTag("tag 1")
-    t1.resolve
+    val t1 = r1.addTag("tag 1")
+    val t2 = c2.addTag("tag 2")   // add this to the call, not a result
+    val t3 = r3.addTag("tag 3")
 
-    val t2 = c2.addTag("tag 2")
-    t2.resolve
+    it("should be auto-resolved/saved when created on a result") {
+      val tags = rt.findTags.toSet
+      tags.contains(Tag("tag 1")) shouldBe true
+      tags.contains(Tag("tag 3")) shouldBe true
+    }
 
-    val t3 = c3.addTag("tag 3")
-    t3.resolve
+    it("need to be resolved when applied to a call") {
+      val tags1 = rt.findTags.toSet
+      tags1.contains(Tag("tag 2")) shouldBe false
 
-    // Make some tags and remove them.  These should only appear in history.
+      t2.resolve
 
-    val t4 = c4.addTag("tag 4 to remove from c4")
-    t4.resolve
-    val t4Removal = c4.removeTag("tag 4 to remove from c4")
-    t4Removal.resolve
+      val tags2 = rt.findTags.toSet
+      tags2.contains(Tag("tag 2")) shouldBe true
+    }
+
+    // Make some more tags and remove them.  These should only appear in history.
+
+    r4.addTag("tag 4 to remove from c4")
+    r4.removeTag("tag 4 to remove from c4")
 
     // This tag is the 2nd tag on c2.  Adding this to ensure it is removed w/o interference with other tags.
-    val t5 = c2.addTag("tag 5 to remove from c2")
-    t5.resolve
-    val t5Removal = c2.removeTag("tag 5 to remove from c2")
-    t5Removal.resolve
+    r2.addTag("tag 5 to remove from c2")
+    r2.removeTag("tag 5 to remove from c2")
 
     // This is a repeat of the tag on c1, but put onto c3, and removed.
-    val t6 = c3.addTag("tag 1")
-    t6.resolve
-    val t6Removal = c3.removeTag("tag 1")
-    t6Removal.resolve
+    r3.addTag("tag 1")
+    r3.removeTag("tag 1")
 
-    // API on the FunctionWithProvenance
+    // Test the API on the FunctionWithProvenance
+
     it("have the expected counts in storage") {
       rt.findTags.size shouldBe 3
       rt.findTagHistory.size shouldBe 9
@@ -80,7 +86,7 @@ class TagSpec extends FunSpec with Matchers {
     }
 
 
-    // ResultTracker API
+    // Test the ResultTracker API
 
     it("can be listed from a result tracker w/o any other information") {
       rt.findTags.toSet shouldEqual Set(Tag("tag 1"), Tag("tag 2"), Tag("tag 3"))
