@@ -22,6 +22,9 @@ class TagSpec extends FunSpec with Matchers {
     val c3 = cubeDouble(1.23)
     val r3 = c3.resolve
 
+    val c4 = cubeDouble(2.34)
+    c4.resolve
+
     val t1 = c1.addTag("tag 1")
     t1.resolve
 
@@ -31,7 +34,30 @@ class TagSpec extends FunSpec with Matchers {
     val t3 = c3.addTag("tag 3")
     t3.resolve
 
+    // Make some tags and remove them.  These should only appear in history.
+
+    val t4 = c4.addTag("tag 4 to remove from c4")
+    t4.resolve
+    val t4Removal = c4.removeTag("tag 4 to remove from c4")
+    t4Removal.resolve
+
+    // This tag is the 2nd tag on c2.  Adding this to ensure it is removed w/o interference with other tags.
+    val t5 = c2.addTag("tag 5 to remove from c2")
+    t5.resolve
+    val t5Removal = c2.removeTag("tag 5 to remove from c2")
+    t5Removal.resolve
+
+    // This is a repeat of the tag on c1, but put onto c3, and removed.
+    val t6 = c3.addTag("tag 1")
+    t6.resolve
+    val t6Removal = c3.removeTag("tag 1")
+    t6Removal.resolve
+
     // API on the FunctionWithProvenance
+    it("have the expected counts in storage") {
+      rt.findTags.size shouldBe 3
+      rt.findTagHistory.size shouldBe 9
+    }
 
     it("can be listed from a function with provenance") {
       squareInt.findTags.toSet shouldEqual Set(Tag("tag 1"), Tag("tag 2"))
@@ -61,7 +87,7 @@ class TagSpec extends FunSpec with Matchers {
     }
 
     it("can be queried from a result tracker for detailed data") {
-      rt.findTagApplications.map(_.subject).map(_.load.normalize).toSet shouldEqual Set(r1.normalize, r2.normalize, r3.normalize)
+      rt.findTagApplications.map(_.subjectData).map(_.load.normalize).toSet shouldEqual Set(r1.normalize, r2.normalize, r3.normalize)
     }
 
     it("can be listed from a result tracker by output class name") {
@@ -84,28 +110,32 @@ class TagSpec extends FunSpec with Matchers {
       tagged3.map(_.load.normalize).toSet shouldEqual Set(r3.normalize)
     }
 
-    it("can be removed") {
-      /*
-      // Repeat all of the above with tag 2 removed.
-      val t2removed = c2.removeTag("tag 2")
-      t2removed.resolve
+    it("can be replaced") {
+      // Add back "tag 1" to c3, which we added above but then removed from c3 above.
+      // It is also on c1, which has not changed.
+      val t7 = c3.addTag("tag 1")
+      t7.resolve
 
-      val tagged1 = squareInt.findResultsByTag("tag 1")
-      val tagged2 = squareInt.findResultsByTag("tag 2")
-      val tagged3 = cubeDouble.findResultsByTag(Tag("tag 3"))
-      tagged1.map(_.normalize).toSet shouldEqual Set(r1.normalize)
-      tagged2.map(_.normalize).toSet shouldEqual Set.empty
-      tagged3.map(_.normalize).toSet shouldEqual Set(r3.normalize)
+      rt.findTags.size shouldBe 3
+      rt.findTagHistory.size shouldBe 10
 
-      rt.findTags.toSet shouldEqual Set(Tag("tag 1"), Tag("tag 3"))
+      val tagged1b = rt.findByTag("tag 1")
+      tagged1b.map(_.load.normalize).toSet shouldEqual Set(r1.normalize, r3.normalize)
 
-      rt.findTagApplications.map(_._1).map(_.load.normalize).toSet shouldEqual Set(r1.normalize, r3.normalize)
+      val taggedAll = rt.findTagApplications.filter(_.tag == Tag("tag 1"))
+      taggedAll.map(_.subjectData.load.normalize).toSet shouldEqual Set(r1.normalize, r3.normalize)
 
-      rt.findTagsByResultFunctionName("com.cibo.provenance.squareInt").toSet shouldEqual Set(Tag("tag 1"))
+      val tagsOnF1 = squareInt.findResultsByTag(Tag("tag 1"))
+      val tagsOnF2 = cubeDouble.findResultsByTag(Tag("tag 1"))
 
-      val tagged2b = rt.findByTag("tag 2")
-      tagged2b.map(_.load.normalize).toSet shouldEqual Set.empty
-      */
+      tagsOnF1.map(_.normalize).toSet shouldEqual Set(r1.normalize)
+      tagsOnF2.map(_.normalize).toSet shouldEqual Set(r3.normalize)
+
+      rt.findTags.toSet shouldEqual Set(Tag("tag 1"), Tag("tag 2"), Tag("tag 3"))
+      rt.findTagApplications.map(_.subjectData).map(_.load.normalize).toSet shouldEqual Set(r1.normalize, r2.normalize, r3.normalize)
+
+      rt.findTagsByResultFunctionName("com.cibo.provenance.squareInt").toSet shouldEqual Set(Tag("tag 1"), Tag("tag 2"))
+      rt.findTagsByResultFunctionName("com.cibo.provenance.cubeDouble").toSet shouldEqual Set(Tag("tag 1"), Tag("tag 3"))
     }
   }
 }

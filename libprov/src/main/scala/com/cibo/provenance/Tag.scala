@@ -97,8 +97,8 @@ object TagImplicits {
       * @param tag  The tag to remove.
       * @return     An RemoveTag[T]#Call that will save the tag when resolved.
       */
-    def removeTag(tag: ValueWithProvenance[_ <: Tag]): AddTag[S]#Call = {
-      val applyTagForType = new AddTag[S]
+    def removeTag(tag: ValueWithProvenance[_ <: Tag]): RemoveTag[S]#Call = {
+      val applyTagForType = new RemoveTag[S]
       val ts = UnknownProvenance(Instant.now)
       applyTagForType(subject, tag, ts)
     }
@@ -109,7 +109,7 @@ object TagImplicits {
       * @param text The tag to remove.
       * @return     An RemoveTag[T]#Call that will save the tag when resolved.
       */
-    def removeTag(text: String): AddTag[S]#Call = {
+    def removeTag(text: String): RemoveTag[S]#Call = {
       val tag = UnknownProvenance(Tag(text))
       removeTag(tag)
     }    
@@ -122,11 +122,13 @@ object TagImplicits {
   * This is a software translation of the call and its inputs, used by the ResultTracker to express history with a clear interface.
   *
   * @param addOrRemove
-  * @param subject
+  * @param subjectData
   * @param tag
   * @param ts
   */
-case class TagHistoryEntry(addOrRemove: AddOrRemoveTag.Value, subject: FunctionCallResultWithProvenanceSerializable, tag: Tag, ts: Instant)
+case class TagHistoryEntry(addOrRemove: AddOrRemoveTag.Value, subjectData: FunctionCallResultWithProvenanceSerializable, tag: Tag, ts: Instant) {
+  def subjectVivified(implicit rt: ResultTracker): FunctionCallResultWithProvenance[_] = subjectData.load(rt)
+}
 
 object AddOrRemoveTag extends Enumeration {
   val AddTag = Value("add")

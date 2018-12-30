@@ -565,11 +565,11 @@ trait ResultTracker extends Serializable {
 
 
   def findTagHistoryByOutputType(outputClassName: String): Iterable[TagHistoryEntry] =
-    findTagHistory.filter { _.subject.call.outputClassName == outputClassName }
+    findTagHistory.filter { _.subjectData.call.outputClassName == outputClassName }
 
   def findTagHistorysByResultFunctionName(functionName: String): Iterable[TagHistoryEntry] =
     findTagHistory.filter {
-      _.subject match {
+      _.subjectData match {
         case k: FunctionCallResultWithKnownProvenanceSerializable =>
           k.call.functionName == functionName
         case u: FunctionCallResultWithUnknownProvenanceSerializable =>
@@ -588,7 +588,7 @@ trait ResultTracker extends Serializable {
     * @return         The most recent tag for each subject that has not been deleted.
     */
   def distillTagHistory(history: Iterable[TagHistoryEntry]): Iterable[TagHistoryEntry] = {
-    history.groupBy(h => (h.subject, h.tag)).values.flatMap {
+    history.groupBy(h => (h.subjectData, h.tag)).values.flatMap {
       addAndRemoveEventsForOneTagAndSubject =>
         val latest = addAndRemoveEventsForOneTagAndSubject.toSeq.maxBy(_.ts)
         if (latest.addOrRemove == AddOrRemoveTag.AddTag)
@@ -604,12 +604,12 @@ trait ResultTracker extends Serializable {
     distillTagHistory(findTagHistory)
 
   def findTagApplicationsByOutputType(outputClassName: String): Iterable[TagHistoryEntry] =
-    distillTagHistory(findTagHistory.filter(_.subject.call.outputClassName == outputClassName))
+    distillTagHistory(findTagHistory.filter(_.subjectData.call.outputClassName == outputClassName))
 
   def findTagApplicationsByResultFunctionName(functionName: String): Iterable[TagHistoryEntry] =
     distillTagHistory(
       findTagHistory.filter {
-        _.subject match {
+        _.subjectData match {
           case k: FunctionCallResultWithKnownProvenanceSerializable =>
             k.call.functionName == functionName
           case u: FunctionCallResultWithUnknownProvenanceSerializable =>
@@ -619,13 +619,13 @@ trait ResultTracker extends Serializable {
     )
 
   def findTags: Iterable[Tag] =
-    findTagApplications.toVector.sortBy(_.ts).reverseIterator.toIterable.map(_.tag)
+    findTagApplications.toVector.sortBy(_.ts).reverseIterator.toIterable.map(_.tag).toVector.distinct
 
   def findTagsByOutputType(outputClassName: String): Iterable[Tag] =
-    findTagApplicationsByOutputType(outputClassName).map(_.tag)
+    findTagApplicationsByOutputType(outputClassName).map(_.tag).toVector.distinct
 
   def findTagsByResultFunctionName(functionName: String): Iterable[Tag] =
-    findTagApplicationsByResultFunctionName(functionName).map(_.tag)
+    findTagApplicationsByResultFunctionName(functionName).map(_.tag).toVector.distinct
 
 
   // Find results by tag
@@ -648,7 +648,7 @@ trait ResultTracker extends Serializable {
             None
         }
     }
-    distillTagHistory(uses.flatMap(convertAddTagOrRemoveTagToTagHistoryEntry)).map(_.subject)
+    distillTagHistory(uses.flatMap(convertAddTagOrRemoveTagToTagHistoryEntry)).map(_.subjectData)
   }
 
   def findTagHistoryBySubject(tag: Tag, subject: FunctionCallResultWithProvenanceSerializable): Iterable[FunctionCallResultWithProvenanceSerializable] = {
