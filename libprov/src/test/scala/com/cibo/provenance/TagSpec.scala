@@ -31,7 +31,6 @@ class TagSpec extends FunSpec with Matchers {
     val t3 = c3.addTag("tag 3")
     t3.resolve
 
-
     // API on the FunctionWithProvenance
 
     it("can be listed from a function with provenance") {
@@ -62,7 +61,7 @@ class TagSpec extends FunSpec with Matchers {
     }
 
     it("can be queried from a result tracker for detailed data") {
-      rt.findTagApplications.map(_._1).map(_.load.normalize).toSet shouldEqual Set(r1.normalize, r2.normalize, r3.normalize)
+      rt.findTagApplications.map(_.subject).map(_.load.normalize).toSet shouldEqual Set(r1.normalize, r2.normalize, r3.normalize)
     }
 
     it("can be listed from a result tracker by output class name") {
@@ -83,6 +82,30 @@ class TagSpec extends FunSpec with Matchers {
       tagged1.map(_.load.normalize).toSet shouldEqual Set(r1.normalize)
       tagged2.map(_.load.normalize).toSet shouldEqual Set(r2.normalize)
       tagged3.map(_.load.normalize).toSet shouldEqual Set(r3.normalize)
+    }
+
+    it("can be removed") {
+      /*
+      // Repeat all of the above with tag 2 removed.
+      val t2removed = c2.removeTag("tag 2")
+      t2removed.resolve
+
+      val tagged1 = squareInt.findResultsByTag("tag 1")
+      val tagged2 = squareInt.findResultsByTag("tag 2")
+      val tagged3 = cubeDouble.findResultsByTag(Tag("tag 3"))
+      tagged1.map(_.normalize).toSet shouldEqual Set(r1.normalize)
+      tagged2.map(_.normalize).toSet shouldEqual Set.empty
+      tagged3.map(_.normalize).toSet shouldEqual Set(r3.normalize)
+
+      rt.findTags.toSet shouldEqual Set(Tag("tag 1"), Tag("tag 3"))
+
+      rt.findTagApplications.map(_._1).map(_.load.normalize).toSet shouldEqual Set(r1.normalize, r3.normalize)
+
+      rt.findTagsByResultFunctionName("com.cibo.provenance.squareInt").toSet shouldEqual Set(Tag("tag 1"))
+
+      val tagged2b = rt.findByTag("tag 2")
+      tagged2b.map(_.load.normalize).toSet shouldEqual Set.empty
+      */
     }
   }
 }

@@ -189,10 +189,10 @@ abstract class FunctionWithProvenance[O : Codec] extends Serializable {
       _.call.asInstanceOf[FunctionCallWithKnownProvenanceSerializable].functionName == name
     ).map(_.asInstanceOf[FunctionCallResultWithKnownProvenanceSerializable])
 
-  def findTagResultData(implicit rt: ResultTracker): Iterable[(FunctionCallResultWithProvenanceSerializable, Tag, Instant)] =
+  def findTagResultData(implicit rt: ResultTracker): Iterable[TagHistoryEntry] =
     rt.findTagApplicationsByResultFunctionName(name)
 
-  def findTags(implicit rt: ResultTracker): Iterable[Tag] = findTagResultData.map(_._2)
+  def findTags(implicit rt: ResultTracker): Iterable[Tag] = findTagResultData.map(_.tag)
 
   class ReflectionException(msg: String) extends RuntimeException(msg)
 }
@@ -501,19 +501,6 @@ abstract class Function0WithProvenance[O : Codec] extends FunctionWithProvenance
   def findResultsByTag(tag: Tag)(implicit rt: ResultTracker): Iterable[Result] =
     findResultDataByTag(tag).flatMap(_.tryLoadAs[Result].toOption)
 
-  /**
-    * Return all tagged results with the associated tag and timestamp.
-    *
-    * Note: Some calls might not instantiate if the class has changed.
-    * Use findTagResultData for a degenerate form of result that will always materialize.
-    *
-    */
-  def findTagResults(implicit rt: ResultTracker): Iterable[(Result, Tag, Instant)] =
-    findTagResultData.flatMap {
-      case (subject, tag, ts) =>
-        Try { (subject.load.asInstanceOf[Result], tag, ts) }.toOption
-    }
-
 }
 
 
@@ -812,19 +799,6 @@ abstract class Function1WithProvenance[[#I1#], O](
     */
   def findResultsByTag(tag: Tag)(implicit rt: ResultTracker): Iterable[Result] =
     findResultDataByTag(tag).flatMap(_.tryLoadAs[Result].toOption)
-
-  /**
-    * Return all tagged results with the associated tag and timestamp.
-    *
-    * Note: Some calls might not instantiate if the class has changed.
-    * Use findTagResultData for a degenerate form of result that will always materialize.
-    *
-    */
-  def findTagResults(implicit rt: ResultTracker): Iterable[(Result, Tag, Instant)] =
-    findTagResultData.flatMap {
-      case (subject, tag, ts) =>
-        Try { (subject.load.asInstanceOf[Result], tag, ts) }.toOption
-    }
 
 }#
 ]

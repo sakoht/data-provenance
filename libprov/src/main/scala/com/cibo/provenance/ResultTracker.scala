@@ -527,55 +527,105 @@ trait ResultTracker extends Serializable {
 
   // Find tags
 
-  def findTagApplications: Iterable[(FunctionCallResultWithProvenanceSerializable, Tag, Instant)] = {
-    findFunctionNames.filter(_.startsWith("com.cibo.provenance.ApplyTag[")).flatMap {
-      applyTagFunctioName =>
-        findResultData(applyTagFunctioName).flatMap {
-          _.call match {
-            case n: FunctionCallWithKnownProvenanceSerializableWithoutInputs
-                if n.functionName.startsWith("com.cibo.provenance.ApplyTag[") =>
-              implicit val rt: ResultTracker = this
-              n.expandInputs(this).inputList match {
-                case subject :: tag :: ts :: Nil =>
-                  Some(
-                    subject.asInstanceOf[FunctionCallResultWithProvenanceSerializable],
-                    tag.loadAs[FunctionCallResultWithProvenance[Tag]].output,
-                    ts.loadAs[FunctionCallResultWithProvenance[Instant]].output
-                  )
-                case other => throw new RuntimeException(f"Unexpected: input to a result is not resolved? $other")
-              }
-            case other =>
-              None
-          }
-        }
+  def findTagHistory: Iterable[TagHistoryEntry] = {
+    findFunctionNames.filter(
+      n => n.startsWith("com.cibo.provenance.AddTag[") || n.startsWith("com.cibo.provenance.RemoveTag[")
+    ).flatMap {
+      functionName =>
+        findResultData(functionName).flatMap(convertAddTagOrRemoveTagToTagHistoryEntry)
     }
   }
 
-  def findTagApplicationsByOutputType(outputClassName: String): Iterable[(FunctionCallResultWithProvenanceSerializable, Tag, Instant)] =
-    findTagApplications.filter {
-      case (subject, tag, ts) =>
-        subject.call.outputClassName == outputClassName
+  def convertAddTagOrRemoveTagToTagHistoryEntry(result: FunctionCallResultWithProvenanceSerializable): Option[TagHistoryEntry] =
+    result.call match {
+      case call: FunctionCallWithKnownProvenanceSerializableWithoutInputs =>
+        implicit val rt: ResultTracker = this
+        call.expandInputs(this).inputList match {
+          case subject :: tag :: ts :: Nil =>
+            val addOrRemove =
+              if (call.functionName.startsWith("com.cibo.provenance.AddTag["))
+                AddOrRemoveTag.AddTag
+              else if (call.functionName.startsWith("com.cibo.provenance.RemoveTag["))
+                AddOrRemoveTag.RemoveTag
+              else
+                throw new RuntimeException(f"Unexpected AddOrRemoveTag flag: $call")
+            Some(
+              TagHistoryEntry(
+                addOrRemove,
+                subject.asInstanceOf[FunctionCallResultWithProvenanceSerializable],
+                tag.loadAs[FunctionCallResultWithProvenance[Tag]].output,
+                ts.loadAs[FunctionCallResultWithProvenance[Instant]].output
+              )
+            )
+          case other => throw new RuntimeException(f"Unexpected: input to a result is not resolved? $other")
+        }
+      case other =>
+        None
     }
 
-  def findTagApplicationsByResultFunctionName(functionName: String): Iterable[(FunctionCallResultWithProvenanceSerializable, Tag, Instant)] =
-    findTagApplications.filter {
-      case (subject, tag, ts) =>
-        subject match {
+
+  def findTagHistoryByOutputType(outputClassName: String): Iterable[TagHistoryEntry] =
+    findTagHistory.filter { _.subject.call.outputClassName == outputClassName }
+
+  def findTagHistorysByResultFunctionName(functionName: String): Iterable[TagHistoryEntry] =
+    findTagHistory.filter {
+      _.subject match {
+        case k: FunctionCallResultWithKnownProvenanceSerializable =>
+          k.call.functionName == functionName
+        case u: FunctionCallResultWithUnknownProvenanceSerializable =>
+          f"UnknownProvenance[${u.call.outputClassName}]" == functionName
+      }
+    }
+
+  //
+
+  /**
+    * Collapse a history of add/remove tag events into just one item for tags that still exist.
+    *
+    * If the most recent event for a tag/subject pair is AddTag, it will be included.  Everything else is omitted.
+    *
+    * @param history  An iterable of TagHistoryEntry objects, potentially with multiple events per tag/subject.
+    * @return         The most recent tag for each subject that has not been deleted.
+    */
+  def distillTagHistory(history: Iterable[TagHistoryEntry]): Iterable[TagHistoryEntry] = {
+    history.groupBy(h => (h.subject, h.tag)).values.flatMap {
+      addAndRemoveEventsForOneTagAndSubject =>
+        val latest = addAndRemoveEventsForOneTagAndSubject.toSeq.maxBy(_.ts)
+        if (latest.addOrRemove == AddOrRemoveTag.AddTag)
+          Some(latest)
+        else if (latest.addOrRemove == AddOrRemoveTag.RemoveTag)
+          None
+        else
+          throw new RuntimeException(s"Unexpected add/remove flag: ${latest.addOrRemove}")
+    }
+  }
+
+  def findTagApplications: Iterable[TagHistoryEntry] =
+    distillTagHistory(findTagHistory)
+
+  def findTagApplicationsByOutputType(outputClassName: String): Iterable[TagHistoryEntry] =
+    distillTagHistory(findTagHistory.filter(_.subject.call.outputClassName == outputClassName))
+
+  def findTagApplicationsByResultFunctionName(functionName: String): Iterable[TagHistoryEntry] =
+    distillTagHistory(
+      findTagHistory.filter {
+        _.subject match {
           case k: FunctionCallResultWithKnownProvenanceSerializable =>
             k.call.functionName == functionName
           case u: FunctionCallResultWithUnknownProvenanceSerializable =>
             f"UnknownProvenance[${u.call.outputClassName}]" == functionName
         }
-    }
+      }
+    )
 
   def findTags: Iterable[Tag] =
-    findTagApplications.toVector.sortBy(_._3).reverseIterator.toIterable.map(_._2)
+    findTagApplications.toVector.sortBy(_.ts).reverseIterator.toIterable.map(_.tag)
 
   def findTagsByOutputType(outputClassName: String): Iterable[Tag] =
-    findTagApplicationsByOutputType(outputClassName).map(_._2)
+    findTagApplicationsByOutputType(outputClassName).map(_.tag)
 
   def findTagsByResultFunctionName(functionName: String): Iterable[Tag] =
-    findTagApplicationsByResultFunctionName(functionName).map(_._2)
+    findTagApplicationsByResultFunctionName(functionName).map(_.tag)
 
 
   // Find results by tag
@@ -585,20 +635,40 @@ trait ResultTracker extends Serializable {
 
   def findByTag(tag: Tag): Iterable[FunctionCallResultWithProvenanceSerializable] = {
     // Find all places the tag is used as an input.
+    val uses = findUsesOfValue(tag).flatMap {
+      result =>
+        // Limit to where it is used as an input to AddTag[...]
+        result.call match {
+          case call: FunctionCallWithKnownProvenanceSerializableWithoutInputs
+              if call.functionName.startsWith("com.cibo.provenance.AddTag[") ||
+                call.functionName.startsWith("com.cibo.provenance.RemoveTag[")
+            =>
+            Some(result)
+          case other =>
+            None
+        }
+    }
+    distillTagHistory(uses.flatMap(convertAddTagOrRemoveTagToTagHistoryEntry)).map(_.subject)
+  }
+
+  def findTagHistoryBySubject(tag: Tag, subject: FunctionCallResultWithProvenanceSerializable): Iterable[FunctionCallResultWithProvenanceSerializable] = {
+    // Find all places the tag is used as an input.
     findUsesOfValue(tag).flatMap {
-      // Limit to where it is used as an input to ApplyTag[...]
-      _.call match {
-        case n: FunctionCallWithKnownProvenanceSerializableWithoutInputs
-            if n.functionName.startsWith("com.cibo.provenance.ApplyTag[") =>
-          // The first input is the subject.
-          n.expandInputs(this).inputList.head match {
-            case k: FunctionCallResultWithKnownProvenanceSerializable => Some(k)
-            case u: FunctionCallResultWithUnknownProvenanceSerializable => Some(u)
-            case other => throw new RuntimeException(f"Unexpected: input to a result is not resolved? $other")
-          }
-        case other =>
-          None
-      }
+      result =>
+        // Limit to where it is used as an input to AddTag[...] or RemoveTag[...]
+        result.call match {
+          case call: FunctionCallWithKnownProvenanceSerializableWithoutInputs
+              if call.functionName.startsWith("com.cibo.provenance.AddTag[") ||
+                call.functionName.startsWith("com.cibo.provenance.RemoveTag[") =>
+            // The first input is the subject.
+            val firstInput = call.expandInputs(this).inputList.head.asInstanceOf[FunctionCallResultWithProvenanceSerializable]
+            if (firstInput == subject)
+              Some(result)
+            else
+              None
+          case other =>
+            None
+        }
     }
   }
 

@@ -16,21 +16,43 @@ object Tag {
 }
 
 /**
-  * This applies a text string Tag to a given call/result.
-  *
-  * @param cd
-  * @tparam T
+  * This function applies a text string Tag to a given call/result.
+  * 
+  * @param cd   The codec for the type of data to which the function will apply.
+  * @tparam S   The type of data to which the tag will apply.
   */
-class ApplyTag[T](implicit cd: Codec[T]) extends Function3WithProvenance[T, Tag, Instant, T] {
+class AddTag[S](implicit cd: Codec[S]) extends Function3WithProvenance[S, Tag, Instant, S] {
   val currentVersion = Version("0.1")
-  def impl(obj: T, tag: Tag, timestamp: Instant): T = obj
+  def impl(obj: S, tag: Tag, timestamp: Instant): S = obj
   override lazy val typeParameterTypeNames: Seq[String] = Seq(Codec.classTagToSerializableName(cd.classTag))
 }
 
-object ApplyTag {
-  def apply[T : Codec]: ApplyTag[T] = {
+object AddTag {
+  def apply[S : Codec]: AddTag[S] = {
     implicit val instantCodec = TagImplicits.instantCodec
-    new ApplyTag[T]
+    new AddTag[S]
+  }
+}
+
+/**
+  * This function "logically" removes a Tag from a given call/result.
+  *
+  * Because the storage of calls is append-only, we don't delete things,
+  * but this nullifies a previous application.
+  *
+  * @param cd   The codec for the type of data to which the function will apply.
+  * @tparam S   The type of data to which the tag will apply.
+  */
+class RemoveTag[S](implicit cd: Codec[S]) extends Function3WithProvenance[S, Tag, Instant, S] {
+  val currentVersion = Version("0.1")
+  def impl(obj: S, tag: Tag, timestamp: Instant): S = obj
+  override lazy val typeParameterTypeNames: Seq[String] = Seq(Codec.classTagToSerializableName(cd.classTag))
+}
+
+object RemoveTag {
+  def apply[S : Codec]: RemoveTag[S] = {
+    implicit val instantCodec = TagImplicits.instantCodec
+    new RemoveTag[S]
   }
 }
 
@@ -43,17 +65,17 @@ object TagImplicits {
     * Extend a ValueWithProvenance[_] to have the addTag(..) method.
     *
     * @param subject  Some call or result.
-    * @tparam T       The output type of the subject.
+    * @tparam S       The output type of the subject.
     */
-  implicit class Taggable[T : Codec](subject: ValueWithProvenance[T]) {
+  implicit class Taggable[S : Codec](subject: ValueWithProvenance[S]) {
     /**
       * Add a tag to the subject.
       *
       * @param tag  The tag to add.
       * @return     An AddTag[T]#Call that will save the tag when resolved.
       */
-    def addTag(tag: ValueWithProvenance[_ <: Tag]): ApplyTag[T]#Call = {
-      val applyTagForType = new ApplyTag[T]
+    def addTag(tag: ValueWithProvenance[_ <: Tag]): AddTag[S]#Call = {
+      val applyTagForType = new AddTag[S]
       val ts = UnknownProvenance(Instant.now)
       applyTagForType(subject, tag, ts)
     }
@@ -64,9 +86,50 @@ object TagImplicits {
       * @param text The tag to add.
       * @return     An AddTag[T]#Call that will save the tag when resolved.
       */
-    def addTag(text: String): ApplyTag[T]#Call = {
+    def addTag(text: String): AddTag[S]#Call = {
       val tag = UnknownProvenance(Tag(text))
       addTag(tag)
     }
+
+    /**
+      * Remove a tag from the subject.
+      *
+      * @param tag  The tag to remove.
+      * @return     An RemoveTag[T]#Call that will save the tag when resolved.
+      */
+    def removeTag(tag: ValueWithProvenance[_ <: Tag]): AddTag[S]#Call = {
+      val applyTagForType = new AddTag[S]
+      val ts = UnknownProvenance(Instant.now)
+      applyTagForType(subject, tag, ts)
+    }
+
+    /**
+      * Remove a tag from the subject by specifying the text String content.
+      *
+      * @param text The tag to remove.
+      * @return     An RemoveTag[T]#Call that will save the tag when resolved.
+      */
+    def removeTag(text: String): AddTag[S]#Call = {
+      val tag = UnknownProvenance(Tag(text))
+      removeTag(tag)
+    }    
   }
 }
+
+/**
+  * A TagHistoryEntry is represents either a call to AddTag or RemoveTag in the history of some tag/subject pair.
+  *
+  * This is a software translation of the call and its inputs, used by the ResultTracker to express history with a clear interface.
+  *
+  * @param addOrRemove
+  * @param subject
+  * @param tag
+  * @param ts
+  */
+case class TagHistoryEntry(addOrRemove: AddOrRemoveTag.Value, subject: FunctionCallResultWithProvenanceSerializable, tag: Tag, ts: Instant)
+
+object AddOrRemoveTag extends Enumeration {
+  val AddTag = Value("add")
+  val RemoveTag = Value("remove")
+}
+
