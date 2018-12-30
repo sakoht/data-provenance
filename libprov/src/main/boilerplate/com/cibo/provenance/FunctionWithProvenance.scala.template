@@ -185,7 +185,7 @@ abstract class FunctionWithProvenance[O : Codec] extends Serializable {
     * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
     */
   def findResultDataByTag(tag: Tag)(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
-    rt.findByTag(tag).filter(
+    rt.findResultDataByTag(tag).filter(
       _.call.asInstanceOf[FunctionCallWithKnownProvenanceSerializable].functionName == name
     ).map(_.asInstanceOf[FunctionCallResultWithKnownProvenanceSerializable])
 

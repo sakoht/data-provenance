@@ -2,6 +2,8 @@ package com.cibo.provenance
 
 import org.scalatest._
 
+import scala.util.Try
+
 class TagSpec extends FunSpec with Matchers {
 
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir
@@ -97,8 +99,8 @@ class TagSpec extends FunSpec with Matchers {
     }
 
     it("can be listed from a result tracker by output class name") {
-      rt.findTagsByOutputType("scala.Int").toSet shouldEqual Set(Tag("tag 1"), Tag("tag 2"))
-      rt.findTagsByOutputType("scala.Double").toSet shouldEqual Set(Tag("tag 3"))
+      rt.findTagsByOutputClassName("scala.Int").toSet shouldEqual Set(Tag("tag 1"), Tag("tag 2"))
+      rt.findTagsByOutputClassName("scala.Double").toSet shouldEqual Set(Tag("tag 3"))
     }
 
     it("can be listed from a result tracker by result function name") {
@@ -107,9 +109,10 @@ class TagSpec extends FunSpec with Matchers {
     }
 
     it("cat be used to query the result tracker for results w/o knowing the specific functions or types") {
-      val tagged1 = rt.findByTag("tag 1")
-      val tagged2 = rt.findByTag("tag 2")
-      val tagged3 = rt.findByTag(Tag("tag 3"))
+      val tagged1 = rt.findResultDataByTag("tag 1")
+      val tagged2 = rt.findResultDataByTag("tag 2")
+      val tagged3 = rt.findResultDataByTag(Tag("tag 3"))
+
 
       tagged1.map(_.load.normalize).toSet shouldEqual Set(r1.normalize)
       tagged2.map(_.load.normalize).toSet shouldEqual Set(r2.normalize)
@@ -125,7 +128,7 @@ class TagSpec extends FunSpec with Matchers {
       rt.findTags.size shouldBe 3
       rt.findTagHistory.size shouldBe 10
 
-      val tagged1b = rt.findByTag("tag 1")
+      val tagged1b = rt.findResultDataByTag("tag 1")
       tagged1b.map(_.load.normalize).toSet shouldEqual Set(r1.normalize, r3.normalize)
 
       val taggedAll = rt.findTagApplications.filter(_.tag == Tag("tag 1"))

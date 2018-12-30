@@ -621,7 +621,7 @@ trait ResultTracker extends Serializable {
   def findTags: Iterable[Tag] =
     findTagApplications.toVector.sortBy(_.ts).reverseIterator.toIterable.map(_.tag).toVector.distinct
 
-  def findTagsByOutputType(outputClassName: String): Iterable[Tag] =
+  def findTagsByOutputClassName(outputClassName: String): Iterable[Tag] =
     findTagApplicationsByOutputType(outputClassName).map(_.tag).toVector.distinct
 
   def findTagsByResultFunctionName(functionName: String): Iterable[Tag] =
@@ -630,10 +630,10 @@ trait ResultTracker extends Serializable {
 
   // Find results by tag
 
-  def findByTag(text: String): Iterable[FunctionCallResultWithProvenanceSerializable] =
-    findByTag(Tag(text))
+  def findResultDataByTag(text: String): Iterable[FunctionCallResultWithProvenanceSerializable] =
+    findResultDataByTag(Tag(text))
 
-  def findByTag(tag: Tag): Iterable[FunctionCallResultWithProvenanceSerializable] = {
+  def findResultDataByTag(tag: Tag): Iterable[FunctionCallResultWithProvenanceSerializable] = {
     // Find all places the tag is used as an input.
     val uses = findUsesOfValue(tag).flatMap {
       result =>
