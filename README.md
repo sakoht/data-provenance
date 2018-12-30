@@ -288,58 +288,182 @@ structure has changed, or is not available in the current application.
 Example:
 ```scala
 
-case class BreadLoaf(slices: Int)
+case class BirthdayCake(candleCount: Int)
 
-object BreadLoaf {
+object BirthdayCake {
   import io.circe._
   import io.circe.generic.semiauto._
-  implicit val encoder: Encoder[BreadLoaf] = deriveEncoder[BreadLoaf]
-  implicit val decoder: Decoder[BreadLoaf] = deriveDecoder[BreadLoaf]
+  implicit val encoder: Encoder[BirthdayCake] = deriveEncoder[BirthdayCake]
+  implicit val decoder: Decoder[BirthdayCake] = deriveDecoder[BirthdayCake]
 }
 
-object addSlices extends Function2WithProvenance[BreadLoaf, Int, BreadLoaf] {
+object addCandles extends Function2WithProvenance[BirthdayCake, Int, BirthdayCake] {
   val currentVersion: Version = Version("0.1")
-  def impl(loaf: BreadLoaf, count: Int): BreadLoaf = loaf.copy(slices = loaf.slices + count)
+  def impl(loaf: BirthdayCake, count: Int): BirthdayCake = loaf.copy(candleCount = loaf.candleCount + count)
 }
 
-val loaf1 = BreadLoaf(5)
-val loaf2 = addSlices(loaf1, 10)
-val loaf3 = addSlices(loaf2, 6)
+val cake1 = BirthdayCake(5)
+val cake2 = addCandles(cake1, 10)
+val cake3 = addCandles(cake2, 6)
 
-loaf3.resolve
+cake3.resolve
+cake3.output shoulldBe 21
 
-val results = addSlices.findResults
+val results = addCandles.findResults
 results.foreach(println)
-// (BreadLoaf(15) <- addSlices(raw(BreadLoaf(5)),raw(10)))
-// (BreadLoaf(21) <- addSlices((BreadLoaf(15) <- addSlices(raw(BreadLoaf(5)),raw(10))),raw(6)))
-
-val resultsRaw = addSlices.findResultData
-val resuts2 = resultsRaw.map(_.load)
-assert(results2 == results)
+// (BirthdayCake(15) <- addCandles(raw(BirthdayCake(5)),raw(10)))
+// (BirthdayCake(21) <- addCandles((BirthdayCake(15) <- addCandles(raw(BirthdayCake(5)),raw(10))),raw(6)))
 ```
+
+The application querying for results may not have the type available, possibly because it was made
+in a foreign application, or because the class has changed since the data was made.
+
+Methods that find "ResultData" instead of "Results" retrieve raw, typless data that can be interrogated
+in any application.  The raw data can be converted into fully typed data with a call to the .load method,
+which will succeed if the type is available, and fail otherwise.
+```
+val resultsRaw = addCandles.findResultData
+val resutsVivified = resultsRaw.map(_.load)
+assert(resultsVivified.map(_.normalize) == results.map(_.normalize)
+```
+
+Note that the `.normalize` method is only required if the code intendes to perform exact equality tests.
+Without it, freshly loaded results will be lazy about loading internals until neceessary.  They are 
+functionally equivalent, but will not pass a plain scala equality test.
+
+The raw *Data access methods are available on the ResultTracker itself, so values can be found even if the
+function is completely foreign:
+```
+val resultsRaw2 = rt.findResultData("com.cibo.provenance.addCandles")
+val resultsRaw3 = rt.findResultData("com.cibo.provenance.addCandles", "0.1")
+val resultsRaw4 = rt.findResultDataByOutput(Digest("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"))
+val resultsRaw5 = rt.findResultDataByOutput(SomeObjectMaybeCreatedByATrackedCall)
+```
+
+It is possible to search for a result by one of its inputs results:
+```
+val result2 = eatCake(result1).resolve
+val usesOfResult1 = rt.findUsesOfResult(result1)
+usesOfResult1.map(_.load.normalize).head == result2.normalize
+```
+
+Or by a raw input value:
+```
+val usesOfOutput1 = rt.findUsesOfValue(result1.output)
+usesOfOutput1.map(_.load.normalize).head == result2.normalize
+```
+
 
 Tags
----------------
-Any result can be tagged with a text String annotation.  Tags are similar to tags in source control,
-except the same tag name can be applied to multiple things.
+----
+Any result can be tagged with a text String annotation.  
 
+Tags are similar to tags in source control, except the same tag name can be applied to multiple things.
+
+Tag a result:
 ```
-// Tag a result
-val call1 = MyCall(...)
-val result1 = call1.resolve
-val tag1 = result1.addTag(Tag("tag 2")
-
-// Tag a call
-val call1 = MyCall(...)
-val tag1 = call1.addTag(Tag("tag 1")
-
-
-
-
+val result1 = eatCake(...).resolve
+result1.addTag("tag 1")
 ```
 
-Shorter Example
----------------
+Find the result later by tag:
+```
+val result1b = eatCake.findResultsByTag("tag 1").head 
+result1b shouldEqual result1
+```
+
+Query the ResultTracker for the data in raw/generic form, accessable across libraries:
+```
+val result1c = rt.findResultDataByTag("tag 1").head
+result1c.load  shouldEqual result1
+```
+
+Find tags by the data type of the result they reference:
+```
+val tag1b = rt.findTagsByOutputClassName("scala.Int").head
+tag1b shouldEqual Tag("tag 1")
+```
+
+Or by the type of function call result they apply to:
+```
+val tag1c = rt.findTagsByResultFunctionName("com.cibo.provenance.eatCake").head
+tag1c shouldEqual Tag("tag 1")
+```
+
+Find it in the list of all tags in the result tracker:
+```
+rt.findTags.contains(Tag("tag 1")
+```
+
+Remove a tag:
+```
+result1.removeTag("tag 1")
+```
+
+Find all additions and removals in the append-only tag history:
+```
+val history = rt.findTagHistory.sortBy(_.ts)
+history.size shouldEqual 2
+
+val add = history.head
+val remove = history.last
+
+add.addOrRemove shouldEqual AddOrRemoveTag.AddTag
+add.subject.load.mormalize shouildEqual result1.normalize
+add.tag shouldEqual Tag("tag 1")
+
+remove.addOrRemove shouldEqual AddOrRemoveTag.RemoveTag
+remove.subject.load.mormalize shouildEqual result1.normalize
+remove.tag shouldEqual Tag("tag 1")
+
+add.ts < remove.ts
+```
+
+
+The same tag text can be applied to different result objects independently.
+All results attached to the same tag can be loaded as a group. 
+
+
+Since old versions of results might not fully vivify when the class changes,
+or if the class is not available to the querying library,
+it is possible to query for the raw metadata w/o fully vivifying the results.
+
+Calls described as "ResultData" intead of "Result" return untyped metadata
+accessible in ay application.
+```
+val callsAsRawData = eatCake.findResultDataByTag("tag 1")
+```
+
+
+The untyped metadata can be loaded in any application where the type is available, presuming the type
+has not changed dramatically enough that it cannot deserialize: 
+```
+val justTheOnesWeCanVivify: Iterable[eatCake.Result] =
+    callsAsRawData.flatMap {
+        primitiveData >
+            Try(primitiveData.load) match {
+                case Success(realObject) => Some(realObject.asInstanceOf[eatCake.Result])
+                case Failure(err) => None
+            }
+    }
+```
+
+
+When a result is tagged, it is saved immediately.
+
+A call can also be tagged, but it the tag addition must be resolved in order to save the tag.
+```
+val call1 = eatCake(...)
+val tag1 = call1.addTag(Tag("tag 2")
+
+call1.resolve
+// tag1 is not saved yet
+tag1.resolve
+// tag1 is now saved
+```
+
+Short Example
+-------------
 
 ```scala
 import com.cibo.provenance._
