@@ -230,7 +230,7 @@ trait ResultTracker extends Serializable {
   }
 
   def loadValueWithCodec[T : ClassTag](valueDigest: Digest)(implicit cct: Codec[Codec[T]]): (T, Codec[T]) = {
-    val allCodecs: List[Codec[T]] = loadCodecsByValueDigest[T](valueDigest: Digest).toList
+    val allCodecs: List[Codec[T]] = loadCodecsByValueDigestTyped[T](valueDigest: Digest).toList
     val workingCodecValuePairs = allCodecs.flatMap {
       codec =>
         implicit val c: Codec[T] = codec
@@ -258,16 +258,16 @@ trait ResultTracker extends Serializable {
     }
   }
 
-  def loadCodecByType[T : ClassTag : TypeTag](implicit cdcd: Codec[Codec[T]]): Codec[T]
+  def loadCodecByType[T : ClassTag](implicit cdcd: Codec[Codec[T]]): Codec[T]
 
   def loadCodecByCodecDigest[T : ClassTag](codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T] = {
     val valueClassName = Codec.classTagToSerializableName[T]
-    loadCodecByClassNameAndCodecDigest[T](valueClassName, codecDigest)
+    loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T](valueClassName, codecDigest)
   }
 
-  def loadCodecByClassNameAndCodecDigest[T : ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T]
+  def loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T : ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T]
 
-  def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Seq[Codec[T]]
+  def loadCodecsByValueDigestTyped[T : ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Seq[Codec[T]]
 
   def loadBuildInfoOption(commitId: String, buildId: String): Option[BuildInfo]
 

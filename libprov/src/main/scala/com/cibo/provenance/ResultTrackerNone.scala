@@ -3,7 +3,6 @@ package com.cibo.provenance
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe
-import scala.reflect.runtime.universe.TypeTag
 
 
 /**
@@ -31,7 +30,7 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
   def saveCallSerializable[O](callSerializable: FunctionCallWithUnknownProvenanceSerializable): FunctionCallWithProvenanceDeflated[O] =
     FunctionCallWithProvenanceDeflated(callSerializable)
 
-  def saveOutputValue[T : Codec](obj: T)(implicit tt: universe.TypeTag[Codec[T]], ct: ClassTag[Codec[T]]): Digest = {
+  def saveOutputValue[T : Codec](obj: T)(implicit ct: ClassTag[Codec[T]]): Digest = {
     // also a no-op that just calculates the ID and returns it
     Codec.digestObject(obj)(implicitly[Codec[T]], implicitly[Codec[T]].classTag)
   }
@@ -68,23 +67,26 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
   def loadCodecByType[T : Codec](implicit cdcd: Codec[Codec[T]]): Codec[T] =
     throw new UnavailableData("No codec data with this tracker")
 
-  def loadCodecByClassNameAndCodecDigest[T : ClassTag](valueClassName: String, codecDigest: Digest)(implicit tt: universe.TypeTag[Codec[T]], ct: ClassTag[Codec[T]]): Codec[T] =
+  def loadCodecByClassNameAndCodecDigest[T : ClassTag](valueClassName: String, codecDigest: Digest)(implicit ct: ClassTag[Codec[T]]): Codec[T] =
     throw new UnavailableData("No codec data with this tracker")
 
-  def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest)(implicit tt: universe.TypeTag[Codec[T]], ct: ClassTag[Codec[T]]): Seq[Codec[T]] =
+  def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest)(implicit ct: ClassTag[Codec[T]]): Seq[Codec[T]] =
     Seq.empty
 
   def loadCallById(callId: Digest): Option[FunctionCallWithProvenanceDeflated[_]] = None
 
   def loadResultById(resultId: Digest): Option[FunctionCallResultWithProvenanceDeflated[_]] = None
 
-  def saveOutputValue[T: Codec](obj: T)(implicit cdcd: Codec[Codec[T]]) = ???
+  def saveOutputValue[T: Codec](obj: T)(implicit cdcd: Codec[Codec[T]]): Digest =
+    throw new RuntimeException(f"Values cannot be be savedf with $this")
 
-  def loadCodecByType[T: ClassTag : universe.TypeTag](implicit cdcd: Codec[Codec[T]]) = ???
+  def loadCodecByType[T: ClassTag](implicit cdcd: Codec[Codec[T]]) =
+    throw new RuntimeException(f"Codecs cannot be loaded from $this")
 
-  def loadCodecByClassNameAndCodecDigest[T: ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]) = ???
+  def loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T: ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T] =
+    throw new RuntimeException(f"Codecs cannot be loaded from $this")
 
-  def loadCodecsByValueDigest[T: ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]) = ???
+  def loadCodecsByValueDigestTyped[T: ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Seq[Codec[T]] = Nil
 
   def findFunctionNames: Iterable[String] = Iterable.empty
 

@@ -127,23 +127,23 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
     aa.get
   }
 
-  def loadCodecByType[T: ClassTag : universe.TypeTag](implicit cdcd: Codec[Codec[T]]): Codec[T] = {
+  def loadCodecByType[T: ClassTag](implicit cdcd: Codec[Codec[T]]): Codec[T] = {
     val aa = Try(a.loadCodecByType[T])
     val bb = Try(b.loadCodecByType[T])
     cmpSeqCodec(aa.map(v => Seq(v)), bb.map(v => Seq(v)), s"loadCodecByType for ${implicitly[ClassTag[T]]} returned different values for sync vs. async: $aa vs $bb")
     aa.get
   }
 
-  def loadCodecByClassNameAndCodecDigest[T: ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T] = {
-    val aa = Try(a.loadCodecByClassNameAndCodecDigest[T](valueClassName, codecDigest))
-    val bb = Try(b.loadCodecByClassNameAndCodecDigest[T](valueClassName, codecDigest))
+  def loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T: ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T] = {
+    val aa = Try(a.loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T](valueClassName, codecDigest))
+    val bb = Try(b.loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T](valueClassName, codecDigest))
     cmpSeqCodec(aa.map(v => Seq(v)), bb.map(v => Seq(v)), s"loadCodecByClassNameAndCodecDigest for $valueClassName, $codecDigest returned different values for sync vs. async: $aa vs $bb")
     aa.get
   }
 
-  def loadCodecsByValueDigest[T: ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Seq[Codec[T]] = {
-    val aa = Try(a.loadCodecsByValueDigest[T](valueDigest))
-    val bb = Try(b.loadCodecsByValueDigest[T](valueDigest))
+  def loadCodecsByValueDigestTyped[T: ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Seq[Codec[T]] = {
+    val aa = Try(a.loadCodecsByValueDigestTyped[T](valueDigest))
+    val bb = Try(b.loadCodecsByValueDigestTyped[T](valueDigest))
     cmpSeqCodec(aa, aa, s"loadCodecsByValueDigest for $valueDigest returned different values for sync vs. async: $aa vs $bb")
     aa.get
   }
