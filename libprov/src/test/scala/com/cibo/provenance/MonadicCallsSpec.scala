@@ -294,6 +294,26 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       s2p.resolve.output.get shouldBe "hello-mysuffix"
     }
   }
+
+  describe("Loading parameterized classes") {
+    it("works") {
+      implicit val rt = ResultTrackerNone()
+
+      val list1 = MakeDummyOutputList()
+      val mapCall: com.cibo.provenance.monadics.MapWithProvenance[List, Int, Int]#Call = list1.map(MyIncrement)
+
+      val f1 = com.cibo.provenance.monadics.MapWithProvenance[List, Int, Int]
+      val f2 = Codec.objectFromSerializableName[MapWithProvenance[List, Int, Int]]("com.cibo.provenance.monadics.MapWithProvenance[List, Int, Int]")
+
+      f2.name shouldEqual f1.name
+
+      val o1 = f1(list1, MyIncrement).resolve.output
+      val o2 = f2(list1, MyIncrement).resolve.output
+
+      o2 shouldEqual o1
+
+    }
+  }
 }
 
 object MakeDummyOutputList extends Function0WithProvenance[List[Int]] {

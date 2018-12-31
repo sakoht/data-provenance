@@ -32,6 +32,11 @@ class ObjectConstructorSpec extends FunSpec with Matchers {
 
       TestUtils.diffOutputSubdir(testSubdir)
     }
+
+    it("reloads correctly") {
+      val byName = Codec.objectFromSerializableName("com.cibo.provenance.Bar.withProvenance").asInstanceOf[FunctionWithProvenance[_]]
+      byName shouldEqual Bar.withProvenance
+    }
   }
 }
 

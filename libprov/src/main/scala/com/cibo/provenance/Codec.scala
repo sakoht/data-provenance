@@ -2,6 +2,7 @@ package com.cibo.provenance
 
 import java.io.Serializable
 
+import com.cibo.provenance.Codec.objectFromSerializableName
 import com.typesafe.scalalogging.LazyLogging
 import io.circe.{Decoder, Encoder, Json}
 
@@ -89,7 +90,7 @@ object Codec extends LazyLogging {
       o: T =>
         val className = o.getClass.getName.stripSuffix("$")
         val valueString = classNameToValueString(className)
-        val companionObject: COMPANION = objFromSerializableName[COMPANION](className)
+        val companionObject: COMPANION = companionObjectForName[COMPANION](className)
         val encoder = companionObject.encoder
         encoder.apply(o).mapObject(
           o1 => o1.add(key, Json.fromString(valueString))
@@ -101,7 +102,7 @@ object Codec extends LazyLogging {
         cursor.downField(key).as[String] match {
           case Right(valueString) =>
             val className = valueStringToClassName(valueString)
-            val companionObject: COMPANION  = objFromSerializableName[COMPANION](className)
+            val companionObject: COMPANION  = companionObjectForName[COMPANION](className)
             cursor.as(companionObject.decoder)
           case Left(err) =>
             throw err
@@ -163,40 +164,18 @@ object Codec extends LazyLogging {
 
   val toolbox = currentMirror.mkToolBox()
 
-  def functionFromSerializableName(name: String): FunctionWithProvenance[_] = {
-    try {
-      // This will work if the function is a singleton.
-      val clazz = Class.forName(name + "$")
-      val obj = clazz.getField("MODULE$").get(clazz)
-      obj.asInstanceOf[FunctionWithProvenance[_]]
-    } catch {
-      case e: Exception if e.isInstanceOf[java.lang.ClassCastException] | e.isInstanceOf[java.lang.ClassNotFoundException] =>
-        // We fall back to using the compiler itself only when re-vivifying a function object as data,
-        // _and_ the function is itself parameterized.  Normal workflow activity never goes here, only
-        // introspection.
-        if (!name.contains("[")) {
-          throw new RuntimeException(
-            f"Error loading FunctionWithProvenance $name: " +
-              f"should either be a singleton or a class with type parameters in the name and no args to construct!"
-          )
-        }
-        val tree = toolbox.parse("new " + name)
-        val fwp = toolbox.compile(tree).apply()
-        fwp.asInstanceOf[FunctionWithProvenance[_]]
-    }
-  }
+  def functionFromSerializableName(name: String): FunctionWithProvenance[_] =
+    objectFromSerializableName[FunctionWithProvenance[_]](name)
 
   def objectFromSerializableName[T](name: String): T = {
     try {
-      // This will work if the function is a singleton.
-      val clazz = Class.forName(name + "$")
-      val obj = clazz.getField("MODULE$").get(clazz)
+      val obj = instanceFromObjectName(name)
       obj.asInstanceOf[T]
     } catch {
       case e: Exception if e.isInstanceOf[java.lang.ClassCastException] | e.isInstanceOf[java.lang.ClassNotFoundException] =>
-        // We fall back to using the compiler itself only when re-vivifying a function object as data,
-        // _and_ the function is itself parameterized.  Normal workflow activity never goes here, only
-        // introspection.
+        // We fall back to using the compiler itself only if re-vivifying a function object as data,
+        // _and_ the function is itself parameterized.  Normal workflow activity never goes here, only introspection,
+        // as this is slow, and requires the compiler to be complete/correct.
         if (!name.contains("[")) {
           throw new RuntimeException(
             f"Error loading obj $name: " +
@@ -209,7 +188,59 @@ object Codec extends LazyLogging {
     }
   }
 
-  def objFromSerializableName[T](name: String): T = {
+  private def instanceFromObjectName(name: String): Any = {
+    val (objOrClass, suffix) = instanceAndSuffixFromNameAndSuffix(name, "")
+    val obj = objOrClass match {
+      case clazz: Class[_] =>
+        clazz.newInstance
+      case instance =>
+        instance
+    }
+    val words = suffix.split('.').filter(_.length > 0).toList
+    returnValueFromInstanceAndMethodChain(obj, words)
+  }
+
+  private def instanceAndSuffixFromNameAndSuffix(name: String, suffix: String): (AnyRef, String) = {
+    try {
+      // This will work if the name is a singleton object.
+      val clazz: Class[_] = Class.forName(name + "$")
+      val obj: AnyRef = clazz.getField("MODULE$").get(clazz)
+      (obj, suffix)
+    } catch {
+      case e: Exception if e.isInstanceOf[java.lang.ClassNotFoundException] =>
+        try {
+          // This will work if the name it is a class w/
+          val clazz: Class[_] = Class.forName(name)
+          (clazz, suffix)
+        } catch {
+          case e: Exception if e.isInstanceOf[java.lang.ClassNotFoundException] =>
+            // Move up to the prefix of the current object name.
+            val words = name.split('.')
+            if (words.length == 1)
+              throw e
+            val first = words.slice(0, words.length - 1)
+            val last = words.last
+            val newName = first.mkString(".")
+            val newSuffix = last + "." + suffix
+            instanceAndSuffixFromNameAndSuffix(newName, newSuffix)
+        }
+    }
+  }
+
+  private def returnValueFromInstanceAndMethodChain(obj: Any, suffix: List[String]): Any = {
+    suffix match {
+      case Nil => obj
+      case _ =>
+        val method = obj.getClass.getMethod(suffix.head)
+        val nextObject = method.invoke(obj)
+        suffix.tail match {
+          case Nil => nextObject
+          case tail => returnValueFromInstanceAndMethodChain(nextObject, tail)
+        }
+    }
+  }
+
+  def companionObjectForName[T](name: String): T = {
     val clazz = Class.forName(name + "$")
     val obj = clazz.getField("MODULE$").get(clazz)
     obj.asInstanceOf[T]
