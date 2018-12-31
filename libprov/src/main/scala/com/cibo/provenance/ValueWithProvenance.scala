@@ -178,8 +178,6 @@ abstract class FunctionCallWithProvenance[O : Codec](var vv: ValueWithProvenance
 
   def outputClassTag: ClassTag[O] = outputCodec.classTag
 
-  def outputTypeTag: TypeTag[O] = outputCodec.typeTag
-
   // Abstract interface.  These are implemented in each Function{n}CallWithProvenance subclass.
 
   def functionName: String

@@ -14,12 +14,10 @@ import scala.reflect.runtime.universe.TypeTag
   * @tparam T       The type of data to be encoded/decoded.
   */
 @SerialVersionUID(1000L)
-case class CirceJsonCodec[T : ClassTag : TypeTag](encoder: Encoder[T], decoder: Decoder[T]) extends Codec[T] with Serializable {
+case class CirceJsonCodec[T : ClassTag](encoder: Encoder[T], decoder: Decoder[T]) extends Codec[T] with Serializable {
   import io.circe.parser._, io.circe.syntax._
 
   lazy val classTag: ClassTag[T] = implicitly[ClassTag[T]]
-
-  lazy val typeTag: TypeTag[T] = implicitly[TypeTag[T]]
 
   def serialize(obj: T): Array[Byte] =
     obj.asJson(encoder).noSpaces.getBytes("UTF-8")

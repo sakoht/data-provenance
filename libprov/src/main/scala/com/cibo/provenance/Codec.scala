@@ -2,13 +2,11 @@ package com.cibo.provenance
 
 import java.io.Serializable
 
-import com.cibo.provenance.Codec.objectFromSerializableName
 import com.typesafe.scalalogging.LazyLogging
 import io.circe.{Decoder, Encoder, Json}
 
 import scala.reflect.ClassTag
 import scala.reflect.runtime.currentMirror
-import scala.reflect.runtime.universe.TypeTag
 
 /**
   * The base trait for wrapping encoder/decoder pairs.
@@ -20,7 +18,6 @@ import scala.reflect.runtime.universe.TypeTag
   */
 trait Codec[T] extends Serializable {
   def classTag: ClassTag[T]
-  def typeTag: TypeTag[T]
   def serializableClassName: String = Codec.classTagToSerializableName(classTag)
   def serialize(obj: T): Array[Byte]
   def deserialize(bytes: Array[Byte]): T
@@ -49,8 +46,8 @@ object Codec extends LazyLogging {
     * @param decoder  A circe Decoder[T].
     * @return A Codec[T] created from implicits.
     */
-  def apply[T : ClassTag : TypeTag](encoder: io.circe.Encoder[T], decoder: io.circe.Decoder[T]): CirceJsonCodec[T] =
-    CirceJsonCodec(encoder, decoder)
+  def apply[T : ClassTag](encoder: io.circe.Encoder[T], decoder: io.circe.Decoder[T]): CirceJsonCodec[T] =
+    CirceJsonCodec.apply(encoder, decoder)
 
   /**
     * Implicitly create a CirceJsonCodec[T] wherever an Encoder[T] and Decoder[T] are implicitly available.
@@ -59,7 +56,7 @@ object Codec extends LazyLogging {
     * @tparam   T The type of data to be encoded/decoded.
     * @return A CirceJsonCodec[T] created from implicits.
     */
-  implicit def createCirceJsonCodec[T : Encoder : Decoder : ClassTag : TypeTag]: Codec[T] =
+  implicit def createCirceJsonCodec[T : Encoder : Decoder : ClassTag]: Codec[T] =
     Codec(implicitly[Encoder[T]], implicitly[Decoder[T]])
 
   /**
@@ -79,7 +76,7 @@ object Codec extends LazyLogging {
     * @tparam T   The base class/trait.
     * @return     A Codec[T]
     */
-  def createAbstractCodec[T : ClassTag : TypeTag](
+  def createAbstractCodec[T : ClassTag](
     key: String = "_subclass",
     valueStringToClassName: (String) => String = (className: String) => className,
     classNameToValueString: (String) => String = (className: String) => className
@@ -118,20 +115,14 @@ object Codec extends LazyLogging {
     * This allows us to fully round-trip data across processes.
     * Note that the Codecs do not themselves serialize reproducibly.
     *
+    * Currently Codecs are serialized as a CirceJsonCodec, but internally
+    * they capture a Serializable byte array.
+    *
     * @tparam T   The type of data underlying the underlying Codec
     * @return     a Codec[ Codec[T] ]
     */
-  implicit def selfCodec[T : ClassTag](implicit tt: TypeTag[Codec[T]], ct: ClassTag[Codec[T]]): Codec[Codec[T]] =
-    Codec(new BinaryEncoder[Codec[T]], new BinaryDecoder[Codec[T]])
-
-  /**
-    * Implicitly convert a Codec[T] into a TypeTag[T].
-    *
-    * @param codec
-    * @tparam T
-    * @return
-    */
-  implicit def toTypeTag[T](codec: Codec[T]): TypeTag[T] = codec.typeTag
+  implicit def selfCodec[T : ClassTag](implicit ct: ClassTag[CirceJsonCodec[T]]): Codec[Codec[T]] =
+    CirceJsonCodec.apply(new BinaryEncoder[CirceJsonCodec[T]], new BinaryDecoder[CirceJsonCodec[T]]).asInstanceOf[Codec[Codec[T]]]
 
   /**
     * Implicitly convert a Codec[T] into a ClassTag[T].

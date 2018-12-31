@@ -4,6 +4,8 @@ package com.cibo.provenance
   * Created by ssmith on 9/20/17.
   */
 
+import java.io.File
+
 import com.cibo.provenance.exceptions.InconsistentVersionException
 import com.cibo.provenance.kvstore._
 import com.typesafe.scalalogging.LazyLogging
@@ -11,7 +13,7 @@ import org.scalatest._
 
 import scala.concurrent.ExecutionContext
 
-class ResultTrackerForSelfTestSpec extends FunSpec with Matchers with LazyLogging {
+class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
   
   // This is the root for test output.
   val testOutputBaseDir: String = TestUtils.testOutputBaseDir
@@ -408,6 +410,80 @@ class ResultTrackerForSelfTestSpec extends FunSpec with Matchers with LazyLoggin
       }
     }
   }
+
+  describe("Codec storage") {
+    val testSubdir = "codec-storage"
+    val testDataDir = f"$testOutputBaseDir/$testSubdir"
+    val rt = ResultTrackerForSelfTest(testDataDir) // not used below, just to wipe
+    rt.wipe
+
+    val x = DummyCodecTestObject(123)
+    val xCodec = DummyCodecTestObject.codec
+    val xBytes = xCodec.serialize(x)
+    val xDigest = Codec.digestBytes(xBytes)
+
+    val codecCodec = Codec.selfCodec[DummyCodecTestObject]
+    val codecBytes = codecCodec.serialize(xCodec)
+    val codecDigest = Codec.digestBytes(codecBytes)
+
+    it("should save") {
+      rt.saveOutputValue(x)
+    }
+
+    it("should reload load with caching") {
+      val (x2, xCodec2) = rt.loadValueWithCodec[DummyCodecTestObject](xDigest)
+      x2 shouldEqual x
+      //xCodec2 shouldEqual xCodec
+    }
+
+    it("should reload without caching") {
+      rt.a.clearCaches()
+      rt.b.clearCaches()
+
+      val (x3, xCodec3) = rt.loadValueWithCodec[DummyCodecTestObject](xDigest)
+      x3 shouldEqual x
+      //xCodec3 shouldEqual xCodec
+    }
+  }
+
+  describe("Codec reloading") {
+    val testDataDirSubdir = "src/test/resources/codec-test-rt"
+
+    val testDataDir =
+      if (new File(testDataDirSubdir).exists)
+        new File(testDataDirSubdir).getAbsolutePath
+      else if (new File("libprov/" + testDataDirSubdir).exists)
+        new File("libprov/" + testDataDirSubdir).getAbsolutePath
+      else
+        throw new RuntimeException(f"Failed to find $testDataDirSubdir!")
+
+    val rt = ResultTrackerForSelfTest(testDataDir)
+    // NOTE: This is static data in the repo.  Don't wipe.
+
+    val x = DummyCodecTestObject(123)
+    val xCodec = DummyCodecTestObject.codec
+    val xBytes = xCodec.serialize(x)
+    val xDigest = Codec.digestBytes(xBytes)
+
+    val codecCodec = Codec.selfCodec[DummyCodecTestObject]
+    val codecBytes = codecCodec.serialize(xCodec)
+    val codecDigest = Codec.digestBytes(codecBytes)
+
+    it("should reload load with caching") {
+      val (x2, xCodec2) = rt.loadValueWithCodec[DummyCodecTestObject](xDigest)
+      x2 shouldEqual x
+      //xCodec2 shouldEqual xCodec
+    }
+
+    it("should reload without caching") {
+      rt.a.clearCaches()
+      rt.b.clearCaches()
+
+      val (x3, xCodec3) = rt.loadValueWithCodec[DummyCodecTestObject](xDigest)
+      x3 shouldEqual x
+      //xCodec3 shouldEqual xCodec
+    }
+  }
 }
 
 object Add extends Function2WithProvenance[Int, Int, Int] {
@@ -428,4 +504,14 @@ object Multiply extends Function2WithProvenance[Int, Int, Int] {
   val currentVersion: Version = Version("1.0")
 
   def impl(a: Int, b: Int): Int = a * b
+}
+
+case class DummyCodecTestObject(a: Int)
+
+object DummyCodecTestObject {
+  import io.circe._
+  import io.circe.generic.semiauto._
+  implicit val encoder: Encoder[DummyCodecTestObject] = deriveEncoder[DummyCodecTestObject]
+  implicit val decoder: Decoder[DummyCodecTestObject] = deriveDecoder[DummyCodecTestObject]
+  implicit val codec: CirceJsonCodec[DummyCodecTestObject] = CirceJsonCodec(encoder, decoder)
 }
