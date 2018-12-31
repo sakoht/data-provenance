@@ -337,7 +337,7 @@ function is completely foreign:
 val resultsRaw2 = rt.findResultData("com.cibo.provenance.addCandles")
 val resultsRaw3 = rt.findResultData("com.cibo.provenance.addCandles", "0.1")
 val resultsRaw4 = rt.findResultDataByOutput(Digest("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"))
-val resultsRaw5 = rt.findResultDataByOutput(SomeObjectMaybeCreatedByATrackedCall)
+val resultsRaw5 = rt.findResultDataByOutput(BirthDayCake(16))
 ```
 
 It is possible to search for a result by one of its inputs results:
@@ -353,16 +353,48 @@ val usesOfOutput1 = rt.findUsesOfValue(result1.output)
 usesOfOutput1.map(_.load.normalize).head == result2.normalize
 ```
 
+Broad queries are also possible, revealing all data in the repository:
+```
+val allResults = rt.findResultData
+val allCalls = rt.findCallData
+```
+
+The subset that can vivify:
+```
+val vivifiableResults = rt.findResults
+val vivifiableCalls = rt.findCalls
+```
+
+Query more narrowly from from any `FunctionWithProvenance`:
+```
+val all: Iterable[eatCake.Result] = eatCake.findResults
+val all: Iterable[eatCake.Call] = eatCake.findCalls
+
+val all: Iterable[FunctionCallResultWithProvenanceSerializable] = eatCake.findResultData
+val all: Iterable[FunctionCallWithProvenanceSerializable] = eatCake.findCallData
+```
+
+Drill down:
+```
+val names: Iterable[String] = rt.findFunctionNames
+val versions: Iterable[Version] = rt.findFunctionVersions("com.cibo.provenance.eatCake")
+val results = rt.findResultData("com.cibo.provenance.eatCake", Version("0.1))
+val calls = rt.findCallData(("com.cibo.provenance.eatCake", Version("0.1))
+```
 
 Tags
 ----
-Any result can be tagged with a text String annotation.  
+Any result can be "tagged" with a text String annotation.  
 
 Tags are similar to tags in source control, except the same tag name can be applied to multiple things.
 
-Tag a result:
+Given some result:
 ```
 val result1 = eatCake(...).resolve
+```
+
+Tag it:
+```
 result1.addTag("tag 1")
 ```
 
@@ -380,7 +412,7 @@ result1c.load  shouldEqual result1
 
 Find tags by the data type of the result they reference:
 ```
-val tag1b = rt.findTagsByOutputClassName("scala.Int").head
+val tag1b = rt.findTagsByOutputClassName("com.cibo.provenance.BirthdayCake").head
 tag1b shouldEqual Tag("tag 1")
 ```
 
@@ -400,7 +432,7 @@ Remove a tag:
 result1.removeTag("tag 1")
 ```
 
-Find all additions and removals in the append-only tag history:
+Find all history, including each additions and removals in the append-only repository:
 ```
 val history = rt.findTagHistory.sortBy(_.ts)
 history.size shouldEqual 2
@@ -419,11 +451,6 @@ remove.tag shouldEqual Tag("tag 1")
 add.ts < remove.ts
 ```
 
-
-The same tag text can be applied to different result objects independently.
-All results attached to the same tag can be loaded as a group. 
-
-
 Since old versions of results might not fully vivify when the class changes,
 or if the class is not available to the querying library,
 it is possible to query for the raw metadata w/o fully vivifying the results.
@@ -433,7 +460,6 @@ accessible in ay application.
 ```
 val callsAsRawData = eatCake.findResultDataByTag("tag 1")
 ```
-
 
 The untyped metadata can be loaded in any application where the type is available, presuming the type
 has not changed dramatically enough that it cannot deserialize: 
@@ -448,7 +474,6 @@ val justTheOnesWeCanVivify: Iterable[eatCake.Result] =
     }
 ```
 
-
 When a result is tagged, it is saved immediately.
 
 A call can also be tagged, but it the tag addition must be resolved in order to save the tag.
@@ -461,6 +486,11 @@ call1.resolve
 tag1.resolve
 // tag1 is now saved
 ```
+
+NOTE: The same tag text can be applied to different result objects independently.
+All results attached to the same tag can be loaded as a group.  Removing a tag from one
+result does not remove it from all results. 
+
 
 Short Example
 -------------
