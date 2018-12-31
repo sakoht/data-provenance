@@ -13,6 +13,7 @@ import scala.reflect.runtime.universe.TypeTag
   * @param decoder  A Decoder[T] that matches it.
   * @tparam T       The type of data to be encoded/decoded.
   */
+@SerialVersionUID(1000L)
 case class CirceJsonCodec[T : ClassTag : TypeTag](encoder: Encoder[T], decoder: Decoder[T]) extends Codec[T] with Serializable {
   import io.circe.parser._, io.circe.syntax._
 
