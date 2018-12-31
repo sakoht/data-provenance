@@ -83,6 +83,9 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
   def loadCodecByType[T: ClassTag](implicit cdcd: Codec[Codec[T]]) =
     throw new RuntimeException(f"Codecs cannot be loaded from $this")
 
+  def loadCodecByClassNameAndCodecDigest(valueClassName: String, codecDigest: Digest): Codec[_] =
+    throw new RuntimeException(f"Codecs cannot be loaded from $this")
+
   def loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T: ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T] =
     throw new RuntimeException(f"Codecs cannot be loaded from $this")
 

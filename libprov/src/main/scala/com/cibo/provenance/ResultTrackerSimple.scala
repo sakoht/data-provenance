@@ -339,10 +339,10 @@ class ResultTrackerSimple(
 
   def loadCodecByClassNameAndCodecDigest(valueClassName: String, codecDigest: Digest): Codec[_] = {
     val clazz = Class.forName(valueClassName)
-    loadCodecByClassNameAndCodecDigest2(clazz, valueClassName, codecDigest)
+    loadCodecByClassNameAndCodecDigestImpl(clazz, valueClassName, codecDigest)
   }
 
-  def loadCodecByClassNameAndCodecDigest2[T](clazz: Class[T], valueClassName: String, codecDigest: Digest): Codec[T] = {
+  protected def loadCodecByClassNameAndCodecDigestImpl[T](clazz: Class[T], valueClassName: String, codecDigest: Digest): Codec[T] = {
     implicit val classTag: ClassTag[T] = ClassTag(clazz)
     val bytes = loadBytes(f"codecs/$valueClassName/${codecDigest.id}")
     val codecCodec: Codec[Codec[T]] = Codec.selfCodec[T]
@@ -352,20 +352,11 @@ class ResultTrackerSimple(
 
   //
 
-  def loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T: ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T] = {
-    val bytes = loadBytes(f"codecs/$valueClassName/${codecDigest.id}")
-    val codec1 = Codec.deserialize[Codec[T]](bytes)
-    val codec2try = Try(loadCodecByClassNameAndCodecDigest(valueClassName, codecDigest).asInstanceOf[Codec[T]])
-    codec2try.get
-  }
-
-
   def loadCodecsByValueDigestTyped[T : ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Seq[Codec[T]] = {
     val valueClassName = Codec.classTagToSerializableName[T]
 
     val tries = getListingRecursive(f"data-codecs/${valueDigest.id}/$valueClassName").map {
       codecId => Try {
-        //loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T](valueClassName, Digest(codecId))
         loadCodecByClassNameAndCodecDigest(valueClassName, Digest(codecId)).asInstanceOf[Codec[T]]
       }
     }

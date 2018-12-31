@@ -134,10 +134,11 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
     aa.get
   }
 
-  def loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T: ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T] = {
-    val aa = Try(a.loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T](valueClassName, codecDigest))
-    val bb = Try(b.loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T](valueClassName, codecDigest))
-    cmpSeqCodec(aa.map(v => Seq(v)), bb.map(v => Seq(v)), s"loadCodecByClassNameAndCodecDigest for $valueClassName, $codecDigest returned different values for sync vs. async: $aa vs $bb")
+  def loadCodecByClassNameAndCodecDigest(valueClassName: String, codecDigest: Digest): Codec[_] = {
+    import scala.language.existentials
+    val aa = Try(a.loadCodecByClassNameAndCodecDigest(valueClassName, codecDigest))
+    val bb = Try(b.loadCodecByClassNameAndCodecDigest(valueClassName, codecDigest))
+    cmpSeqCodec(aa.map(v => Seq(v)), bb.map(v => Seq(v)), s"loadCodecByClassNameAndCodecDigest for $valueClassName, $codecDigest returned differente values for sync vs. async: $aa vs $bb")
     aa.get
   }
 
@@ -254,7 +255,7 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
   }
 
   // Special hndling for a Seq of Codecs.  Expect only the class tags to match.
-  private def cmpSeqCodec[T](a: Try[Seq[Codec[T]]], b: Try[Seq[Codec[T]]], msg: String): Unit = {
+  private def cmpSeqCodec(a: Try[Seq[Codec[_]]], b: Try[Seq[Codec[_]]], msg: String): Unit = {
     a match {
       case Success(avalue) =>
         b match {

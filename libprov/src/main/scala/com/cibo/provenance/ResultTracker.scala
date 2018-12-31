@@ -262,11 +262,10 @@ trait ResultTracker extends Serializable {
 
   def loadCodecByCodecDigest[T : ClassTag](codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T] = {
     val valueClassName = Codec.classTagToSerializableName[T]
-    loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T](valueClassName, codecDigest)
-    //loadCodecByClassNameAndCodecDigest(valueClassName, codecDigest)
+    loadCodecByClassNameAndCodecDigest(valueClassName, codecDigest).asInstanceOf[Codec[T]]
   }
 
-  def loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T : ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T]
+  def loadCodecByClassNameAndCodecDigest(valueClassName: String, codecDigest: Digest): Codec[_]
 
   def loadCodecsByValueDigestTyped[T : ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Seq[Codec[T]]
 
