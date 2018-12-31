@@ -161,7 +161,7 @@ trait ResultTracker extends Serializable {
     * @tparam T     The type of data to save.
     * @return       The Digest of the serialized data.  A unique ID usable to re-load later.
     */
-  def saveOutputValue[T : Codec](obj: T)(implicit cdcd: Codec[Codec[T]]): Digest
+  def saveOutputValue[T : Codec](obj: T): Digest
 
   def saveBuildInfo: Digest
 
@@ -215,7 +215,7 @@ trait ResultTracker extends Serializable {
     loadValueOption(clazz, digest)
   }
 
-  protected def loadValueOption[T](clazz: Class[T], digest: Digest)(implicit cdcd: Codec[Codec[T]]): Option[_] = {
+  protected def loadValueOption[T](clazz: Class[T], digest: Digest): Option[_] = {
     implicit val ct: ClassTag[T] = ClassTag(clazz)
     Try {
       val (value, codec) = loadValueWithCodec[T](digest)
@@ -229,7 +229,7 @@ trait ResultTracker extends Serializable {
     }
   }
 
-  def loadValueWithCodec[T : ClassTag](valueDigest: Digest)(implicit cct: Codec[Codec[T]]): (T, Codec[T]) = {
+  def loadValueWithCodec[T : ClassTag](valueDigest: Digest): (T, Codec[T]) = {
     val allCodecs: List[Codec[T]] = loadCodecsByValueDigestTyped[T](valueDigest: Digest).toList
     val workingCodecValuePairs = allCodecs.flatMap {
       codec =>
@@ -258,16 +258,16 @@ trait ResultTracker extends Serializable {
     }
   }
 
-  def loadCodecByType[T : ClassTag](implicit cdcd: Codec[Codec[T]]): Codec[T]
+  def loadCodecByType[T : ClassTag]: Codec[T]
 
-  def loadCodecByCodecDigest[T : ClassTag](codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T] = {
+  def loadCodecByCodecDigest[T : ClassTag](codecDigest: Digest): Codec[T] = {
     val valueClassName = Codec.classTagToSerializableName[T]
     loadCodecByClassNameAndCodecDigest(valueClassName, codecDigest).asInstanceOf[Codec[T]]
   }
 
   def loadCodecByClassNameAndCodecDigest(valueClassName: String, codecDigest: Digest): Codec[_]
 
-  def loadCodecsByValueDigestTyped[T : ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Seq[Codec[T]]
+  def loadCodecsByValueDigestTyped[T : ClassTag](valueDigest: Digest): Seq[Codec[T]]
 
   def loadBuildInfoOption(commitId: String, buildId: String): Option[BuildInfo]
 

@@ -320,7 +320,7 @@ class ResultTrackerSimple(
     FunctionCallWithProvenanceDeflated(callSerializable)
   }
 
-  def saveOutputValue[T: Codec](obj: T)(implicit cdcd: Codec[Codec[T]]): Digest = {
+  def saveOutputValue[T: Codec](obj: T): Digest = {
     val bytes = Codec.serialize(obj)
     val digest = Codec.digestBytes(bytes)
     if (checkForInconsistentSerialization(obj))
@@ -333,7 +333,6 @@ class ResultTrackerSimple(
   }
 
   //
-
 
   import scala.language.existentials
 
@@ -352,7 +351,7 @@ class ResultTrackerSimple(
 
   //
 
-  def loadCodecsByValueDigestTyped[T : ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Seq[Codec[T]] = {
+  def loadCodecsByValueDigestTyped[T : ClassTag](valueDigest: Digest): Seq[Codec[T]] = {
     val valueClassName = Codec.classTagToSerializableName[T]
 
     val tries = getListingRecursive(f"data-codecs/${valueDigest.id}/$valueClassName").map {
@@ -391,7 +390,7 @@ class ResultTrackerSimple(
     }
   }
 
-  def loadCodecByType[T: ClassTag](implicit cdcd: Codec[Codec[T]]): Codec[T] = {
+  def loadCodecByType[T: ClassTag]: Codec[T] = {
     val valueClassName = Codec.classTagToSerializableName[T]
     getListingRecursive(f"codecs/$valueClassName").flatMap {
       path =>
@@ -618,7 +617,7 @@ class ResultTrackerSimple(
   protected lazy val codecCache: Cache[Codec[_], Digest] =
     CacheUtils.mkCache[Codec[_], Digest](codecCacheSize, logger)
 
-  def saveCodecForOutputDigest[T : Codec](outputDigest: Digest)(implicit cd: Codec[Codec[T]]): Digest = {
+  def saveCodecForOutputDigest[T : Codec](outputDigest: Digest): Digest = {
     val codec = implicitly[Codec[T]]
     val codecDigest = Option(codecCache.getIfPresent(codec)) match {
       case None =>
@@ -632,7 +631,7 @@ class ResultTrackerSimple(
     saveLinkPath(f"data-codecs/${outputDigest.id}/$outputClassName/${codecDigest.id}")
   }
 
-  def saveCodec[T](implicit cd: Codec[T], cdcd: Codec[Codec[T]]): Digest = {
+  def saveCodec[T](implicit cd: Codec[T]): Digest = {
     val codec: Codec[T] = implicitly[Codec[T]]
     val outputClassName = Codec.classTagToSerializableName[T](codec.classTag)
     implicit val ct: ClassTag[T] = codec.classTag

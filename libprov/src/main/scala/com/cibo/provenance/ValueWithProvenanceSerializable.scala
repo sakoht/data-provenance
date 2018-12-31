@@ -108,12 +108,10 @@ case class FunctionCallWithUnknownProvenanceSerializable(
   }
 
   def loadWithKnownTypeAndUnknownCodec[T](clazz: Class[T])(
-    implicit rt: ResultTracker,
-    cdcd: Codec[Codec[T]]
+    implicit rt: ResultTracker
   ): UnknownProvenance[_] = {
     implicit val ct: ClassTag[T] = ClassTag(clazz)
-    val (value, codec) = rt.loadValueWithCodec[T](valueDigest).asInstanceOf[(T, Codec[T])]
-    //implicit val ct: ClassTag[T] = codec.valueClassTag
+    val (value, codec) = rt.loadValueWithCodec[T](valueDigest)
     UnknownProvenance(value)(codec)
   }
 

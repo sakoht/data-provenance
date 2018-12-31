@@ -64,7 +64,7 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
   def loadBuildInfoOption(commitId: String, buildId: String): Option[BuildInfo] = None // never
 
-  def loadCodecByType[T : Codec](implicit cdcd: Codec[Codec[T]]): Codec[T] =
+  def loadCodecByType[T : Codec]: Codec[T] =
     throw new UnavailableData("No codec data with this tracker")
 
   def loadCodecByClassNameAndCodecDigest[T : ClassTag](valueClassName: String, codecDigest: Digest)(implicit ct: ClassTag[Codec[T]]): Codec[T] =
@@ -77,19 +77,19 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
 
   def loadResultById(resultId: Digest): Option[FunctionCallResultWithProvenanceDeflated[_]] = None
 
-  def saveOutputValue[T: Codec](obj: T)(implicit cdcd: Codec[Codec[T]]): Digest =
+  def saveOutputValue[T: Codec](obj: T): Digest =
     throw new RuntimeException(f"Values cannot be be savedf with $this")
 
-  def loadCodecByType[T: ClassTag](implicit cdcd: Codec[Codec[T]]) =
+  def loadCodecByType[T: ClassTag] =
     throw new RuntimeException(f"Codecs cannot be loaded from $this")
 
   def loadCodecByClassNameAndCodecDigest(valueClassName: String, codecDigest: Digest): Codec[_] =
     throw new RuntimeException(f"Codecs cannot be loaded from $this")
 
-  def loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T: ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T] =
+  def loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T: ClassTag](valueClassName: String, codecDigest: Digest): Codec[T] =
     throw new RuntimeException(f"Codecs cannot be loaded from $this")
 
-  def loadCodecsByValueDigestTyped[T: ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Seq[Codec[T]] = Nil
+  def loadCodecsByValueDigestTyped[T: ClassTag](valueDigest: Digest): Seq[Codec[T]] = Nil
 
   def findFunctionNames: Iterable[String] = Iterable.empty
 
