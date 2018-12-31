@@ -1,5 +1,6 @@
 package com.cibo.provenance
 
+import scala.collection.immutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe
@@ -127,10 +128,33 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
     aa.get
   }
 
-  def loadCodecByType[T: ClassTag]: Codec[T] = {
-    val aa = Try(a.loadCodecByType[T])
-    val bb = Try(b.loadCodecByType[T])
+  def loadCodec[T: ClassTag]: Codec[T] = {
+    val aa = Try(a.loadCodec[T])
+    val bb = Try(b.loadCodec[T])
     cmpSeqCodec(aa.map(v => Seq(v)), bb.map(v => Seq(v)), s"loadCodecByType for ${implicitly[ClassTag[T]]} returned different values for sync vs. async: $aa vs $bb")
+    aa.get
+  }
+
+
+  def loadCodecsByClassName(valueClassName: String): Seq[Try[Codec[_]]] = {
+    val aa: Try[Seq[Try[Codec[_]]]] = Try(a.loadCodecsByClassName(valueClassName))
+    val bb = Try(b.loadCodecsByClassName(valueClassName))
+    cmpSeqCodec(
+      aa.map(v => v.flatMap(_.toOption)), bb.map(v => v.flatMap(_.toOption)),
+      s"loadCodecsByClassName for $valueClassName returned different values for sync vs. async: $aa vs $bb"
+    )
+    aa.get
+  }
+
+  def loadCodecs: Map[String, Seq[Try[Codec[_]]]] = {
+    val aa = Try(a.loadCodecs)
+    val bb = Try(b.loadCodecs)
+    val aCodecs: Try[Seq[Codec[_]]] = aa.map(_.flatMap(_._2.flatMap(_.toOption)).toList)
+    val bCodecs: Try[Seq[Codec[_]]] = bb.map(_.flatMap(_._2.flatMap(_.toOption)).toList)
+    cmpSeqCodec(
+      aCodecs, bCodecs,
+      s"loadCodecs returned different values for sync vs. async: $aa vs $bb"
+    )
     aa.get
   }
 
@@ -138,13 +162,16 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
     import scala.language.existentials
     val aa = Try(a.loadCodecByClassNameAndCodecDigest(valueClassName, codecDigest))
     val bb = Try(b.loadCodecByClassNameAndCodecDigest(valueClassName, codecDigest))
-    cmpSeqCodec(aa.map(v => Seq(v)), bb.map(v => Seq(v)), s"loadCodecByClassNameAndCodecDigest for $valueClassName, $codecDigest returned differente values for sync vs. async: $aa vs $bb")
+    cmpSeqCodec(aa.map(
+      v => Seq(v)), bb.map(v => Seq(v)),
+      s"loadCodecByClassNameAndCodecDigest for $valueClassName, $codecDigest returned differente values for sync vs. async: $aa vs $bb"
+    )
     aa.get
   }
 
-  def loadCodecsByValueDigestTyped[T: ClassTag](valueDigest: Digest): Seq[Codec[T]] = {
-    val aa = Try(a.loadCodecsByValueDigestTyped[T](valueDigest))
-    val bb = Try(b.loadCodecsByValueDigestTyped[T](valueDigest))
+  def loadCodecsByValueDigest[T: ClassTag](valueDigest: Digest): Seq[Codec[T]] = {
+    val aa = Try(a.loadCodecsByValueDigest[T](valueDigest))
+    val bb = Try(b.loadCodecsByValueDigest[T](valueDigest))
     cmpSeqCodec(aa, aa, s"loadCodecsByValueDigest for $valueDigest returned different values for sync vs. async: $aa vs $bb")
     aa.get
   }
@@ -275,4 +302,5 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
         }
     }
   }
+
 }

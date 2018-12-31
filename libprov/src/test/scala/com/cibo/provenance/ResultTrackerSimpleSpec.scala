@@ -414,7 +414,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
   describe("Codec storage") {
     val testSubdir = "codec-storage"
     val testDataDir = f"$testOutputBaseDir/$testSubdir"
-    val rt = ResultTrackerForSelfTest(testDataDir) // not used below, just to wipe
+    val rt = ResultTrackerForSelfTest(testDataDir)
     rt.wipe
 
     val x = DummyCodecTestObject(123)
@@ -444,6 +444,14 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
       x3 shouldEqual x
       //xCodec3 shouldEqual xCodec
     }
+
+    it("should be able to load all") {
+      val allCodecs = rt.loadCodecs
+      allCodecs.size shouldBe 1
+
+      val someCodecs = rt.loadCodecsByClassName("com.cibo.provenance.DummyCodecTestObject")
+      someCodecs.size shouldBe 1
+    }
   }
 
   describe("Codec reloading") {
@@ -472,7 +480,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
     it("should reload load with caching") {
       val (x2, xCodec2) = rt.loadValueWithCodec[DummyCodecTestObject](xDigest)
       x2 shouldEqual x
-      //xCodec2 shouldEqual xCodec
+      xCodec2.deserialize(xCodec2.serialize(x2)) shouldEqual x2
     }
 
     it("should reload without caching") {
@@ -481,7 +489,7 @@ class ResultTrackerSimpleSpec extends FunSpec with Matchers with LazyLogging {
 
       val (x3, xCodec3) = rt.loadValueWithCodec[DummyCodecTestObject](xDigest)
       x3 shouldEqual x
-      //xCodec3 shouldEqual xCodec
+      xCodec3.deserialize(xCodec3.serialize(x3)) shouldEqual x3
     }
   }
 }

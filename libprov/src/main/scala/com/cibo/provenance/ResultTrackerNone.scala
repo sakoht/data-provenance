@@ -3,6 +3,7 @@ package com.cibo.provenance
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe
+import scala.util.Try
 
 
 /**
@@ -80,7 +81,13 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
   def saveOutputValue[T: Codec](obj: T): Digest =
     throw new RuntimeException(f"Values cannot be be savedf with $this")
 
-  def loadCodecByType[T: ClassTag] =
+  def loadCodec[T: ClassTag] =
+    throw new RuntimeException(f"Codecs cannot be loaded from $this")
+
+  def loadCodecsByClassName(valueClassName: String): Seq[Try[Codec[_]]] =
+    throw new RuntimeException(f"Codecs cannot be loaded from $this")
+
+  def loadCodecs: Map[String, Seq[Try[Codec[_]]]] =
     throw new RuntimeException(f"Codecs cannot be loaded from $this")
 
   def loadCodecByClassNameAndCodecDigest(valueClassName: String, codecDigest: Digest): Codec[_] =
@@ -89,7 +96,7 @@ case class ResultTrackerNone()(implicit val currentAppBuildInfo: BuildInfo) exte
   def loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T: ClassTag](valueClassName: String, codecDigest: Digest): Codec[T] =
     throw new RuntimeException(f"Codecs cannot be loaded from $this")
 
-  def loadCodecsByValueDigestTyped[T: ClassTag](valueDigest: Digest): Seq[Codec[T]] = Nil
+  def loadCodecsByValueDigest[T: ClassTag](valueDigest: Digest): Seq[Codec[T]] = Nil
 
   def findFunctionNames: Iterable[String] = Iterable.empty
 

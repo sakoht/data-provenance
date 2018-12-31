@@ -332,8 +332,6 @@ class ResultTrackerSimple(
     digest
   }
 
-  //
-
   import scala.language.existentials
 
   def loadCodecByClassNameAndCodecDigest(valueClassName: String, codecDigest: Digest): Codec[_] = {
@@ -349,9 +347,27 @@ class ResultTrackerSimple(
     codec
   }
 
-  //
+  def loadCodecsByClassName(valueClassName: String): Seq[Try[Codec[_]]] = {
+    getListingRecursive(f"codecs/$valueClassName").map {
+      codecId => Try { loadCodecByClassNameAndCodecDigest(valueClassName, Digest(codecId)) }
+    }
+  }
 
-  def loadCodecsByValueDigestTyped[T : ClassTag](valueDigest: Digest): Seq[Codec[T]] = {
+  def loadCodecs: Map[String, Seq[Try[Codec[_]]]] = {
+    val grouped: Map[String, List[(String, Try[Codec[_]])]] = getListingRecursive(f"codecs").map {
+      _.split("/").toList match {
+        case valueClassName :: codecId :: Nil =>
+          (valueClassName, Try {
+            loadCodecByClassNameAndCodecDigest(valueClassName, Digest(codecId))
+          })
+        case other =>
+          throw new RuntimeException(f"Expected a suffix with class name and codec ID!  Got: $other")
+      }
+    }.groupBy(_._1)
+    grouped.map { case (k, v) => (k, v.map(_._2)) }
+  }
+
+  def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest): Seq[Codec[T]] = {
     val valueClassName = Codec.classTagToSerializableName[T]
 
     val tries = getListingRecursive(f"data-codecs/${valueDigest.id}/$valueClassName").map {
@@ -390,7 +406,7 @@ class ResultTrackerSimple(
     }
   }
 
-  def loadCodecByType[T: ClassTag]: Codec[T] = {
+  def loadCodec[T: ClassTag]: Codec[T] = {
     val valueClassName = Codec.classTagToSerializableName[T]
     getListingRecursive(f"codecs/$valueClassName").flatMap {
       path =>

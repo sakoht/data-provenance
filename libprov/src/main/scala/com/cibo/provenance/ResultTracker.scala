@@ -230,7 +230,7 @@ trait ResultTracker extends Serializable {
   }
 
   def loadValueWithCodec[T : ClassTag](valueDigest: Digest): (T, Codec[T]) = {
-    val allCodecs: List[Codec[T]] = loadCodecsByValueDigestTyped[T](valueDigest: Digest).toList
+    val allCodecs: List[Codec[T]] = loadCodecsByValueDigest[T](valueDigest: Digest).toList
     val workingCodecValuePairs = allCodecs.flatMap {
       codec =>
         implicit val c: Codec[T] = codec
@@ -258,16 +258,60 @@ trait ResultTracker extends Serializable {
     }
   }
 
-  def loadCodecByType[T : ClassTag]: Codec[T]
+  /**
+    * Load a codec using the implicit ClassTag[T]
+    * @tparam T   The type of codec to load.
+    * @return     A Codec[T]
+    */
+  def loadCodec[T : ClassTag]: Codec[T]
 
+  /**
+    * Load a codec by its saved digest (ID).
+    * This requires that the type T be a parameter, and the implicit ClassTag[T] be available.
+    *
+    * @param codecDigest  The digest of the codec (the ID under which it was saved)
+    * @tparam T           The type of data the codec serializes/deserializes.
+    * @return             A Codec[T]
+    */
   def loadCodecByCodecDigest[T : ClassTag](codecDigest: Digest): Codec[T] = {
     val valueClassName = Codec.classTagToSerializableName[T]
     loadCodecByClassNameAndCodecDigest(valueClassName, codecDigest).asInstanceOf[Codec[T]]
   }
 
+  /**
+    * Load a codec with only the name of the class and the digest value.
+    * This is the entrypoint to retrieving types from typeless data.
+    *
+    * @param valueClassName   The fully qualified class name.
+    * @param codecDigest      The digest (ID) of the Codec when it was saved.
+    * @return                 A Codec[_], which will typically need to be type cast before use.
+    */
   def loadCodecByClassNameAndCodecDigest(valueClassName: String, codecDigest: Digest): Codec[_]
 
-  def loadCodecsByValueDigestTyped[T : ClassTag](valueDigest: Digest): Seq[Codec[T]]
+  /**
+    * When any value is saved, the Codec that serialized it is also saved.
+    * Typically there is only one Codec per class if the class does not change.
+    *
+    * @param valueDigest  The ID of some object of type T saved with the codec.
+    * @tparam T           The type of the value saved.
+    * @return             The specific Codec[T] that saved the object.
+    */
+  def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest): Seq[Codec[T]]
+
+  /**
+    * Load all Codecs for a given class by class name.
+    * The results return as a Try because, typically, only one such Codec will vivify in the current process, if any.
+    *
+    * @param valueClassName The name of the class for which to search for Codecs.
+    * @return               A Seq[Try[Codec[ _ ] ].
+    */
+  def loadCodecsByClassName(valueClassName: String): Seq[Try[Codec[_]]]
+
+  /**
+    * Load all Codecs from storage.
+    * @return   A Map[String, Seq[Try[Codec[ _ ] ] ] with all Codecs grouped by class name.
+    */
+  def loadCodecs: Map[String, Seq[Try[Codec[_]]]]
 
   def loadBuildInfoOption(commitId: String, buildId: String): Option[BuildInfo]
 
