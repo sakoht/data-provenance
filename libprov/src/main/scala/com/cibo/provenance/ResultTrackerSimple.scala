@@ -346,11 +346,9 @@ class ResultTrackerSimple(
     implicit val classTag: ClassTag[T] = ClassTag(clazz)
     val bytes = loadBytes(f"codecs/$valueClassName/${codecDigest.id}")
     val codecCodec: Codec[Codec[T]] = Codec.selfCodec[T]
-    //val codec: Codec[T] = codecCodec.deserialize(bytes)
-    val codec = Codec.deserialize[Codec[T]](bytes)
+    val codec: Codec[T] = codecCodec.deserialize(bytes)
     codec
   }
-
 
   //
 
@@ -367,7 +365,8 @@ class ResultTrackerSimple(
 
     val tries = getListingRecursive(f"data-codecs/${valueDigest.id}/$valueClassName").map {
       codecId => Try {
-        loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T](valueClassName, Digest(codecId))
+        //loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T](valueClassName, Digest(codecId))
+        loadCodecByClassNameAndCodecDigest(valueClassName, Digest(codecId)).asInstanceOf[Codec[T]]
       }
     }
 
@@ -383,7 +382,8 @@ class ResultTrackerSimple(
       val successes2 =
         getListingRecursive(f"codecs/$valueClassName").map {
           codecId => Try {
-            (codecId, loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T](valueClassName, Digest(codecId)))
+            //(codecId, loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T](valueClassName, Digest(codecId)))
+            (codecId, loadCodecByClassNameAndCodecDigest(valueClassName, Digest(codecId)).asInstanceOf[Codec[T]])
           }
         }
 
