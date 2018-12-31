@@ -17,6 +17,13 @@ import scala.concurrent.{ExecutionContext, Future}
 trait KVStore {
   protected lazy val logger: Logger = LoggerFactory.getLogger(getClass)
 
+  override def toString: String = {
+    val default = super.toString
+    val i = default.indexOf("@")
+    val typeName = default.substring(0, i)
+    f"$typeName($basePath)"
+  }
+
   def basePath: String
 
   def isLocal: Boolean
