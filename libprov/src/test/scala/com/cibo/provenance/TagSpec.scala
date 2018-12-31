@@ -113,7 +113,6 @@ class TagSpec extends FunSpec with Matchers {
       val tagged2 = rt.findResultDataByTag("tag 2")
       val tagged3 = rt.findResultDataByTag(Tag("tag 3"))
 
-
       tagged1.map(_.load.normalize).toSet shouldEqual Set(r1.normalize)
       tagged2.map(_.load.normalize).toSet shouldEqual Set(r2.normalize)
       tagged3.map(_.load.normalize).toSet shouldEqual Set(r3.normalize)
@@ -127,6 +126,7 @@ class TagSpec extends FunSpec with Matchers {
 
       rt.findTags.size shouldBe 3
       rt.findTagHistory.size shouldBe 10
+      rt.findTagHistory(Tag("tag 1")).size shouldBe 4
 
       val tagged1b = rt.findResultDataByTag("tag 1")
       tagged1b.map(_.load.normalize).toSet shouldEqual Set(r1.normalize, r3.normalize)

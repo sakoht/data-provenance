@@ -651,6 +651,9 @@ trait ResultTracker extends Serializable {
     distillTagHistory(uses.flatMap(convertAddTagOrRemoveTagToTagHistoryEntry)).map(_.subjectData)
   }
 
+  def findTagHistory(tag: Tag): Iterable[TagHistoryEntry] =
+    findUsesOfValue(tag).flatMap { result => convertAddTagOrRemoveTagToTagHistoryEntry(result) }
+
   def findTagHistoryBySubject(tag: Tag, subject: FunctionCallResultWithProvenanceSerializable): Iterable[FunctionCallResultWithProvenanceSerializable] = {
     // Find all places the tag is used as an input.
     findUsesOfValue(tag).flatMap {

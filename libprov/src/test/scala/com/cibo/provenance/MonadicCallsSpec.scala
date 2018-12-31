@@ -4,7 +4,6 @@ import com.cibo.provenance.FunctionCallWithProvenance.TraversableCallExt
 import org.scalatest.{FunSpec, Matchers}
 
 
-
 /**
   * Created by ssmith on 11/07/17.
   */
