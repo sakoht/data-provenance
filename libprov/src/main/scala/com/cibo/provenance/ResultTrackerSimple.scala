@@ -58,6 +58,17 @@ class ResultTrackerSimple(
   import scala.reflect.runtime.universe.TypeTag
   import scala.util.{Failure, Success, Try}
 
+  override def toString: String = {
+    val default = super.toString()
+    val i = default.indexOf("@")
+    val base = if (i == -1) default else default.substring(0, i)
+    val full = f"$base($storage)"
+    underlyingTrackerOption match {
+      case Some(under) => f"$full over $under"
+      case None => full
+    }
+  }
+
   @transient
   implicit lazy val vwpCodec: Codec[ValueWithProvenanceSerializable] = ValueWithProvenanceSerializable.codec
 
@@ -315,7 +326,7 @@ class ResultTrackerSimple(
     val digest = Codec.digestBytes(bytes)
     if (checkForInconsistentSerialization(obj))
       Codec.checkConsistency(obj, bytes, digest)
-    saveCodec[T](digest)
+    saveCodecForOutputDigest[T](digest)
     val path = f"data/${digest.id}"
     logger.info(f"Saving raw $obj to $path")
     saveBytes(path, bytes)
@@ -329,16 +340,39 @@ class ResultTrackerSimple(
 
   def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Seq[Codec[T]] = {
     val valueClassName = Codec.classTagToSerializableName[T]
-    getListingRecursive(f"data-codecs/${valueDigest.id}/$valueClassName").map {
-       codecId =>
-        Try(
-          loadCodecByClassNameAndCodecDigest[T](valueClassName, Digest(codecId))
-        ) match {
-          case Success(codec) =>
-            codec
-          case Failure(err) =>
-            throw new FailedSaveException(f"Failed to deserialize codec $codecId for $valueClassName: $err")
+
+    val tries = getListingRecursive(f"data-codecs/${valueDigest.id}/$valueClassName").map {
+      codecId => Try {
+        loadCodecByClassNameAndCodecDigest[T](valueClassName, Digest(codecId))
+      }
+    }
+
+    val successes = tries.filter(_.isSuccess)
+    val failures = tries.filter(_.isFailure)
+
+    if (successes.nonEmpty) {
+      // Some codecs for this value loaded.  Return them.
+      successes.map(_.get)
+    } else {
+      // None of the codecs loaded.
+      // This error should occur during testing when the class changes, before the class change is committed.
+      val successes2 =
+        getListingRecursive(f"codecs/$valueClassName").map {
+          codecId => Try {
+            (codecId, loadCodecByClassNameAndCodecDigest[T](valueClassName, Digest(codecId)))
+          }
         }
+
+      if (successes2.nonEmpty) {
+        val (codecId, codec) = successes2.head.get
+        saveLinkPath(f"data-codecs/${valueDigest.id}/$valueClassName/$codecId")
+        successes2.map(_.get._2)
+      } else {
+        throw new SerializationInconsistencyException(
+          f"No codecs for $valueDigest load, and no other codecs for $valueClassName were found that load.  " +
+          f"Save a new codecs for $valueClassName to this ResultTracker to deserialize old results."
+        )
+      }
     }
   }
 
@@ -356,7 +390,6 @@ class ResultTrackerSimple(
     val digest = Codec.digestBytes(bytes)
     hasValue(digest)
   }
-
 
   def hasValue(digest: Digest): Boolean =
     pathExists(f"data/${digest.id}")
@@ -570,30 +603,26 @@ class ResultTrackerSimple(
   protected lazy val codecCache: Cache[Codec[_], Digest] =
     CacheUtils.mkCache[Codec[_], Digest](codecCacheSize, logger)
 
-  private def saveCodec[T : Codec](outputDigest: Digest)(implicit cd: Codec[Codec[T]]): Digest = {
-    val outputClassName = Codec.classTagToSerializableName[T](implicitly[Codec[T]].classTag)
+  def saveCodecForOutputDigest[T : Codec](outputDigest: Digest)(implicit cd: Codec[Codec[T]]): Digest = {
     val codec = implicitly[Codec[T]]
     val codecDigest = Option(codecCache.getIfPresent(codec)) match {
       case None =>
-        val codecDigest = saveCodecImpl[T](outputClassName, outputDigest)
+        val codecDigest = saveCodec[T]
         codecCache.put(codec, codecDigest)
         codecDigest
       case Some(digest) =>
         digest
     }
+    val outputClassName = Codec.classTagToSerializableName[T](implicitly[Codec[T]].classTag)
     saveLinkPath(f"data-codecs/${outputDigest.id}/$outputClassName/${codecDigest.id}")
   }
 
-  private def saveCodecImpl[T : Codec](
-    outputClassName: String,
-    outputDigest: Digest
-  )(implicit cdcd: Codec[Codec[T]]): Digest = {
-
+  def saveCodec[T](implicit cd: Codec[T], cdcd: Codec[Codec[T]]): Digest = {
     val codec: Codec[T] = implicitly[Codec[T]]
+    val outputClassName = Codec.classTagToSerializableName[T](codec.classTag)
     implicit val ct: ClassTag[T] = codec.classTag
     val codecBytes = Codec.serialize(codec)
     val codecDigest = Codec.digestBytes(codecBytes)
-
     if (checkForInconsistentSerialization(codec))
       Codec.checkConsistency(codec, codecBytes, codecDigest)
     saveBytes(f"codecs/$outputClassName/${codecDigest.id}", codecBytes)
