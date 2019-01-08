@@ -1,9 +1,10 @@
 package com.cibo.provenance
 
-
-import com.cibo.provenance.kvstore.KVStore
+import com.cibo.provenance.kvstore.{KVStore, LocalStore}
+import io.circe.{Decoder, DecodingFailure, Json}
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Left, Right}
 
 /**
   * Created by ssmith on 5/16/17.
@@ -54,10 +55,18 @@ class ResultTrackerSimple(
   import com.google.common.cache.Cache
 
   import scala.reflect.ClassTag
-  import scala.reflect.runtime.universe.TypeTag
   import scala.util.{Failure, Success, Try}
 
-  def basePath = storage.basePath
+  override def toString: String = {
+    val default = super.toString()
+    val i = default.indexOf("@")
+    val base = if (i == -1) default else default.substring(0, i)
+    val full = f"$base($storage)"
+    underlyingTrackerOption match {
+      case Some(under) => f"$full over $under"
+      case None => full
+    }
+  }
 
   @transient
   implicit lazy val vwpCodec: Codec[ValueWithProvenanceSerializable] = ValueWithProvenanceSerializable.codec
@@ -71,19 +80,23 @@ class ResultTrackerSimple(
   }
 
   def loadCallById(callId: Digest): Option[FunctionCallWithProvenanceDeflated[_]] =
+    loadCallDataByIdOption(callId).map(_.wrap)
+
+  def loadResultById(resultId: Digest): Option[FunctionCallResultWithProvenanceDeflated[_]] =
+    loadResultDataByIdOption(resultId).map(_.wrap)
+
+  def loadCallDataByIdOption(callId: Digest): Option[FunctionCallWithProvenanceSerializable] =
     loadBytesOption(s"calls/${callId.id}").map {
       bytes =>
         Codec.deserialize(bytes)(ValueWithProvenanceSerializable.codec)
           .asInstanceOf[FunctionCallWithProvenanceSerializable]
-          .wrap
     }
 
-  def loadResultById(resultId: Digest): Option[FunctionCallResultWithProvenanceDeflated[_]] =
+  def loadResultDataByIdOption(resultId: Digest): Option[FunctionCallResultWithProvenanceSerializable] =
     loadBytesOption(s"results/${resultId.id}").map {
       bytes =>
         Codec.deserialize(bytes)(ValueWithProvenanceSerializable.codec)
           .asInstanceOf[FunctionCallResultWithProvenanceSerializable]
-          .wrap
     }
 
   // These methods can be overridden to selectively do additional checking.
@@ -110,7 +123,7 @@ class ResultTrackerSimple(
   lazy val resultCacheSize = 1000L
 
   @transient
-  protected lazy val resultCache =
+  protected lazy val resultCache: Cache[FunctionCallResultWithKnownProvenanceSerializable, Boolean] =
     CacheUtils.mkCache[FunctionCallResultWithKnownProvenanceSerializable, Boolean](resultCacheSize, logger)
 
   def saveResultSerializable(
@@ -166,23 +179,34 @@ class ResultTrackerSimple(
 
     saveBytes(f"results/${resultDigest.id}", resultBytes)
 
-    inputResultsAlreadySaved.indices.map {
+    inputResultsAlreadySaved.indices.foreach {
       n =>
+        // For each input, append a "result-uses" link indicating that it was used here, as the nth argument.
+        // The link in the upstream looks like this:
+        // functions/$inFuncName/$inFuncVersion/result-uses/$thisResult/used-by/$thisFuncName/$thisFuncVersion/as-arg/$n/from-inputs/$thisInputGroupId/with-result/$thisResultId
+
         val inputResultSaved: FunctionCallResultWithProvenanceSerializable = inputResultsAlreadySaved(n)
+        val inputResultDigest = inputResultSaved.toDigest
         val inputCallSaved: FunctionCallWithProvenanceSerializable = inputResultSaved.call
-        inputCallSaved match {
-          case i: FunctionCallWithKnownProvenanceSerializableWithoutInputs =>
-            val inputCallDigest = i.digestOfEquivalentWithInputs
-            val path =
-              f"functions/${i.functionName}/${i.functionVersion.id}/output-uses/" +
-                f"${inputResultSaved.outputDigest.id}/from-input-group/$inputGroupId/with-prov/${inputCallDigest.id}/" +
-                f"went-to/$functionName/$functionVersionId/input-group/$inputGroupId/arg/$n"
-            saveLinkPath(path)
-          case _: FunctionCallWithUnknownProvenanceSerializable =>
-            // Don't link values with unknown provenance to everywhere they are used.
-          case other =>
-            throw new FailedSaveException(f"Unexpected input type $other.  Cannot save result $resultSerializable!")
-        }
+
+        val usagePathPrefix =
+          inputCallSaved match {
+            case i: FunctionCallWithKnownProvenanceSerializableWithoutInputs =>
+              f"functions/${i.functionName}/${i.functionVersion.id}/result-uses/${inputResultDigest.id}"
+            case u: FunctionCallWithUnknownProvenanceSerializable =>
+              // NOTE: Since we don't save a result for values with unknown provenance, we use the digest of the value itself as the ID.
+              f"functions/UnknownProvenance[${u.outputClassName}]/-/result-uses/${u.valueDigest.id}"
+            case other =>
+              throw new FailedSaveException(f"Unexpected input type $other.  Cannot save result $resultSerializable!")
+          }
+
+        val usagePath = usagePathPrefix +
+          f"/used-by/" + f"$functionName/$functionVersion" +
+          f"/as-arg/$n" +
+          f"/from-inputs/$inputGroupId" +
+          f"/with-result/${resultDigest.id}"
+
+        saveLinkPath(usagePath)
     }
 
     /*
@@ -220,7 +244,7 @@ class ResultTrackerSimple(
     prefix: String,
     functionName: String,
     functionVersion: Version
-  ) = {
+  ): Unit = {
     val previousSavePaths = getListingRecursive(f"$prefix/inputs-to-output/$inputGroupId")
     if (previousSavePaths.isEmpty) {
       logger.debug("New data.")
@@ -279,8 +303,6 @@ class ResultTrackerSimple(
   def saveCallSerializable[O](callSerializable: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O] = {
     val functionName = callSerializable.functionName
     val version = callSerializable.functionVersion
-    val versionId = version.id
-    val prefix = f"functions/$functionName/$versionId"
     val callBytes = callSerializable.toBytes
     val callId = callSerializable.toDigest.id
     saveBytes(f"calls/$callId", callBytes)
@@ -288,40 +310,103 @@ class ResultTrackerSimple(
     FunctionCallWithProvenanceDeflated(callSerializable)
   }
 
-  //def saveOutputValue[T : Codec](obj: T)(implicit tt: TypeTag[Codec[T]], ct: ClassTag[Codec[T]]): Digest = {
-  def saveOutputValue[T: Codec](obj: T)(implicit cdcd: Codec[Codec[T]]) = {
+  def saveCallSerializable[O](callSerializable: FunctionCallWithUnknownProvenanceSerializable): FunctionCallWithProvenanceDeflated[O] = {
+    // For values with unknown provenance, the "call" is just an empty shell.
+    // We don't save that, but we do save a single entry in the data-provenance/ tree indicating the value was used this way.
+    val s = callSerializable
+    saveLinkPath(
+      f"data-provenance/${s.valueDigest.id}/as/${s.outputClassName}/from/UnknownProvenance[${s.outputClassName}]/-"
+    )
+    FunctionCallWithProvenanceDeflated(callSerializable)
+  }
+
+  def saveOutputValue[T: Codec](obj: T): Digest = {
     val bytes = Codec.serialize(obj)
     val digest = Codec.digestBytes(bytes)
     if (checkForInconsistentSerialization(obj))
       Codec.checkConsistency(obj, bytes, digest)
-    saveCodec[T](digest)
+    saveCodecForOutputDigest[T](digest)
     val path = f"data/${digest.id}"
     logger.info(f"Saving raw $obj to $path")
     saveBytes(path, bytes)
     digest
   }
 
-  def loadCodecByClassNameAndCodecDigest[T: ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]) = {
-    val bytes = loadBytes(f"codecs/$valueClassName/${codecDigest.id}")
-    Codec.deserialize[Codec[T]](bytes)
+  import scala.language.existentials
+
+  def loadCodecByClassNameAndCodecDigest(valueClassName: String, codecDigest: Digest): Codec[_] = {
+    val clazz = Class.forName(valueClassName)
+    loadCodecByClassNameAndCodecDigestImpl(clazz, valueClassName, codecDigest)
   }
 
-  def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Seq[Codec[T]] = {
-    val valueClassName = Codec.classTagToSerializableName[T]
-    getListingRecursive(f"data-codecs/${valueDigest.id}/$valueClassName").map {
-       codecId =>
-        Try(
-          loadCodecByClassNameAndCodecDigest[T](valueClassName, Digest(codecId))
-        ) match {
-          case Success(codec) =>
-            codec
-          case Failure(err) =>
-            throw new FailedSaveException(f"Failed to deserialize codec $codecId for $valueClassName: $err")
-        }
+  protected def loadCodecByClassNameAndCodecDigestImpl[T](clazz: Class[T], valueClassName: String, codecDigest: Digest): Codec[T] = {
+    implicit val classTag: ClassTag[T] = ClassTag(clazz)
+    val bytes = loadBytes(f"codecs/$valueClassName/${codecDigest.id}")
+    val codecCodec: Codec[Codec[T]] = Codec.selfCodec[T]
+    val codec: Codec[T] = codecCodec.deserialize(bytes)
+    codec
+  }
+
+  def loadCodecsByClassName(valueClassName: String): Seq[Try[Codec[_]]] = {
+    getListingRecursive(f"codecs/$valueClassName").map {
+      codecId => Try { loadCodecByClassNameAndCodecDigest(valueClassName, Digest(codecId)) }
     }
   }
 
-  def loadCodecByType[T: ClassTag : TypeTag](implicit cdcd: Codec[Codec[T]]): Codec[T] = {
+  def loadCodecs: Map[String, Seq[Try[Codec[_]]]] = {
+    val grouped: Map[String, List[(String, Try[Codec[_]])]] = getListingRecursive(f"codecs").map {
+      _.split("/").toList match {
+        case valueClassName :: codecId :: Nil =>
+          (valueClassName, Try {
+            loadCodecByClassNameAndCodecDigest(valueClassName, Digest(codecId))
+          })
+        case other =>
+          throw new RuntimeException(f"Expected a suffix with class name and codec ID!  Got: $other")
+      }
+    }.groupBy(_._1)
+    grouped.map { case (k, v) => (k, v.map(_._2)) }
+  }
+
+  def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest): Seq[Codec[T]] = {
+    val valueClassName = Codec.classTagToSerializableName[T]
+
+    val tries = getListingRecursive(f"data-codecs/${valueDigest.id}/$valueClassName").map {
+      codecId => Try {
+        loadCodecByClassNameAndCodecDigest(valueClassName, Digest(codecId)).asInstanceOf[Codec[T]]
+      }
+    }
+
+    val successes = tries.filter(_.isSuccess)
+    val failures = tries.filter(_.isFailure)
+
+    if (successes.nonEmpty) {
+      // Some codecs for this value loaded.  Return them.
+      successes.map(_.get)
+    } else {
+      // None of the codecs loaded.
+      // This error should occur during testing when the class changes, before the class change is committed.
+      val successes2 =
+        getListingRecursive(f"codecs/$valueClassName").map {
+          codecId => Try {
+            //(codecId, loadCodecByClassNameCodecDigestClassTagAndSelfCodec[T](valueClassName, Digest(codecId)))
+            (codecId, loadCodecByClassNameAndCodecDigest(valueClassName, Digest(codecId)).asInstanceOf[Codec[T]])
+          }
+        }
+
+      if (successes2.nonEmpty) {
+        val (codecId, codec) = successes2.head.get
+        saveLinkPath(f"data-codecs/${valueDigest.id}/$valueClassName/$codecId")
+        successes2.map(_.get._2)
+      } else {
+        throw new SerializationInconsistencyException(
+          f"No codecs for $valueDigest load, and no other codecs for $valueClassName were found that load.  " +
+          f"Save a new codecs for $valueClassName to this ResultTracker to deserialize old results."
+        )
+      }
+    }
+  }
+
+  def loadCodec[T: ClassTag]: Codec[T] = {
     val valueClassName = Codec.classTagToSerializableName[T]
     getListingRecursive(f"codecs/$valueClassName").flatMap {
       path =>
@@ -336,18 +421,19 @@ class ResultTrackerSimple(
     hasValue(digest)
   }
 
-
   def hasValue(digest: Digest): Boolean =
     pathExists(f"data/${digest.id}")
 
   def hasOutputForCall[O](call: FunctionCallWithProvenance[O]): Boolean =
     loadOutputIdsForCallOption(call).nonEmpty
 
-  def loadResultByCallOption[O](call: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] =
-    loadOutputIdsForCallOption(call).map {
+  def loadResultByCallOption[O](call: FunctionCallWithProvenance[O]): Option[FunctionCallResultWithProvenance[O]] = {
+    val callWithResolvedInputs = call.resolveInputs(this) // This is not required but will be more efficient.
+    loadOutputIdsForCallOption(callWithResolvedInputs).map {
       case (outputId, commitId, buildId) =>
-        createResultFromPreviousCallOutput(call, outputId, commitId, buildId)
+        createResultFromPreviousCallOutput(callWithResolvedInputs, outputId, commitId, buildId)
     }
+  }
 
   def loadResultByCallOptionAsync[O](call: FunctionCallWithProvenance[O])(implicit ec: ExecutionContext): Future[Option[FunctionCallResultWithProvenance[O]]] = {
     loadOutputIdsForCallOptionAsync(call).map {
@@ -544,33 +630,29 @@ class ResultTrackerSimple(
   lazy val codecCacheSize = 1000L
 
   @transient
-  protected lazy val codecCache =
+  protected lazy val codecCache: Cache[Codec[_], Digest] =
     CacheUtils.mkCache[Codec[_], Digest](codecCacheSize, logger)
 
-  private def saveCodec[T : Codec](outputDigest: Digest)(implicit cd: Codec[Codec[T]]): Digest = {
-    val outputClassName = Codec.classTagToSerializableName[T](implicitly[Codec[T]].classTag)
+  def saveCodecForOutputDigest[T : Codec](outputDigest: Digest): Digest = {
     val codec = implicitly[Codec[T]]
     val codecDigest = Option(codecCache.getIfPresent(codec)) match {
       case None =>
-        val codecDigest = saveCodecImpl[T](outputClassName, outputDigest)
+        val codecDigest = saveCodec[T]
         codecCache.put(codec, codecDigest)
         codecDigest
       case Some(digest) =>
         digest
     }
+    val outputClassName = Codec.classTagToSerializableName[T](implicitly[Codec[T]].classTag)
     saveLinkPath(f"data-codecs/${outputDigest.id}/$outputClassName/${codecDigest.id}")
   }
 
-  private def saveCodecImpl[T : Codec](
-    outputClassName: String,
-    outputDigest: Digest
-  )(implicit cdcd: Codec[Codec[T]]): Digest = {
-
+  def saveCodec[T](implicit cd: Codec[T]): Digest = {
     val codec: Codec[T] = implicitly[Codec[T]]
+    val outputClassName = Codec.classTagToSerializableName[T](codec.classTag)
     implicit val ct: ClassTag[T] = codec.classTag
     val codecBytes = Codec.serialize(codec)
     val codecDigest = Codec.digestBytes(codecBytes)
-
     if (checkForInconsistentSerialization(codec))
       Codec.checkConsistency(codec, codecBytes, codecDigest)
     saveBytes(f"codecs/$outputClassName/${codecDigest.id}", codecBytes)
@@ -591,7 +673,10 @@ class ResultTrackerSimple(
 
   import scala.concurrent.duration._
 
-  def isLocal: Boolean = storage.isLocal
+  def isLocal: Boolean = storage match {
+    case _: LocalStore => true
+    case _ => false
+  }
 
   @transient
   protected lazy val ioTimeout: FiniteDuration = 5.minutes
@@ -714,7 +799,7 @@ class ResultTrackerSimple(
     }
 
   protected def getListingRecursive(path: String): List[String] = {
-    val listing1 = storage.getKeySuffixes(path)
+    val listing1 = storage.getSubKeysRecursive(path)
     underlyingTrackerOption match {
       case Some(underlying) =>
         // NOTE: It would be a performance improvment to make this a merge sort.
@@ -821,6 +906,135 @@ class ResultTrackerSimple(
     heavyCache.invalidateAll()
     codecCache.invalidateAll()
     resultCache.invalidateAll()
+  }
+
+  /*
+   * Query Interface: Basic
+   *
+   * These implement the required query interface in the base trait.
+   *
+   */
+
+  // Functions
+
+  def findFunctionNames: Iterable[String] =
+    storage.getSubKeys("functions")
+
+  def findFunctionVersions(functionName: String): Iterable[Version] =
+    storage.getSubKeys(f"functions/$functionName").map(Version.apply)
+
+
+  // Calls
+
+  def findCallData: Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
+    storage.getSubKeysRecursive("calls").map { id => loadCallDataByIdRaw(Digest(id)) }
+
+  def findCallData(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
+    storage.getSubKeysRecursive(f"functions/$functionName").flatMap {
+      suffix =>
+        suffix.split("/").toList match {
+          case version :: "calls" :: callId :: Nil =>
+            Some(loadCallDataByIdRaw(Digest(callId)))
+          case _ =>
+            None
+        }
+    }
+
+  def findCallData(functionName: String, version: Version): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
+    storage.getSubKeysRecursive(f"functions/$functionName/${version.id}/calls").map {
+      id => loadCallDataByIdRaw(Digest(id))
+    }
+
+
+  // Results
+
+  def findResultData: Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    storage.getSubKeysRecursive("results").map { id => loadResultDataByIdRaw(Digest(id)) }
+
+  def findResultData(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    findFunctionVersions(functionName).flatMap {
+      v => findResultData(functionName, v)
+    }
+
+  def findResultData(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
+    val outputBuildInfo: Map[String, (String, String)] =
+      storage.getSubKeysRecursive(f"functions/$functionName/${version.id}/inputs-to-output").map(_.split("/")).map {
+        vals =>
+          val inputId = vals(0)
+          val outputId = vals(1)
+          val commitId = vals(2)
+          val buildId = vals(3)
+          outputId -> (commitId, buildId)
+      }.toMap
+
+    val resultsByOutput =
+      storage.getSubKeysRecursive(f"functions/$functionName/${version.id}/output-to-provenance").map(_.split("/")).map {
+        vals =>
+          val outputId = vals(0)
+          val inputId = vals(1)
+          val callId = vals(2)
+          val bi = outputBuildInfo(outputId)
+          findResultDataImpl(outputId, inputId, callId, bi._1, bi._2)
+      }
+    require(outputBuildInfo.keys.size == resultsByOutput.map(_.outputDigest).toVector.distinct.size, "Failed to find one result per output!")
+    resultsByOutput
+  }
+
+  protected def loadCallDataByIdRaw(callDigest: Digest): FunctionCallWithKnownProvenanceSerializableWithInputs = {
+    val bytes: Array[Byte] = loadBytes(f"calls/${callDigest.id}")
+    val o = Codec.deserialize(bytes)(ValueWithProvenanceSerializable.codec)
+    o.asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
+  }
+
+  protected def loadResultDataByIdRaw(resultDigest: Digest): FunctionCallResultWithKnownProvenanceSerializable = {
+    val bytes: Array[Byte] = loadBytes(f"results/${resultDigest.id}")
+    Codec.deserialize(bytes)(ValueWithProvenanceSerializable.codec)
+      .asInstanceOf[FunctionCallResultWithKnownProvenanceSerializable]
+  }
+
+  protected def findResultDataImpl(
+    outputId: String,
+    inputId: String,
+    callId: String,
+    commitId: String,
+    buildId: String
+  ): FunctionCallResultWithKnownProvenanceSerializable = {
+    val call = loadCallDataByIdRaw(Digest(callId))
+    FunctionCallResultWithKnownProvenanceSerializable(
+      call.unexpandInputs,
+      Digest(inputId),
+      Digest(outputId),
+      commitId,
+      buildId
+    )
+  }
+
+  def findResultDataByOutput(outputDigest: Digest): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    storage.getSubKeysRecursive(s"data-provenance/${outputDigest.id}").map(_.split("/").toList).flatMap {
+      case
+        "as" :: className ::
+          "from" :: functionName :: version ::
+          "with-inputs" :: inputGroupId ::
+          "with-provenance" :: callId ::
+          "at" :: commitId :: buildId ::
+          Nil
+        => Some(findResultDataImpl(outputDigest.id, inputGroupId, callId, commitId, buildId))
+      case _ => None
+    }
+
+  // Uses
+
+  def findUsesOfResultWithIndex(functionName: String, version: Version, resultDigest: Digest): Iterable[(FunctionCallResultWithProvenanceSerializable, Int)] = {
+    storage.getSubKeysRecursive(f"functions/$functionName/${version.id}/result-uses/${resultDigest.id}").map(_.split("/").toList).flatMap {
+      case "used-by" :: functionName2 :: versionId2 ::
+          "as-arg" :: argN ::
+          "from-inputs" :: inputGroupId2 ::
+          "with-result" :: resultId2 ::
+          Nil
+        => loadResultDataByIdOption(Digest(resultId2)).map( result => (result, argN.toInt))
+      case _
+        => None
+    }
   }
 }
 

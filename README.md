@@ -267,8 +267,233 @@ The `BuildInfo` object used should be created by the `SbtBuildInfo` plugin.  Eac
 The package name used in the configuration should be in a namespace that is unique for the app/lib.  If an organization namespace is used by a wide variety of apps, make a sub-namespace for each component that is independently built and put the `BuildInfo` there, even if it is the only thing there.
 
 
-Shorter Example
----------------
+Querying
+--------
+
+Previously created results can be retrieved from any FunctionWithProvenance by calling `.findResults` method.  This
+returns an iterator of previous results.  There is also a `.findCalls` method that returns lighter-weight objects
+that just contain metadata about the result, minus the output.
+
+Because a software library will change over time, it is possible that values retrieved from a `ResultTracker`
+were made at a time when the software structure was very different.  It is possible that the objects will no longer fully vivify.
+Also, the history may cross libraries, and some classes might not be instantiatable from the application doing the query.
+
+The `.findResults` and `.findCalls` methods will omit any results or calls that cannot be fully vivified in the current application.
+
+Lower-level methods, `.findResultData` and `.findCallData`, always return the complete list, but in a degenerate form of
+just metadata.  The `.load` method will attempt to vivify the object, possibly resulting in an exception if the class 
+structure has changed, or is not available in the current application.  
+
+
+Example:
+```scala
+
+case class BirthdayCake(candleCount: Int)
+
+object BirthdayCake {
+  import io.circe._
+  import io.circe.generic.semiauto._
+  implicit val encoder: Encoder[BirthdayCake] = deriveEncoder[BirthdayCake]
+  implicit val decoder: Decoder[BirthdayCake] = deriveDecoder[BirthdayCake]
+}
+
+object addCandles extends Function2WithProvenance[BirthdayCake, Int, BirthdayCake] {
+  val currentVersion: Version = Version("0.1")
+  def impl(loaf: BirthdayCake, count: Int): BirthdayCake = loaf.copy(candleCount = loaf.candleCount + count)
+}
+
+val cake1 = BirthdayCake(5)
+val cake2 = addCandles(cake1, 10)
+val cake3 = addCandles(cake2, 6)
+
+cake3.resolve
+cake3.output shoulldBe 21
+
+val results = addCandles.findResults
+results.foreach(println)
+// (BirthdayCake(15) <- addCandles(raw(BirthdayCake(5)),raw(10)))
+// (BirthdayCake(21) <- addCandles((BirthdayCake(15) <- addCandles(raw(BirthdayCake(5)),raw(10))),raw(6)))
+```
+
+The application querying for results may not have the type available, possibly because it was made
+in a foreign application, or because the class has changed since the data was made.
+
+Methods that find "ResultData" instead of "Results" retrieve raw, typless data that can be interrogated
+in any application.  The raw data can be converted into fully typed data with a call to the .load method,
+which will succeed if the type is available, and fail otherwise.
+```
+val resultsRaw = addCandles.findResultData
+val resutsVivified = resultsRaw.map(_.load)
+assert(resultsVivified.map(_.normalize) == results.map(_.normalize)
+```
+
+Note that the `.normalize` method is only required if the code intendes to perform exact equality tests.
+Without it, freshly loaded results will be lazy about loading internals until neceessary.  They are 
+functionally equivalent, but will not pass a plain scala equality test.
+
+The raw *Data access methods are available on the ResultTracker itself, so values can be found even if the
+function is completely foreign:
+```
+val resultsRaw2 = rt.findResultData("com.cibo.provenance.addCandles")
+val resultsRaw3 = rt.findResultData("com.cibo.provenance.addCandles", "0.1")
+val resultsRaw4 = rt.findResultDataByOutput(Digest("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"))
+val resultsRaw5 = rt.findResultDataByOutput(BirthDayCake(16))
+```
+
+It is possible to search for a result by one of its inputs results:
+```
+val result2 = eatCake(result1).resolve
+val usesOfResult1 = rt.findUsesOfResult(result1)
+usesOfResult1.map(_.load.normalize).head == result2.normalize
+```
+
+Or by a raw input value:
+```
+val usesOfOutput1 = rt.findUsesOfValue(result1.output)
+usesOfOutput1.map(_.load.normalize).head == result2.normalize
+```
+
+Broad queries are also possible, revealing all data in the repository:
+```
+val allResults = rt.findResultData
+val allCalls = rt.findCallData
+```
+
+The subset that can vivify:
+```
+val vivifiableResults = rt.findResults
+val vivifiableCalls = rt.findCalls
+```
+
+Query more narrowly from from any `FunctionWithProvenance`:
+```
+val all: Iterable[eatCake.Result] = eatCake.findResults
+val all: Iterable[eatCake.Call] = eatCake.findCalls
+
+val all: Iterable[FunctionCallResultWithProvenanceSerializable] = eatCake.findResultData
+val all: Iterable[FunctionCallWithProvenanceSerializable] = eatCake.findCallData
+```
+
+Drill down:
+```
+val names: Iterable[String] = rt.findFunctionNames
+val versions: Iterable[Version] = rt.findFunctionVersions("com.cibo.provenance.eatCake")
+val results = rt.findResultData("com.cibo.provenance.eatCake", Version("0.1))
+val calls = rt.findCallData(("com.cibo.provenance.eatCake", Version("0.1))
+```
+
+Tags
+----
+Any result can be "tagged" with a text String annotation.  
+
+Tags are similar to tags in source control, except the same tag name can be applied to multiple things.
+
+Given some result:
+```
+val result1 = eatCake(...).resolve
+```
+
+Tag it:
+```
+result1.addTag("tag 1")
+```
+
+Find the result later by tag:
+```
+val result1b = eatCake.findResultsByTag("tag 1").head 
+result1b shouldEqual result1
+```
+
+Query the ResultTracker for the data in raw/generic form, accessable across libraries:
+```
+val result1c = rt.findResultDataByTag("tag 1").head
+result1c.load  shouldEqual result1
+```
+
+Find tags by the data type of the result they reference:
+```
+val tag1b = rt.findTagsByOutputClassName("com.cibo.provenance.BirthdayCake").head
+tag1b shouldEqual Tag("tag 1")
+```
+
+Or by the type of function call result they apply to:
+```
+val tag1c = rt.findTagsByResultFunctionName("com.cibo.provenance.eatCake").head
+tag1c shouldEqual Tag("tag 1")
+```
+
+Find it in the list of all tags in the result tracker:
+```
+rt.findTags.contains(Tag("tag 1")
+```
+
+Remove a tag:
+```
+result1.removeTag("tag 1")
+```
+
+Find all history, including each additions and removals in the append-only repository:
+```
+val history = rt.findTagHistory.sortBy(_.ts)
+history.size shouldEqual 2
+
+val add = history.head
+val remove = history.last
+
+add.addOrRemove shouldEqual AddOrRemoveTag.AddTag
+add.subject.load.mormalize shouildEqual result1.normalize
+add.tag shouldEqual Tag("tag 1")
+
+remove.addOrRemove shouldEqual AddOrRemoveTag.RemoveTag
+remove.subject.load.mormalize shouildEqual result1.normalize
+remove.tag shouldEqual Tag("tag 1")
+
+add.ts < remove.ts
+```
+
+Since old versions of results might not fully vivify when the class changes,
+or if the class is not available to the querying library,
+it is possible to query for the raw metadata w/o fully vivifying the results.
+
+Calls described as "ResultData" intead of "Result" return untyped metadata
+accessible in ay application.
+```
+val callsAsRawData = eatCake.findResultDataByTag("tag 1")
+```
+
+The untyped metadata can be loaded in any application where the type is available, presuming the type
+has not changed dramatically enough that it cannot deserialize: 
+```
+val justTheOnesWeCanVivify: Iterable[eatCake.Result] =
+    callsAsRawData.flatMap {
+        primitiveData >
+            Try(primitiveData.load) match {
+                case Success(realObject) => Some(realObject.asInstanceOf[eatCake.Result])
+                case Failure(err) => None
+            }
+    }
+```
+
+When a result is tagged, it is saved immediately.
+
+A call can also be tagged, but it the tag addition must be resolved in order to save the tag.
+```
+val call1 = eatCake(...)
+val tag1 = call1.addTag(Tag("tag 2")
+
+call1.resolve
+// tag1 is not saved yet
+tag1.resolve
+// tag1 is now saved
+```
+
+NOTE: The same tag text can be applied to different result objects independently.
+All results attached to the same tag can be loaded as a group.  Removing a tag from one
+result does not remove it from all results. 
+
+
+Short Example
+-------------
 
 ```scala
 import com.cibo.provenance._

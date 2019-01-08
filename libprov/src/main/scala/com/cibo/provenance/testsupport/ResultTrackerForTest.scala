@@ -42,7 +42,7 @@ case class ResultTrackerForTest(outputStorage: KVStore, referenceStorage: KVStor
   extends ResultTrackerSimple(
     outputStorage,
     writable = true,
-    Some(ResultTrackerSimple(referenceStorage, writable = false))
+    Some(ResultTrackerSimple(referenceStorage, false))
   ) with Rechecking {
 
   def outputPath = outputStorage.basePath
@@ -50,7 +50,7 @@ case class ResultTrackerForTest(outputStorage: KVStore, referenceStorage: KVStor
   def referencePath = referenceStorage.basePath
 
   require(underlyingTrackerOption.nonEmpty, "Refusing to clean() a ResultTracker that does not have an underlying tracker.")
-  require(storage.isLocal, "Refusing to clean() an S3 path.")
+  require(isLocal, f"Refusing to clean() a non-local path $storage.")
 
   /**
     * Get the underlying tracker that holds just the reference data.
@@ -66,18 +66,18 @@ case class ResultTrackerForTest(outputStorage: KVStore, referenceStorage: KVStor
     * This should be called at the beginning of a test.
     */
   def clean(): Unit = {
-    if (storage.isRemote) {
+    if (!isLocal) {
       sys.env.get("USER") match {
         case Some(user) =>
-          if (!basePath.contains(user))
-            throw new RuntimeException(f"Refusing to delete an S3 test a directory that does not contain the current user's name: $user not in ${basePath}")
+          if (!outputPath.contains(user))
+            throw new RuntimeException(f"Refusing to delete an S3 test a directory that does not contain the current user's name: $user not in ${outputPath}")
           import scala.sys.process._
-          s"aws s3 rm --recursive ${basePath}".!
+          s"aws s3 rm --recursive ${outputPath}".!
 
         case None =>
           throw new RuntimeException(
             "Failed to determine the current user." +
-              f"Refusing to delete a test a directory that does not contain the current user's name!: ${basePath}"
+              f"Refusing to delete a test a directory that does not contain the current user's name!: ${outputPath}"
           )
       }
     }
@@ -99,12 +99,12 @@ case class ResultTrackerForTest(outputStorage: KVStore, referenceStorage: KVStor
     * Note: Calling push() will also stage it automatically.
     */
   def checkForUnstagedResults(): Unit = {
-    if (storage.getKeySuffixes().toList.nonEmpty) {
+    if (storage.getSubKeysRecursive().toList.nonEmpty) {
       val msg =
-        if (storage.isLocal && underlyingTrackerOption.map(_.isLocal).getOrElse(throw new RuntimeException("Missing underlying tracker.")))
-          f"# New reference data! To stage it:\nrsync -av --progress ${basePath}/ ${referenceTracker.basePath}"
+        if (isLocal && underlyingTrackerOption.map(_.isLocal).getOrElse(throw new RuntimeException("Missing underlying tracker.")))
+          "# New reference data! To stage it:\nrsync -av --progress \"" + outputPath + "/\" \"" + referencePath + "\""
         else
-          f"# New reference data! To stage it:\naws s3 sync ${basePath} ${referenceTracker.basePath}"
+          "# New reference data! To stage it:\naws s3 sync \"" + outputPath + "\" \"" + referencePath + "\""
       throw new ResultTrackerForTest.UnstagedReferenceDataException(msg)
     }
   }
@@ -119,16 +119,15 @@ case class ResultTrackerForTest(outputStorage: KVStore, referenceStorage: KVStor
     * It is called before check() when it is known that the test data needs to be regenerated.
     */
   def push(): Unit = {
-    val referenceDir = underlyingTrackerOption.get.basePath
     if (isLocal && referenceTracker.isLocal) {
-      if (new File(basePath).exists) {
-        new File(referenceDir).getParentFile.mkdirs()
-        FileUtils.copyDirectoryToDirectory(new File(basePath), new File(referenceDir))
+      if (new File(outputPath).exists) {
+        new File(referencePath).getParentFile.mkdirs()
+        FileUtils.copyDirectoryToDirectory(new File(referencePath), new File(referencePath))
       } else {
-        logger.warn(f"No data in $basePath to transfer to $referencePath...")
+        logger.warn(f"No data in $outputPath to transfer to $referencePath...")
       }
     } else {
-      val cmd = Seq("aws", "s3", "sync", basePath, referenceDir)
+      val cmd = Seq("aws", "s3", "sync", outputPath, referencePath)
       import scala.sys.process._
       logger.info(f"RUNNING: $cmd")
       cmd.!
@@ -142,8 +141,8 @@ object ResultTrackerForTest {
   import io.circe._
   import com.cibo.provenance.BuildInfo.codec
 
-  implicit private val buildInfoEncoder = codec.encoder
-  implicit private val buildInfoDecoder = codec.decoder
+  implicit private val buildInfoEncoder: Encoder[BuildInfo] = codec.encoder
+  implicit private val buildInfoDecoder: Decoder[BuildInfo] = codec.decoder
   implicit private val e2 = new BinaryEncoder[ResultTrackerSimple]
   implicit private val d2 = new BinaryDecoder[ResultTrackerSimple]
 

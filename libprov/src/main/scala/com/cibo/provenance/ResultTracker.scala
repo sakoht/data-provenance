@@ -1,5 +1,8 @@
 package com.cibo.provenance
 
+import java.time.Instant
+
+import scala.collection.immutable
 import scala.concurrent.{ExecutionContext, Future}
 
 
@@ -116,11 +119,21 @@ trait ResultTracker extends Serializable {
     * The deflated version uses IDs to reference its inputs (also deflated, recursively), and
     * as such is a light-weight pointer into the complete history of the call.
     *
-    * @param callInSerializableForm:  The call to save.
-    * @tparam O:    The output type of the call and returned deflated call.
-    * @return       The deflated call created during saving.
+    * @param callSerializable   The call to save.
+    * @tparam O:                The output type of the call and returned deflated call.
+    * @return                   The deflated call created during saving.
     */
-  def saveCallSerializable[O](callInSerializableForm: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O]
+  def saveCallSerializable[O](callSerializable: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O]
+
+  /**
+    * Save an UnknownProvenance call.  This is mostly a no-op, since there was no trackable call that generated the data.
+    * The ResultTracker indexes this call so that it can track forward to its usage.
+    *
+    * @param callSerializable   The call to save.
+    * @tparam O                 The output type of the call and returned deflated call.
+    * @return                   The deflated call created during the save process.
+    */
+  def saveCallSerializable[O](callSerializable: FunctionCallWithUnknownProvenanceSerializable): FunctionCallWithProvenanceDeflated[O]
 
   /**
     * Write out one `FunctionCallResultWithProvenanceSaved`.
@@ -148,7 +161,7 @@ trait ResultTracker extends Serializable {
     * @tparam T     The type of data to save.
     * @return       The Digest of the serialized data.  A unique ID usable to re-load later.
     */
-  def saveOutputValue[T : Codec](obj: T)(implicit cdcd: Codec[Codec[T]]): Digest
+  def saveOutputValue[T : Codec](obj: T): Digest
 
   def saveBuildInfo: Digest
 
@@ -202,7 +215,7 @@ trait ResultTracker extends Serializable {
     loadValueOption(clazz, digest)
   }
 
-  protected def loadValueOption[T](clazz: Class[T], digest: Digest)(implicit cdcd: Codec[Codec[T]]): Option[_] = {
+  protected def loadValueOption[T](clazz: Class[T], digest: Digest): Option[_] = {
     implicit val ct: ClassTag[T] = ClassTag(clazz)
     Try {
       val (value, codec) = loadValueWithCodec[T](digest)
@@ -216,8 +229,7 @@ trait ResultTracker extends Serializable {
     }
   }
 
-  //def loadValueWithCodec[T : ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): (T, Codec[T]) = {
-  def loadValueWithCodec[T : ClassTag](valueDigest: Digest)(implicit cct: Codec[Codec[T]]): (T, Codec[T]) = {
+  def loadValueWithCodec[T : ClassTag](valueDigest: Digest): (T, Codec[T]) = {
     val allCodecs: List[Codec[T]] = loadCodecsByValueDigest[T](valueDigest: Digest).toList
     val workingCodecValuePairs = allCodecs.flatMap {
       codec =>
@@ -246,19 +258,62 @@ trait ResultTracker extends Serializable {
     }
   }
 
-  def loadCodecByType[T : ClassTag : TypeTag](implicit cdcd: Codec[Codec[T]]): Codec[T]
+  /**
+    * Load a codec using the implicit ClassTag[T]
+    * @tparam T   The type of codec to load.
+    * @return     A Codec[T]
+    */
+  def loadCodec[T : ClassTag]: Codec[T]
 
-  def loadCodecByCodecDigest[T : ClassTag](codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T] = {
+  /**
+    * Load a codec by its saved digest (ID).
+    * This requires that the type T be a parameter, and the implicit ClassTag[T] be available.
+    *
+    * @param codecDigest  The digest of the codec (the ID under which it was saved)
+    * @tparam T           The type of data the codec serializes/deserializes.
+    * @return             A Codec[T]
+    */
+  def loadCodecByCodecDigest[T : ClassTag](codecDigest: Digest): Codec[T] = {
     val valueClassName = Codec.classTagToSerializableName[T]
-    loadCodecByClassNameAndCodecDigest[T](valueClassName, codecDigest)
+    loadCodecByClassNameAndCodecDigest(valueClassName, codecDigest).asInstanceOf[Codec[T]]
   }
 
-  def loadCodecByClassNameAndCodecDigest[T : ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T]
+  /**
+    * Load a codec with only the name of the class and the digest value.
+    * This is the entrypoint to retrieving types from typeless data.
+    *
+    * @param valueClassName   The fully qualified class name.
+    * @param codecDigest      The digest (ID) of the Codec when it was saved.
+    * @return                 A Codec[_], which will typically need to be type cast before use.
+    */
+  def loadCodecByClassNameAndCodecDigest(valueClassName: String, codecDigest: Digest): Codec[_]
 
-  def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Seq[Codec[T]]
+  /**
+    * When any value is saved, the Codec that serialized it is also saved.
+    * Typically there is only one Codec per class if the class does not change.
+    *
+    * @param valueDigest  The ID of some object of type T saved with the codec.
+    * @tparam T           The type of the value saved.
+    * @return             The specific Codec[T] that saved the object.
+    */
+  def loadCodecsByValueDigest[T : ClassTag](valueDigest: Digest): Seq[Codec[T]]
+
+  /**
+    * Load all Codecs for a given class by class name.
+    * The results return as a Try because, typically, only one such Codec will vivify in the current process, if any.
+    *
+    * @param valueClassName The name of the class for which to search for Codecs.
+    * @return               A Seq[Try[Codec[ _ ] ].
+    */
+  def loadCodecsByClassName(valueClassName: String): Seq[Try[Codec[_]]]
+
+  /**
+    * Load all Codecs from storage.
+    * @return   A Map[String, Seq[Try[Codec[ _ ] ] ] with all Codecs grouped by class name.
+    */
+  def loadCodecs: Map[String, Seq[Try[Codec[_]]]]
 
   def loadBuildInfoOption(commitId: String, buildId: String): Option[BuildInfo]
-
 
   /**
     * A type-agnostic version of loadValueSerializedDataOption.  This works with a class string as text.
@@ -295,9 +350,6 @@ trait ResultTracker extends Serializable {
     * @return         An Option of T that is Some[T] if the digest ID is found in storage.
     */
   def loadValue[T : Codec](digest: Digest): T = {
-    //val ct = implicitly[ClassTag[T]]
-    //val className = Util.classToName[T]
-    //val clazz = Class.forName(className)
     loadValueOption[T](digest) match {
       case Some(obj) =>
         obj
@@ -307,6 +359,365 @@ trait ResultTracker extends Serializable {
     }
   }
 
+  /**
+    * Query Interface
+    *
+    * The low-level interface on the ResultTracker returns data even if the types are not
+    * fully instantiatable in the current application.
+    *
+    * To fully vivify an object, call .load to get a fully typified object.
+    */
+
+  // Functions
+
+  /**
+    * Return the names of all functions with results tracked in this tracker.
+    *
+    * @return  The fully-qualified names of the functions.
+    */
+  def findFunctionNames: Iterable[String]
+
+  /**
+    * Return all versions of a given function with calls or results in storage.
+    *
+    * @param functionName
+    * @return
+    */
+  def findFunctionVersions(functionName: String): Iterable[Version]
+
+  // Calls
+
+  /**
+    * Return all call data for which there is data in storage.
+    *
+    * @return An iterable of calls.
+    */
+  def findCallData: Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs]
+
+  /**
+    * Return all call data for which there is data in storage for a given function name.
+    *
+    * @return An iterable of calls.
+    */
+  def findCallData(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs]
+
+  /**
+    * Return all call data for which there is data in storage for a given function name and verison number.
+    *
+    * @return An iterable of calls.
+    */
+  def findCallData(functionName: String, version: Version): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs]
+
+
+  // Results
+
+  /**
+    * Return all result data for which there is data in storage.
+    *
+    * @return An iterable of results.
+    */
+  def findResultData: Iterable[FunctionCallResultWithKnownProvenanceSerializable]
+
+  /**
+    * Return all result data for which there is data in storage for a given function name.
+    *
+    * @return An iterable of results.
+    */
+  def findResultData(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable]
+
+  /**
+    * Return all result data for which there is data in storage for a given function name and version.
+    *
+    * @return An iterable of results.
+    */
+  def findResultData(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable]
+
+  // Results by output
+
+  /**
+    * Return all result data (unvivified) that returns an output with the specified digest.
+    *
+    * @param outputDigest   The digest of to search for.
+    * @return               An iterable of results, un-vivified.
+    */
+  def findResultDataByOutput(outputDigest: Digest): Iterable[FunctionCallResultWithKnownProvenanceSerializable]
+
+  /**
+    * Return all result data (unvivified) that returns a given output value.
+    *
+    * @param output         The output value to search for.
+    * @tparam O             The type of the output value (implicit Codec required),
+    * @return               An iterable of results, un-vivified.
+    */
+  def findResultDataByOutput[O : Codec](output: O): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
+    val codec = implicitly[Codec[O]]
+    val bytes = codec.serialize(output)
+    val digest = Codec.digestBytes(bytes)
+    findResultDataByOutput(digest)
+  }
+
+  /**
+    * Return results for a given output digest.
+    *
+    * @param outputDigest   The digest of to search for.
+    * @return               An iterable of fully vivified results.
+    */
+  def findResultsByOutput(outputDigest: Digest): Iterable[FunctionCallResultWithProvenance[_]] =
+    findResultDataByOutput(outputDigest).map(_.load(this))
+
+  /**
+    * Return results for a given output value.
+    *
+    * @param output         The output value to search for.
+    * @tparam O             The type of the output value (implicit Codec required),
+    * @return               An iterable of fully vivified results.
+    */
+  def findResultsByOutput[O : Codec](output: O): Iterable[FunctionCallResultWithProvenance[O]] = {
+    val codec = implicitly[Codec[O]]
+    val bytes = codec.serialize(output)
+    val digest = Codec.digestBytes(bytes)
+    findResultsByOutput(digest).map(_.asInstanceOf[FunctionCallResultWithProvenance[O]])
+  }
+
+  // Use
+
+  /**
+    * Find all places a given value is used as an input, including where the value had no
+    * prior provenance tracking, and where it was an output of something with tracking.
+    *
+    * @param value      The value to search for.
+    * @tparam O         The value type, which must have an implicit Codec.
+    * @return           An iterable of un-vivified results that use the value as an input.
+    */
+  def findUsesOfValue[O : Codec](value: O): Iterable[FunctionCallResultWithProvenanceSerializable] = {
+    val knownProvenance = findResultDataByOutput(value).flatMap(findUsesOfResult)
+    val unknownProvenance = findUsesOfResult(UnknownProvenance(value).resolve(this))
+    unknownProvenance ++ knownProvenance
+  }
+
+  /**
+    * Find all places a given result is used as an input.
+    *
+    * @param result     The value to search for.
+    * @return           An iterable of un-vivified results that use the value as an input.
+    */
+  def findUsesOfResult(result: FunctionCallResultWithProvenance[_]): Iterable[FunctionCallResultWithProvenanceSerializable] =
+    findUsesOfResultWithIndex(result).map(_._1)
+
+  /**
+    * Find all places a given result is used as an input, specified by serialized result data.
+    *
+    * @param result     The value to search for.
+    * @return           An iterable of un-vivified results that use the value as an input.
+    */
+  def findUsesOfResult(result: FunctionCallResultWithProvenanceSerializable): Iterable[FunctionCallResultWithProvenanceSerializable] =
+    findUsesOfResultWithIndex(result).map(_._1)
+
+  /**
+    * Find all places a given result is used as an input.
+    *
+    * @param result     The value to search for.
+    * @return           An iterable of un-vivified results that use the value as an input,
+    *                   with the index position of the value in the inputs of each output result.
+    */
+  def findUsesOfResultWithIndex(result: FunctionCallResultWithProvenance[_]): Iterable[(FunctionCallResultWithProvenanceSerializable, Int)] = {
+    val resultAsData = FunctionCallResultWithProvenanceSerializable.save(result)(this)
+    findUsesOfResultWithIndex(resultAsData)
+  }
+
+  /**
+    * Find all places a given result is used as an input, specifying the input result as unvivified data.
+    *
+    * @param result     The value to search for.
+    * @return           An iterable of un-vivified results that use the value as an input,
+    *                   with the index position of the value in the inputs of each output result.
+    */
+  def findUsesOfResultWithIndex(result: FunctionCallResultWithProvenanceSerializable): Iterable[(FunctionCallResultWithProvenanceSerializable, Int)] =
+    result.call match {
+      case k: FunctionCallWithKnownProvenanceSerializableWithoutInputs =>
+        findUsesOfResultWithIndex(k.functionName, k.functionVersion, result.toDigest)
+      case u: FunctionCallWithUnknownProvenanceSerializable =>
+        findUsesOfResultWithIndex(f"UnknownProvenance[${u.outputClassName}]", NoVersion, u.valueDigest)
+      case other =>
+        throw new RuntimeException(f"Unexpected call type: $other")
+    }
+
+  /**
+    * Find all places a given result is used as an input.
+    *
+    * @param functionName     The name of the function that produced the value to search for.
+    * @param version          The version of the function that produced the value to search for.
+    * @param resultDigest     The value to search for, expressed as a digest.
+    * @return                 An iterable of un-vivified results that use the value as an input,
+    *                         with the index position of the value in the inputs of each output result.
+    */
+  def findUsesOfResultWithIndex(functionName: String, version: Version, resultDigest: Digest): Iterable[(FunctionCallResultWithProvenanceSerializable, Int)]
+
+  /**
+    * Copy results from one storage to another.
+    *
+    * This can also be used to upgrade the storage tree if the structure of storage has changed,
+    * presuming the old FunctionCallResultWithKnownProvenanceSerializable still deserializable by its codec.
+    *
+    */
+  def copyResultsFrom(otherResultTracker: ResultTracker): Iterable[Try[FunctionCallResultWithKnownProvenanceSerializable]] =
+    otherResultTracker.findResultData.map {
+      resultAsData =>
+        Try {
+          val result = resultAsData.load(otherResultTracker)
+          FunctionCallResultWithKnownProvenanceSerializable.save(result)(this)
+        }
+    }
+
+  // Find tags
+
+  def findTagHistory: Iterable[TagHistoryEntry] = {
+    findFunctionNames.filter(
+      n => n.startsWith("com.cibo.provenance.AddTag[") || n.startsWith("com.cibo.provenance.RemoveTag[")
+    ).flatMap {
+      functionName =>
+        findResultData(functionName).flatMap(convertAddTagOrRemoveTagToTagHistoryEntry)
+    }
+  }
+
+  def convertAddTagOrRemoveTagToTagHistoryEntry(result: FunctionCallResultWithProvenanceSerializable): Option[TagHistoryEntry] =
+    result.call match {
+      case call: FunctionCallWithKnownProvenanceSerializableWithoutInputs =>
+        implicit val rt: ResultTracker = this
+        call.expandInputs(this).inputList match {
+          case subject :: tag :: ts :: Nil =>
+            val addOrRemove =
+              if (call.functionName.startsWith("com.cibo.provenance.AddTag["))
+                AddOrRemoveTag.AddTag
+              else if (call.functionName.startsWith("com.cibo.provenance.RemoveTag["))
+                AddOrRemoveTag.RemoveTag
+              else
+                throw new RuntimeException(f"Unexpected AddOrRemoveTag flag: $call")
+            Some(
+              TagHistoryEntry(
+                addOrRemove,
+                subject.asInstanceOf[FunctionCallResultWithProvenanceSerializable],
+                tag.loadAs[FunctionCallResultWithProvenance[Tag]].output,
+                ts.loadAs[FunctionCallResultWithProvenance[Instant]].output
+              )
+            )
+          case other => throw new RuntimeException(f"Unexpected: input to a result is not resolved? $other")
+        }
+      case other =>
+        None
+    }
+
+
+  def findTagHistoryByOutputType(outputClassName: String): Iterable[TagHistoryEntry] =
+    findTagHistory.filter { _.subjectData.call.outputClassName == outputClassName }
+
+  def findTagHistorysByResultFunctionName(functionName: String): Iterable[TagHistoryEntry] =
+    findTagHistory.filter {
+      _.subjectData match {
+        case k: FunctionCallResultWithKnownProvenanceSerializable =>
+          k.call.functionName == functionName
+        case u: FunctionCallResultWithUnknownProvenanceSerializable =>
+          f"UnknownProvenance[${u.call.outputClassName}]" == functionName
+      }
+    }
+
+  //
+
+  /**
+    * Collapse a history of add/remove tag events into just one item for tags that still exist.
+    *
+    * If the most recent event for a tag/subject pair is AddTag, it will be included.  Everything else is omitted.
+    *
+    * @param history  An iterable of TagHistoryEntry objects, potentially with multiple events per tag/subject.
+    * @return         The most recent tag for each subject that has not been deleted.
+    */
+  def distillTagHistory(history: Iterable[TagHistoryEntry]): Iterable[TagHistoryEntry] = {
+    history.groupBy(h => (h.subjectData, h.tag)).values.flatMap {
+      addAndRemoveEventsForOneTagAndSubject =>
+        val latest = addAndRemoveEventsForOneTagAndSubject.toSeq.maxBy(_.ts)
+        if (latest.addOrRemove == AddOrRemoveTag.AddTag)
+          Some(latest)
+        else if (latest.addOrRemove == AddOrRemoveTag.RemoveTag)
+          None
+        else
+          throw new RuntimeException(s"Unexpected add/remove flag: ${latest.addOrRemove}")
+    }
+  }
+
+  def findTagApplications: Iterable[TagHistoryEntry] =
+    distillTagHistory(findTagHistory)
+
+  def findTagApplicationsByOutputType(outputClassName: String): Iterable[TagHistoryEntry] =
+    distillTagHistory(findTagHistory.filter(_.subjectData.call.outputClassName == outputClassName))
+
+  def findTagApplicationsByResultFunctionName(functionName: String): Iterable[TagHistoryEntry] =
+    distillTagHistory(
+      findTagHistory.filter {
+        _.subjectData match {
+          case k: FunctionCallResultWithKnownProvenanceSerializable =>
+            k.call.functionName == functionName
+          case u: FunctionCallResultWithUnknownProvenanceSerializable =>
+            f"UnknownProvenance[${u.call.outputClassName}]" == functionName
+        }
+      }
+    )
+
+  def findTags: Iterable[Tag] =
+    findTagApplications.toVector.sortBy(_.ts).reverseIterator.toIterable.map(_.tag).toVector.distinct
+
+  def findTagsByOutputClassName(outputClassName: String): Iterable[Tag] =
+    findTagApplicationsByOutputType(outputClassName).map(_.tag).toVector.distinct
+
+  def findTagsByResultFunctionName(functionName: String): Iterable[Tag] =
+    findTagApplicationsByResultFunctionName(functionName).map(_.tag).toVector.distinct
+
+
+  // Find results by tag
+
+  def findResultDataByTag(text: String): Iterable[FunctionCallResultWithProvenanceSerializable] =
+    findResultDataByTag(Tag(text))
+
+  def findResultDataByTag(tag: Tag): Iterable[FunctionCallResultWithProvenanceSerializable] = {
+    // Find all places the tag is used as an input.
+    val uses = findUsesOfValue(tag).flatMap {
+      result =>
+        // Limit to where it is used as an input to AddTag[...]
+        result.call match {
+          case call: FunctionCallWithKnownProvenanceSerializableWithoutInputs
+              if call.functionName.startsWith("com.cibo.provenance.AddTag[") ||
+                call.functionName.startsWith("com.cibo.provenance.RemoveTag[")
+            =>
+            Some(result)
+          case other =>
+            None
+        }
+    }
+    distillTagHistory(uses.flatMap(convertAddTagOrRemoveTagToTagHistoryEntry)).map(_.subjectData)
+  }
+
+  def findTagHistory(tag: Tag): Iterable[TagHistoryEntry] =
+    findUsesOfValue(tag).flatMap { result => convertAddTagOrRemoveTagToTagHistoryEntry(result) }
+
+  def findTagHistoryBySubject(tag: Tag, subject: FunctionCallResultWithProvenanceSerializable): Iterable[FunctionCallResultWithProvenanceSerializable] = {
+    // Find all places the tag is used as an input.
+    findUsesOfValue(tag).flatMap {
+      result =>
+        // Limit to where it is used as an input to AddTag[...] or RemoveTag[...]
+        result.call match {
+          case call: FunctionCallWithKnownProvenanceSerializableWithoutInputs
+              if call.functionName.startsWith("com.cibo.provenance.AddTag[") ||
+                call.functionName.startsWith("com.cibo.provenance.RemoveTag[") =>
+            // The first input is the subject.
+            val firstInput = call.expandInputs(this).inputList.head.asInstanceOf[FunctionCallResultWithProvenanceSerializable]
+            if (firstInput == subject)
+              Some(result)
+            else
+              None
+          case other =>
+            None
+        }
+    }
+  }
 
   /**
     * An UnresolvedVersionException is thrown if the system attempts to deflate a call with an unresolved version.

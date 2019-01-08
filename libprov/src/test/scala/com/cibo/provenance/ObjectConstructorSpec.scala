@@ -4,7 +4,6 @@ import scala.language.existentials
 import io.circe._
 import io.circe.generic.semiauto._
 import org.scalatest._
-
 import com.cibo.provenance.oo._
 import com.cibo.provenance.implicits._
 
@@ -32,6 +31,11 @@ class ObjectConstructorSpec extends FunSpec with Matchers {
       baz.buz(3) shouldBe 3 * 100 * 1.23
 
       TestUtils.diffOutputSubdir(testSubdir)
+    }
+
+    it("reloads correctly") {
+      val byName = Codec.objectFromSerializableName("com.cibo.provenance.Bar.withProvenance").asInstanceOf[FunctionWithProvenance[_]]
+      byName shouldEqual Bar.withProvenance
     }
   }
 }

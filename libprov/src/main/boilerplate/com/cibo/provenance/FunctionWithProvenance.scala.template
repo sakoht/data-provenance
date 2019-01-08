@@ -12,7 +12,9 @@ package com.cibo.provenance
 
 import io.circe.{Decoder, Encoder}
 import java.io.Serializable
+import java.time.Instant
 
+import scala.util.Try
 import scala.language.existentials
 import scala.language.implicitConversions
 import scala.reflect.ClassTag
@@ -98,7 +100,7 @@ abstract class FunctionWithProvenance[O : Codec] extends Serializable {
   }
 
   /**
-    *
+    * The fully qualified name of a function.
     */
   lazy val name: String =
     if (typeParameterTypeNames.isEmpty)
@@ -107,6 +109,90 @@ abstract class FunctionWithProvenance[O : Codec] extends Serializable {
       baseName+ "[" + typeParameterTypeNames.mkString(",") + "]"
 
   override def toString = f"$name@$currentVersion"
+
+
+  /**
+    * Return all calls of this function that have data in a given (implicit) ResultTracker.
+    *
+    * This returns a degenerate form of the calls with types expressed as strings by name.
+    * The data from this is durable across changes in the codebase.
+    *
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs].
+    */
+  def findCallData()(implicit rt: ResultTracker): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
+    rt.findCallData(name)
+
+  /**
+    * Return all calls of this function that have data in a given (implicit) ResultTracker.
+    *
+    * This returns a degenerate form of the calls with types expressed as strings by name.
+    * The data from this is durable across changes in the codebase.
+    *
+    * @param version  Limit results to the specified version of the function.
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs].
+    */
+  def findCallData(version: Version)(implicit rt: ResultTracker): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] =
+    rt.findCallData(name, version)
+
+  /**
+    * Return all results of this function that have data in a given (implicit) ResultTracker.
+    *
+    * This returns a degenerate form of the results with types expressed as strings by name.
+    * The data from this is durable across changes in the codebase.
+    *
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
+    */
+  def findResultData()(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    rt.findResultData(name)
+
+  /**
+    * Return all results of this function that have data in a given (implicit) ResultTracker.
+    *
+    * This returns a degenerate form of the results with types expressed as strings by name.
+    * The data from this is durable across changes in the codebase.
+    *
+    * @param version  Limit results to the specified version of the function.
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
+    */
+  def findResultData(version: Version)(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    rt.findResultData(name, version)
+
+  /**
+    * Return all results tagged with the specified tag.
+    *
+    * This returns a degenerate form of the results with types expressed as strings by name.
+    * The data from this is durable across changes in the codebase.
+    *
+    * @param text The text of the tag to search for.
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
+    */
+  def findResultDataByTag(tagText: String)(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    findResultDataByTag(tag = Tag(tagText))
+
+  /**
+    * Return all results tagged with the specified text string.
+    *
+    * This returns a degenerate form of the results with types expressed as strings by name.
+    * The data from this is durable across changes in the codebase.
+    *
+    * @param tag  A Tag of text string annotation.
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
+    */
+  def findResultDataByTag(tag: Tag)(implicit rt: ResultTracker): Iterable[FunctionCallResultWithKnownProvenanceSerializable] =
+    rt.findResultDataByTag(tag).filter(
+      _.call.asInstanceOf[FunctionCallWithKnownProvenanceSerializable].functionName == name
+    ).map(_.asInstanceOf[FunctionCallResultWithKnownProvenanceSerializable])
+
+  def findTagResultData(implicit rt: ResultTracker): Iterable[TagHistoryEntry] =
+    rt.findTagApplicationsByResultFunctionName(name)
+
+  def findTags(implicit rt: ResultTracker): Iterable[Tag] = findTagResultData.map(_.tag)
 
   class ReflectionException(msg: String) extends RuntimeException(msg)
 }
@@ -140,6 +226,7 @@ object FunctionWithProvenance {
 
   def getByName(name: String): FunctionWithProvenance[_] =
     Codec.objectFromSerializableName[FunctionWithProvenance[_]](name)
+
 }
 
 
@@ -202,6 +289,7 @@ abstract class Function0WithProvenance[O : Codec] extends FunctionWithProvenance
       throwInvalidVersionException(v)
     impl()
   }
+
   /**
     * This method is "pulled-up" from Call.run() into the wrapping function so it can be overridden
     * by provenance library infrastructural functions.
@@ -227,7 +315,7 @@ abstract class Function0WithProvenance[O : Codec] extends FunctionWithProvenance
   def deserializeCall(s: FunctionCallWithProvenanceSerializable)(implicit rt: ResultTracker): Call = {
     val ss = s.asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
     val i = ss.inputList.toVector
-    Call(ss.functionVersion)
+    Call(UnknownProvenance(ss.functionVersion))
   }
 
   object Call {
@@ -244,43 +332,49 @@ abstract class Function0WithProvenance[O : Codec] extends FunctionWithProvenance
     * @param v:     The Version of the function.
     */
   case class Call(v: ValueWithProvenance[Version] = currentVersion)
-    extends Function0CallWithProvenance[O](v)(implVersion) {
+      extends Function0CallWithProvenance[O](v)(implVersion) {
 
-      val function = self
+    val function = self
 
-      val functionName: String = self.name
+    val functionName: String = self.name
 
-      override def toString: String =
-        self.getClass.getSimpleName.stripSuffix("$") + "()" // no Tuple0
+    override def toString: String =
+      self.getClass.getSimpleName.stripSuffix("$") + "()" // no Tuple0
 
-      override def resolve(implicit rt: ResultTracker): Result =
-        super.resolve(rt).asInstanceOf[Result]
+    override def resolve(implicit rt: ResultTracker): Result =
+      super.resolve(rt).asInstanceOf[Result]
 
-      def newResult(output: VirtualValue[O])(implicit bi: BuildInfo): Result =
-        Result(this, output)(bi)
+    override def unresolve(implicit rt: ResultTracker): Call =
+      super.unresolve(rt).asInstanceOf[Call]
 
-      def duplicate(vv: ValueWithProvenance[Version]): Call =
-        copy(v)
-    
-      //
-      
-      override def resolveInputs(implicit rt: ResultTracker): Call =
-        nocopy(duplicate(v.resolve), this)
+    override def normalize(implicit rt: ResultTracker): Call =
+      unresolve(rt)
 
-      override def unresolveInputs(implicit rt: ResultTracker): Call =
-        nocopy(duplicate(v.unresolve), this)
+    def newResult(output: VirtualValue[O])(implicit bi: BuildInfo): Result =
+      Result(this, output)(bi)
 
-      override def loadInputs(implicit rt: ResultTracker): Call =
-        nocopy(duplicate(v.load), this)
+    def duplicate(vv: ValueWithProvenance[Version]): Call =
+      copy(vv)
 
-      override def loadRecurse(implicit rt: ResultTracker): Call =
-        nocopy(duplicate(v.loadRecurse), this)
+    //
 
-      override def saveInputs(implicit rt: ResultTracker): Call =
-        nocopy(duplicate(v.load), this)
+    override def resolveInputs(implicit rt: ResultTracker): Call =
+      nocopy(duplicate(v.resolve), this)
 
-      override def run(implicit rt: ResultTracker): Result =
-        runCall(this)(rt)
+    override def unresolveInputs(implicit rt: ResultTracker): Call =
+      nocopy(duplicate(v.unresolve), this)
+
+    override def loadInputs(implicit rt: ResultTracker): Call =
+      nocopy(duplicate(v.load), this)
+
+    override def loadRecurse(implicit rt: ResultTracker): Call =
+      nocopy(duplicate(v.loadRecurse), this)
+
+    override def saveInputs(implicit rt: ResultTracker): Call =
+      nocopy(duplicate(v.load), this)
+
+    override def run(implicit rt: ResultTracker): Result =
+      runCall(this)(rt)
   }
 
   /**
@@ -292,7 +386,14 @@ abstract class Function0WithProvenance[O : Codec] extends FunctionWithProvenance
     * @param bi:                    The implicit BuildInfo for the app that produced the output.
     */
   case class Result(override val call: Call, override val outputAsVirtualValue: VirtualValue[O])(implicit bi: BuildInfo)
-    extends Function0CallResultWithProvenance(call, outputAsVirtualValue)(bi)
+    extends Function0CallResultWithProvenance(call, outputAsVirtualValue)(bi) {
+
+    def normalize(implicit rt: ResultTracker): Result =
+      Result(call.unresolve, outputAsVirtualValue.resolveDigest)(bi.abbreviate)
+
+    def expandBuildInfo(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
+      Result(call, outputAsVirtualValue)(rt.loadBuildInfoOption(bi.commitId, bi.buildId).get)
+  }
 
   /**
     * Implicitly re-package a Function0CallWithProvenance into one specific to this Function0WithProvenance.
@@ -314,11 +415,96 @@ abstract class Function0WithProvenance[O : Codec] extends FunctionWithProvenance
   implicit private def convertResult(result: Function0CallResultWithProvenance[O]): Result =
     Result(result.call, result.outputAsVirtualValue)(result.outputBuildInfoBrief)
 
+
+  /**
+    * Return all versions of this function that have data in a given (implicit) ResultTracker.
+    *
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[Version].
+    */
+  def findVersions(implicit rt: ResultTracker): Iterable[Version] =
+    rt.findFunctionVersions(self.name)
+
+  /**
+    * Return all calls of this function that have data in a given (implicit) ResultTracker.
+    *
+    * Note: Some calls might not instantiate if the class has changed.  Use findCallData
+    * for a degenerate form that will always return.
+    *
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[Version].
+    */
+  def findCalls()(implicit rt: ResultTracker): Iterable[Call] =
+    rt.findCallData(self.name).flatMap(_.tryLoadAs[Call].toOption).map(_.unresolveInputs)
+
+  /**
+    * Return all calls of this function that have data in a given (implicit) ResultTracker.
+    *
+    * Note: Some calls might not instantiate if the class has changed.  Use findCallData
+    * for a degenerate form that will always return.
+    *
+    * @param version  Limit results to the specified version of the function.
+    * @param rt       The implicit ResultTracker.
+    * @return         An Iterable[Version].
+    */
+  def findCalls(version: Version)(implicit rt: ResultTracker): Iterable[Call] =
+    rt.findCallData(self.name, version).flatMap(_.tryLoadAs[Call].toOption).map(_.unresolveInputs)
+
+  /**
+    * Return all results of this function that have data in a given (implicit) ResultTracker.
+    *
+    * Note: Some calls might not instantiate if the class has changed.  Use findCallData
+    * for a degenerate form that will always return.
+    *
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[Version].
+    */
+  def findResults()(implicit rt: ResultTracker): Iterable[Result] =
+    rt.findResultData(self.name).flatMap(_.tryLoadAs[Result].toOption)
+
+  /**
+    * Return all results of this function that have data in a given (implicit) ResultTracker.
+    *
+    * Note: Some calls might not instantiate if the class has changed.  Use findCallData
+    * for a degenerate form that will always return.
+    *
+    * @param version  Limit results to the specified version of the function.
+    * @param rt       The implicit ResultTracker.
+    * @return         An Iterable[Version].
+    */
+  def findResults(version: Version)(implicit rt: ResultTracker): Iterable[Result] =
+    rt.findResultData(self.name, version).flatMap(_.tryLoadAs[Result].toOption)
+
+  /**
+    * Return all results tagged with the specified tag.
+    *
+    * Note: Some calls might not instantiate if the class has changed.
+    * Use findResultDataByTag for a degenerate form of result that will always materialize.
+    *
+    * @param tag  A Tag of text string annotation.
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
+    */
+  def findResultsByTag(tagText: String)(implicit rt: ResultTracker): Iterable[Result] =
+    findResultsByTag(Tag(tagText))
+
+  /**
+    * Return all results tagged with the specified text string.
+    *
+    * Note: Some calls might not instantiate if the class has changed.
+    * Use findResultDataByTag for a degenerate form of result that will always materialize.
+    *
+    * @param tag  A Tag of text string annotation.
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
+    */
+  def findResultsByTag(tag: Tag)(implicit rt: ResultTracker): Iterable[Result] =
+    findResultDataByTag(tag).flatMap(_.tryLoadAs[Result].toOption)
+
 }
 
 
 [1..21#
-
 /**
   * A Function1 with per-function versioning, and intermediate `.Call` and `.Result` tracking.
   *
@@ -414,8 +600,18 @@ abstract class Function1WithProvenance[[#I1#], O](
 
   def deserializeCall(s: FunctionCallWithProvenanceSerializable)(implicit rt: ResultTracker): Call = {
     val ss = s.asInstanceOf[FunctionCallWithKnownProvenanceSerializableWithInputs]
-    val i = ss.inputList.toVector
-    Call([#i(0).load.asInstanceOf[ValueWithProvenance[I1]]#], ss.functionVersion)
+    val i = ss.inputList.toVector.map(_.load)
+
+    // If any inputs are resolved, also pass a resolved version.
+    // This keeps the reloaded version symmetrical with the other data.
+    val inputsResolved = i.filter { case _: com.cibo.provenance.Result[_] => true; case _ => false }
+
+    val v = if (inputsResolved.nonEmpty)
+              UnknownProvenance(ss.functionVersion).resolve
+            else
+              UnknownProvenance(ss.functionVersion)
+
+    Call([#i(0).asInstanceOf[ValueWithProvenance[I1]]#], v)
   }
 
   object Call {
@@ -450,6 +646,9 @@ abstract class Function1WithProvenance[[#I1#], O](
       override def unresolve(implicit rt: ResultTracker): Call =
         unresolveInputs(rt).asInstanceOf[Call]
 
+      override def normalize(implicit rt: ResultTracker): Call =
+        super.normalize(rt).asInstanceOf[Call]
+
       def newResult(output: VirtualValue[O])(implicit bi: BuildInfo): Result =
         Result(this, output)(bi)
 
@@ -474,7 +673,7 @@ abstract class Function1WithProvenance[[#I1#], O](
 
       override def saveInputs(implicit rt: ResultTracker): Call =
         nocopy(duplicate([#i1.save#], v.load), this)
-  }
+}
 
   /**
     * The Result inner class is a Function1CallResultWithProvenance
@@ -485,7 +684,14 @@ abstract class Function1WithProvenance[[#I1#], O](
     * @param bi:                    The implicit BuildInfo for the app that produced the output.
     */
   case class Result(override val call: Call, override val outputAsVirtualValue: VirtualValue[O])(implicit bi: BuildInfo)
-    extends Function1CallResultWithProvenance(call, outputAsVirtualValue)(bi)
+    extends Function1CallResultWithProvenance(call, outputAsVirtualValue)(bi) {
+
+    def normalize(implicit rt: ResultTracker): Result =
+      Result(call.unresolve, outputAsVirtualValue.resolveDigest)(bi.abbreviate)
+
+    def expandBuildInfo(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O] =
+      Result(call, outputAsVirtualValue)(rt.loadBuildInfoOption(bi.commitId, bi.buildId).get)
+  }
 
   /**
     * Implicitly re-package a Function1CallWithProvenance into one specific to this Function1WithProvenance.
@@ -508,6 +714,91 @@ abstract class Function1WithProvenance[[#I1#], O](
     */
   implicit private def convertResult(r: Function1CallResultWithProvenance[[#I1#], O]): Result =
     Result(r.call, r.outputAsVirtualValue)(r.outputBuildInfoBrief)
+
+  /**
+    * Return all versions of this function that have data in a given (implicit) ResultTracker.
+    *
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[Version].
+    */
+  def findVersions(implicit rt: ResultTracker): Iterable[Version] =
+    rt.findFunctionVersions(self.name)
+
+  /**
+    * Return all calls of this function that have data in a given (implicit) ResultTracker.
+    *
+    * Note: Some calls might not instantiate if the class has changed.  Use findCallsHistorical
+    * for a degenerate form that will always return.
+    *
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[Version].
+    */
+  def findCalls()(implicit rt: ResultTracker): Iterable[Call] =
+    rt.findCallData(self.name).flatMap(s => Try(s.load.asInstanceOf[Call]).toOption).map(_.unresolve)
+
+  /**
+    * Return all calls of this function that have data in a given (implicit) ResultTracker.
+    *
+    * Note: Some calls might not instantiate if the class has changed.  Use findCallsHistorical
+    * for a degenerate form that will always return.
+    *
+    * @param version  Limit results to the specified version of the function.
+    * @param rt       The implicit ResultTracker.
+    * @return         An Iterable[Version].
+    */
+  def findCalls(version: Version)(implicit rt: ResultTracker): Iterable[Call] =
+    rt.findCallData(self.name, version).flatMap(s => Try(s.load.asInstanceOf[Call]).toOption).map(_.unresolve)
+
+  /**
+    * Return all results of this function that have data in a given (implicit) ResultTracker.
+    *
+    * Note: Some calls might not instantiate if the class has changed.  Use findCallsHistorical
+    * for a degenerate form that will always return.
+    *
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[Version].
+    */
+  def findResults()(implicit rt: ResultTracker): Iterable[Result] =
+    rt.findResultData(self.name).flatMap(s => Try(s.load.asInstanceOf[Result]).toOption)
+
+  /**
+    * Return all results of this function that have data in a given (implicit) ResultTracker.
+    *
+    * Note: Some calls might not instantiate if the class has changed.  Use findCallsHistorical
+    * for a degenerate form that will always return.
+    *
+    * @param version  Limit results to the specified version of the function.
+    * @param rt       The implicit ResultTracker.
+    * @return         An Iterable[Version].
+    */
+  def findResults(version: Version)(implicit rt: ResultTracker): Iterable[Result] =
+    rt.findResultData(self.name, version).flatMap(s => Try(s.load.asInstanceOf[Result]).toOption)
+
+  /**
+    * Return all results tagged with the specified tag.
+    *
+    * Note: Some calls might not instantiate if the class has changed.
+    * Use findResultDataByTag for a degenerate form of result that will always materialize.
+    *
+    * @param tag  A Tag of text string annotation.
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
+    */
+  def findResultsByTag(tagText: String)(implicit rt: ResultTracker): Iterable[Result] =
+    findResultsByTag(Tag(tagText))
+
+  /**
+    * Return all results tagged with the specified text string.
+    *
+    * Note: Some calls might not instantiate if the class has changed.
+    * Use findResultDataByTag for a degenerate form of result that will always materialize.
+    *
+    * @param tag  A Tag of text string annotation.
+    * @param rt   The implicit ResultTracker.
+    * @return     An Iterable[FunctionCallResultWithKnownProvenanceSerializable].
+    */
+  def findResultsByTag(tag: Tag)(implicit rt: ResultTracker): Iterable[Result] =
+    findResultDataByTag(tag).flatMap(_.tryLoadAs[Result].toOption)
 
 }#
 ]

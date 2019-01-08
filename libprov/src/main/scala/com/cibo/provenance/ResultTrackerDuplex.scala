@@ -1,5 +1,6 @@
 package com.cibo.provenance
 
+import scala.collection.immutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe
@@ -49,10 +50,17 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
     aa.get
   }
 
-  def saveCallSerializable[O](callInSerializableForm: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O] = {
-    val aa = Try(a.saveCallSerializable[O](callInSerializableForm))
-    val bb = Try(b.saveCallSerializable[O](callInSerializableForm))
-    cmp(aa, bb, s"saveCallSerializable for $callInSerializableForm returned different values for sync vs. async: $aa vs $bb")
+  def saveCallSerializable[O](callSerializable: FunctionCallWithKnownProvenanceSerializableWithInputs): FunctionCallWithProvenanceDeflated[O] = {
+    val aa = Try(a.saveCallSerializable[O](callSerializable))
+    val bb = Try(b.saveCallSerializable[O](callSerializable))
+    cmp(aa, bb, s"saveCallSerializable for $callSerializable returned different values for sync vs. async: $aa vs $bb")
+    aa.get
+  }
+
+  def saveCallSerializable[O](callSerializable: FunctionCallWithUnknownProvenanceSerializable): FunctionCallWithProvenanceDeflated[O] = {
+    val aa = Try(a.saveCallSerializable[O](callSerializable))
+    val bb = Try(b.saveCallSerializable[O](callSerializable))
+    cmp(aa, bb, s"saveCallSerializable for $callSerializable returned different values for sync vs. async: $aa vs $bb")
     aa.get
   }
 
@@ -64,7 +72,7 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
     aa.get
   }
 
-  def saveOutputValue[T: Codec](obj: T)(implicit cdcd: Codec[Codec[T]]): Digest = {
+  def saveOutputValue[T: Codec](obj: T): Digest = {
     val aa = Try(a.saveOutputValue[T](obj))
     val bb = Try(b.saveOutputValue(obj))
     cmp(aa, bb, s"saveOutputValue for $obj returned different values for sync vs. async: $aa vs $bb")
@@ -120,21 +128,48 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
     aa.get
   }
 
-  def loadCodecByType[T: ClassTag : universe.TypeTag](implicit cdcd: Codec[Codec[T]]): Codec[T] = {
-    val aa = Try(a.loadCodecByType[T])
-    val bb = Try(b.loadCodecByType[T])
+  def loadCodec[T: ClassTag]: Codec[T] = {
+    val aa = Try(a.loadCodec[T])
+    val bb = Try(b.loadCodec[T])
     cmpSeqCodec(aa.map(v => Seq(v)), bb.map(v => Seq(v)), s"loadCodecByType for ${implicitly[ClassTag[T]]} returned different values for sync vs. async: $aa vs $bb")
     aa.get
   }
 
-  def loadCodecByClassNameAndCodecDigest[T: ClassTag](valueClassName: String, codecDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Codec[T] = {
-    val aa = Try(a.loadCodecByClassNameAndCodecDigest[T](valueClassName, codecDigest))
-    val bb = Try(b.loadCodecByClassNameAndCodecDigest[T](valueClassName, codecDigest))
-    cmpSeqCodec(aa.map(v => Seq(v)), bb.map(v => Seq(v)), s"loadCodecByClassNameAndCodecDigest for $valueClassName, $codecDigest returned different values for sync vs. async: $aa vs $bb")
+
+  def loadCodecsByClassName(valueClassName: String): Seq[Try[Codec[_]]] = {
+    val aa: Try[Seq[Try[Codec[_]]]] = Try(a.loadCodecsByClassName(valueClassName))
+    val bb = Try(b.loadCodecsByClassName(valueClassName))
+    cmpSeqCodec(
+      aa.map(v => v.flatMap(_.toOption)), bb.map(v => v.flatMap(_.toOption)),
+      s"loadCodecsByClassName for $valueClassName returned different values for sync vs. async: $aa vs $bb"
+    )
     aa.get
   }
 
-  def loadCodecsByValueDigest[T: ClassTag](valueDigest: Digest)(implicit cdcd: Codec[Codec[T]]): Seq[Codec[T]] = {
+  def loadCodecs: Map[String, Seq[Try[Codec[_]]]] = {
+    val aa = Try(a.loadCodecs)
+    val bb = Try(b.loadCodecs)
+    val aCodecs: Try[Seq[Codec[_]]] = aa.map(_.flatMap(_._2.flatMap(_.toOption)).toList)
+    val bCodecs: Try[Seq[Codec[_]]] = bb.map(_.flatMap(_._2.flatMap(_.toOption)).toList)
+    cmpSeqCodec(
+      aCodecs, bCodecs,
+      s"loadCodecs returned different values for sync vs. async: $aa vs $bb"
+    )
+    aa.get
+  }
+
+  def loadCodecByClassNameAndCodecDigest(valueClassName: String, codecDigest: Digest): Codec[_] = {
+    import scala.language.existentials
+    val aa = Try(a.loadCodecByClassNameAndCodecDigest(valueClassName, codecDigest))
+    val bb = Try(b.loadCodecByClassNameAndCodecDigest(valueClassName, codecDigest))
+    cmpSeqCodec(aa.map(
+      v => Seq(v)), bb.map(v => Seq(v)),
+      s"loadCodecByClassNameAndCodecDigest for $valueClassName, $codecDigest returned differente values for sync vs. async: $aa vs $bb"
+    )
+    aa.get
+  }
+
+  def loadCodecsByValueDigest[T: ClassTag](valueDigest: Digest): Seq[Codec[T]] = {
     val aa = Try(a.loadCodecsByValueDigest[T](valueDigest))
     val bb = Try(b.loadCodecsByValueDigest[T](valueDigest))
     cmpSeqCodec(aa, aa, s"loadCodecsByValueDigest for $valueDigest returned different values for sync vs. async: $aa vs $bb")
@@ -155,6 +190,76 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
     aa.get
   }
 
+  def findFunctionNames: Iterable[String] = {
+    val aa = Try(a.findFunctionNames)
+    val bb = Try(b.findFunctionNames)
+    cmp(aa, bb, s"findFunctionNames")
+    aa.get
+  }
+
+  def findFunctionVersions(functionName: String): Iterable[Version] = {
+    val aa = Try(a.findFunctionVersions(functionName))
+    val bb = Try(b.findFunctionVersions(functionName))
+    cmp(aa, bb, s"findFunctionVersions for $functionName")
+    aa.get
+  }
+
+  def findCallData: Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] = {
+    val aa = Try(a.findCallData)
+    val bb = Try(b.findCallData)
+    cmp(aa, bb, s"findCallData")
+    aa.get
+  }
+
+  def findCallData(functionName: String): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] = {
+    val aa = Try(a.findCallData(functionName))
+    val bb = Try(b.findCallData(functionName))
+    cmp(aa, bb, s"findCallData for $functionName")
+    aa.get
+  }
+
+  def findCallData(functionName: String, version: Version): Iterable[FunctionCallWithKnownProvenanceSerializableWithInputs] = {
+    val aa = Try(a.findCallData(functionName, version))
+    val bb = Try(b.findCallData(functionName, version))
+    cmp(aa, bb, s"findCallData for $functionName and $version")
+    aa.get
+  }
+
+  def findResultData: Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
+    val aa = Try(a.findResultData)
+    val bb = Try(b.findResultData)
+    cmp(aa, bb, s"findResultData")
+    aa.get
+  }
+
+  def findResultData(functionName: String): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
+    val aa = Try(a.findResultData(functionName))
+    val bb = Try(b.findResultData(functionName))
+    cmp(aa, bb, s"findResultData for $functionName")
+    aa.get
+  }
+
+  def findResultData(functionName: String, version: Version): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
+    val aa = Try(a.findResultData(functionName, version))
+    val bb = Try(b.findResultData(functionName, version))
+    cmp(aa, bb, s"findResultData for $functionName and $version")
+    aa.get
+  }
+
+  def findResultDataByOutput(outputDigest: Digest): Iterable[FunctionCallResultWithKnownProvenanceSerializable] = {
+    val aa = Try(a.findResultDataByOutput(outputDigest))
+    val bb = Try(b.findResultDataByOutput(outputDigest))
+    cmp(aa, bb, s"findResultDataByOutput for $outputDigest")
+    aa.get
+  }
+
+  def findUsesOfResultWithIndex(functionName: String, version: Version, resultDigest: Digest): Iterable[(FunctionCallResultWithProvenanceSerializable, Int)] = {
+    val aa = Try(a.findUsesOfResultWithIndex(functionName, version, resultDigest))
+    val bb = Try(b.findUsesOfResultWithIndex(functionName, version, resultDigest))
+    cmp(aa, bb, s"findUsesOfResultWithIndex for $functionName, $version, $resultDigest")
+    aa.get
+  }
+
   // Compare two Try[T] and require that they match.
   // Try[T] does not by default support ==.
   private def cmp[T](a: Try[T], b: Try[T], msg: String): Unit = {
@@ -164,20 +269,20 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
           case Success(bvalue) =>
             require(avalue == bvalue, msg)
           case Failure(berror) =>
-            throw new RuntimeException(s"Result a succeeeded but b failed! $avalue vs $berror")
+            throw new RuntimeException(s"$msg: Result a succeeded but b failed! $avalue vs $berror")
         }
       case Failure(aerror) =>
         b match {
           case Success(bvalue) =>
-            throw new RuntimeException(s"Result a failed but b succeeded! $aerror vs $bvalue")
+            throw new RuntimeException(s"$msg: Result a failed but b succeeded! $aerror vs $bvalue")
           case Failure(berror) =>
-            require(aerror == berror, msg)
+            require(aerror.toString == berror.toString, s"$msg: Both failed with different messages: $aerror vs $berror")
         }
     }
   }
 
   // Special hndling for a Seq of Codecs.  Expect only the class tags to match.
-  private def cmpSeqCodec[T](a: Try[Seq[Codec[T]]], b: Try[Seq[Codec[T]]], msg: String): Unit = {
+  private def cmpSeqCodec(a: Try[Seq[Codec[_]]], b: Try[Seq[Codec[_]]], msg: String): Unit = {
     a match {
       case Success(avalue) =>
         b match {
@@ -197,4 +302,5 @@ class ResultTrackerDuplex[T <: ResultTracker, U <: ResultTracker](val a: T, val 
         }
     }
   }
+
 }

@@ -7,7 +7,6 @@ import io.circe.{Decoder, Encoder, Json}
 
 import scala.reflect.ClassTag
 import scala.reflect.runtime.currentMirror
-import scala.reflect.runtime.universe.TypeTag
 
 /**
   * The base trait for wrapping encoder/decoder pairs.
@@ -19,7 +18,6 @@ import scala.reflect.runtime.universe.TypeTag
   */
 trait Codec[T] extends Serializable {
   def classTag: ClassTag[T]
-  def typeTag: TypeTag[T]
   def serializableClassName: String = Codec.classTagToSerializableName(classTag)
   def serialize(obj: T): Array[Byte]
   def deserialize(bytes: Array[Byte]): T
@@ -48,8 +46,8 @@ object Codec extends LazyLogging {
     * @param decoder  A circe Decoder[T].
     * @return A Codec[T] created from implicits.
     */
-  def apply[T : ClassTag : TypeTag](encoder: io.circe.Encoder[T], decoder: io.circe.Decoder[T]): CirceJsonCodec[T] =
-    CirceJsonCodec(encoder, decoder)
+  def apply[T : ClassTag](encoder: io.circe.Encoder[T], decoder: io.circe.Decoder[T]): CirceJsonCodec[T] =
+    CirceJsonCodec.apply(encoder, decoder)
 
   /**
     * Implicitly create a CirceJsonCodec[T] wherever an Encoder[T] and Decoder[T] are implicitly available.
@@ -58,7 +56,7 @@ object Codec extends LazyLogging {
     * @tparam   T The type of data to be encoded/decoded.
     * @return A CirceJsonCodec[T] created from implicits.
     */
-  implicit def createCirceJsonCodec[T : Encoder : Decoder : ClassTag : TypeTag]: Codec[T] =
+  implicit def createCirceJsonCodec[T : Encoder : Decoder : ClassTag]: Codec[T] =
     Codec(implicitly[Encoder[T]], implicitly[Decoder[T]])
 
   /**
@@ -78,7 +76,7 @@ object Codec extends LazyLogging {
     * @tparam T   The base class/trait.
     * @return     A Codec[T]
     */
-  def createAbstractCodec[T : ClassTag : TypeTag](
+  def createAbstractCodec[T : ClassTag](
     key: String = "_subclass",
     valueStringToClassName: (String) => String = (className: String) => className,
     classNameToValueString: (String) => String = (className: String) => className
@@ -89,7 +87,7 @@ object Codec extends LazyLogging {
       o: T =>
         val className = o.getClass.getName.stripSuffix("$")
         val valueString = classNameToValueString(className)
-        val companionObject: COMPANION = objFromSerializableName[COMPANION](className)
+        val companionObject: COMPANION = companionObjectForName[COMPANION](className)
         val encoder = companionObject.encoder
         encoder.apply(o).mapObject(
           o1 => o1.add(key, Json.fromString(valueString))
@@ -101,7 +99,7 @@ object Codec extends LazyLogging {
         cursor.downField(key).as[String] match {
           case Right(valueString) =>
             val className = valueStringToClassName(valueString)
-            val companionObject: COMPANION  = objFromSerializableName[COMPANION](className)
+            val companionObject: COMPANION  = companionObjectForName[COMPANION](className)
             cursor.as(companionObject.decoder)
           case Left(err) =>
             throw err
@@ -117,20 +115,14 @@ object Codec extends LazyLogging {
     * This allows us to fully round-trip data across processes.
     * Note that the Codecs do not themselves serialize reproducibly.
     *
+    * Currently Codecs are serialized as a CirceJsonCodec, but internally
+    * they capture a Serializable byte array.
+    *
     * @tparam T   The type of data underlying the underlying Codec
     * @return     a Codec[ Codec[T] ]
     */
-  implicit def selfCodec[T : ClassTag](implicit tt: TypeTag[Codec[T]], ct: ClassTag[Codec[T]]): Codec[Codec[T]] =
-    Codec(new BinaryEncoder[Codec[T]], new BinaryDecoder[Codec[T]])
-
-  /**
-    * Implicitly convert a Codec[T] into a TypeTag[T].
-    *
-    * @param codec
-    * @tparam T
-    * @return
-    */
-  implicit def toTypeTag[T](codec: Codec[T]): TypeTag[T] = codec.typeTag
+  implicit def selfCodec[T : ClassTag](implicit ct: ClassTag[CirceJsonCodec[T]]): Codec[Codec[T]] =
+    CirceJsonCodec.apply(new BinaryEncoder[CirceJsonCodec[T]], new BinaryDecoder[CirceJsonCodec[T]]).asInstanceOf[Codec[Codec[T]]]
 
   /**
     * Implicitly convert a Codec[T] into a ClassTag[T].
@@ -163,40 +155,18 @@ object Codec extends LazyLogging {
 
   val toolbox = currentMirror.mkToolBox()
 
-  def functionFromSerializableName(name: String): FunctionWithProvenance[_] = {
-    try {
-      // This will work if the function is a singleton.
-      val clazz = Class.forName(name + "$")
-      val obj = clazz.getField("MODULE$").get(clazz)
-      obj.asInstanceOf[FunctionWithProvenance[_]]
-    } catch {
-      case e: Exception if e.isInstanceOf[java.lang.ClassCastException] | e.isInstanceOf[java.lang.ClassNotFoundException] =>
-        // We fall back to using the compiler itself only when re-vivifying a function object as data,
-        // _and_ the function is itself parameterized.  Normal workflow activity never goes here, only
-        // introspection.
-        if (!name.contains("[")) {
-          throw new RuntimeException(
-            f"Error loading FunctionWithProvenance $name: " +
-              f"should either be a singleton or a class with type parameters in the name and no args to construct!"
-          )
-        }
-        val tree = toolbox.parse("new " + name)
-        val fwp = toolbox.compile(tree).apply()
-        fwp.asInstanceOf[FunctionWithProvenance[_]]
-    }
-  }
+  def functionFromSerializableName(name: String): FunctionWithProvenance[_] =
+    objectFromSerializableName[FunctionWithProvenance[_]](name)
 
   def objectFromSerializableName[T](name: String): T = {
     try {
-      // This will work if the function is a singleton.
-      val clazz = Class.forName(name + "$")
-      val obj = clazz.getField("MODULE$").get(clazz)
+      val obj = instanceFromObjectName(name)
       obj.asInstanceOf[T]
     } catch {
       case e: Exception if e.isInstanceOf[java.lang.ClassCastException] | e.isInstanceOf[java.lang.ClassNotFoundException] =>
-        // We fall back to using the compiler itself only when re-vivifying a function object as data,
-        // _and_ the function is itself parameterized.  Normal workflow activity never goes here, only
-        // introspection.
+        // We fall back to using the compiler itself only if re-vivifying a function object as data,
+        // _and_ the function is itself parameterized.  Normal workflow activity never goes here, only introspection,
+        // as this is slow, and requires the compiler to be complete/correct.
         if (!name.contains("[")) {
           throw new RuntimeException(
             f"Error loading obj $name: " +
@@ -209,7 +179,59 @@ object Codec extends LazyLogging {
     }
   }
 
-  def objFromSerializableName[T](name: String): T = {
+  private def instanceFromObjectName(name: String): Any = {
+    val (objOrClass, suffix) = instanceAndSuffixFromNameAndSuffix(name, "")
+    val obj = objOrClass match {
+      case clazz: Class[_] =>
+        clazz.newInstance
+      case instance =>
+        instance
+    }
+    val words = suffix.split('.').filter(_.length > 0).toList
+    returnValueFromInstanceAndMethodChain(obj, words)
+  }
+
+  private def instanceAndSuffixFromNameAndSuffix(name: String, suffix: String): (AnyRef, String) = {
+    try {
+      // This will work if the name is a singleton object.
+      val clazz: Class[_] = Class.forName(name + "$")
+      val obj: AnyRef = clazz.getField("MODULE$").get(clazz)
+      (obj, suffix)
+    } catch {
+      case e: Exception if e.isInstanceOf[java.lang.ClassNotFoundException] =>
+        try {
+          // This will work if the name it is a class w/
+          val clazz: Class[_] = Class.forName(name)
+          (clazz, suffix)
+        } catch {
+          case e: Exception if e.isInstanceOf[java.lang.ClassNotFoundException] =>
+            // Move up to the prefix of the current object name.
+            val words = name.split('.')
+            if (words.length == 1)
+              throw e
+            val first = words.slice(0, words.length - 1)
+            val last = words.last
+            val newName = first.mkString(".")
+            val newSuffix = last + "." + suffix
+            instanceAndSuffixFromNameAndSuffix(newName, newSuffix)
+        }
+    }
+  }
+
+  private def returnValueFromInstanceAndMethodChain(obj: Any, suffix: List[String]): Any = {
+    suffix match {
+      case Nil => obj
+      case _ =>
+        val method = obj.getClass.getMethod(suffix.head)
+        val nextObject = method.invoke(obj)
+        suffix.tail match {
+          case Nil => nextObject
+          case tail => returnValueFromInstanceAndMethodChain(nextObject, tail)
+        }
+    }
+  }
+
+  def companionObjectForName[T](name: String): T = {
     val clazz = Class.forName(name + "$")
     val obj = clazz.getField("MODULE$").get(clazz)
     obj.asInstanceOf[T]

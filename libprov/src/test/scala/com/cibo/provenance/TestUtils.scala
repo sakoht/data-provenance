@@ -54,9 +54,9 @@ object TestUtils extends LazyLogging with Matchers {
         // The actual outputs are in S3.  To keep the logic simple below, sync it down to a temp dir and use that.
         val startPos = actualOutputDirPath.basePath.indexOf("://") + 3
         val tmpStore = LocalStore(f"/tmp/$user/" + actualOutputDirPath.basePath.substring(startPos))
-        tmpStore.getKeySuffixes().foreach { key => tmpStore.remove(key) }
+        tmpStore.getSubKeysRecursive().foreach { key => tmpStore.remove(key) }
         val t1 = Instant.now
-        s3store.getKeySuffixes().foreach { key => tmpStore.putBytes(key, s3store.getBytes(key)) }
+        s3store.getSubKeysRecursive().foreach { key => tmpStore.putBytes(key, s3store.getBytes(key)) }
         val t2 = Instant.now
         val d = t2.toEpochMilli - t1.toEpochMilli
         logger.warn(s"Sync of $actualOutputDirPath completed in ${d}ms.")

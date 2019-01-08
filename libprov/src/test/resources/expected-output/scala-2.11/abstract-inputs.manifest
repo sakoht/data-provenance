@@ -2,11 +2,15 @@
  440 ./calls/c1dd48aed9f7b0cfe1c808d9ee68935158e807db
  471 ./commits/DUMMY-COMMIT/builds/1955.11.12T22.04.00Z/37ec13133419421ab0bacaa1c377c117047d06b7
    0 ./data-provenance/01a096b1afc5417def6e743f03bfa72fad0a95ad/as/java.lang.String/from/com.cibo.provenance.sayYourName/0.1/with-inputs/f533143e34304e4f78d3392f4b102b896b330686/with-provenance/6f7c533e9f0c9cf601e831a81a82408783210fab/at/DUMMY-COMMIT/1955.11.12T22.04.00Z
+   0 ./data-provenance/3262d171ef4b8f769d786ef8a71dd064a2d79790/as/com.cibo.provenance.Kitty/from/UnknownProvenance[com.cibo.provenance.Kitty]/-
+   0 ./data-provenance/5d6f55289ba914284245323744d2dcce413903f8/as/com.cibo.provenance.Doggie/from/UnknownProvenance[com.cibo.provenance.Doggie]/-
    0 ./data-provenance/b261d443941d86779a0b8a0900efe64510f19058/as/java.lang.String/from/com.cibo.provenance.sayYourName/0.1/with-inputs/f5e5bd5030b4a28fe0fbe873143f1fd843f8378e/with-provenance/c1dd48aed9f7b0cfe1c808d9ee68935158e807db/at/DUMMY-COMMIT/1955.11.12T22.04.00Z
    9 ./data/01a096b1afc5417def6e743f03bfa72fad0a95ad
   17 ./data/3262d171ef4b8f769d786ef8a71dd064a2d79790
   18 ./data/5d6f55289ba914284245323744d2dcce413903f8
    8 ./data/b261d443941d86779a0b8a0900efe64510f19058
+   0 ./functions/UnknownProvenance[com.cibo.provenance.Doggie]/-/result-uses/5d6f55289ba914284245323744d2dcce413903f8/used-by/com.cibo.provenance.sayYourName/v0.1/as-arg/0/from-inputs/f533143e34304e4f78d3392f4b102b896b330686/with-result/269c0f7dcec9a448a094a3ec36f64db1d40f727c
+   0 ./functions/UnknownProvenance[com.cibo.provenance.Kitty]/-/result-uses/3262d171ef4b8f769d786ef8a71dd064a2d79790/used-by/com.cibo.provenance.sayYourName/v0.1/as-arg/0/from-inputs/f5e5bd5030b4a28fe0fbe873143f1fd843f8378e/with-result/0bd80cca60d4bb0d845bf6f8212428b8ad897823
    0 ./functions/com.cibo.provenance.sayYourName/0.1/call-resolved-inputs/6f7c533e9f0c9cf601e831a81a82408783210fab/f533143e34304e4f78d3392f4b102b896b330686
    0 ./functions/com.cibo.provenance.sayYourName/0.1/call-resolved-inputs/c1dd48aed9f7b0cfe1c808d9ee68935158e807db/f5e5bd5030b4a28fe0fbe873143f1fd843f8378e
    0 ./functions/com.cibo.provenance.sayYourName/0.1/calls/6f7c533e9f0c9cf601e831a81a82408783210fab

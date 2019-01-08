@@ -11,7 +11,7 @@ package com.cibo.provenance
   *         UnknownProvenance                         case class derived from Function0CallWithProvenance
   *     Result                                        sealed trait
   *       FunctionCallResultWithProvenance            abstract class with N abstract subclasses
-  *         UnknownProvenanceValue                    case class derived from Function0CallResultWithProvenance
+  *         UnknownProvenanceResolved                 case class derived from Function0CallResultWithProvenance
   *
   * A secondary hierarchy allowing for "deflated" objects:
   *
@@ -56,7 +56,6 @@ import scala.language.implicitConversions
 import scala.language.higherKinds
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe.TypeTag
-
 import scala.concurrent.{ExecutionContext, Future}
 
 
@@ -116,6 +115,12 @@ object ValueWithProvenance {
     val call = gatherer(seq)
     call
   }
+
+  implicit class TaggabeCallWithProvenance[T : Codec](subject: Call[T])
+    extends TagImplicits.TaggableCall[T](subject)
+
+  implicit class TaggabeResultWithProvenance[T : Codec](subject: Result[T])(implicit rt: ResultTracker)
+    extends TagImplicits.TaggableResult[T](subject)
 }
 
 
@@ -173,8 +178,6 @@ abstract class FunctionCallWithProvenance[O : Codec](var vv: ValueWithProvenance
 
   def outputClassTag: ClassTag[O] = outputCodec.classTag
 
-  def outputTypeTag: TypeTag[O] = outputCodec.typeTag
-
   // Abstract interface.  These are implemented in each Function{n}CallWithProvenance subclass.
 
   def functionName: String
@@ -231,6 +234,13 @@ abstract class FunctionCallWithProvenance[O : Codec](var vv: ValueWithProvenance
 
   def load(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     this
+
+  def normalize(implicit rt: ResultTracker): FunctionCallWithProvenance[O] = {
+    val o = unresolve(rt)
+
+    o
+  }
+
 }
 
 
@@ -252,6 +262,22 @@ abstract class FunctionCallResultWithProvenance[O](
   def outputBuildInfo: BuildInfo = pOutputBuildInfo
 
   def outputBuildInfoBrief: BuildInfoBrief = pOutputBuildInfo.abbreviate
+
+  def outputId: Digest = outputAsVirtualValue.resolveDigest.digestOption.get
+
+  def provenanceId(implicit rt: ResultTracker): Digest = {
+    // NOTE: This redoes part of the work done during save() to pull out the digest.
+    // Refactor to get this w/o duplication.
+    val resultSerializable: ValueWithProvenanceSerializable = FunctionCallResultWithProvenanceSerializable.save(this)
+    implicit lazy val vwpCodec: Codec[ValueWithProvenanceSerializable] = ValueWithProvenanceSerializable.codec
+    val resultBytes = Codec.serialize(resultSerializable.asInstanceOf[ValueWithProvenanceSerializable])(vwpCodec)
+    val resultDigest = Codec.digestBytes(resultBytes)
+    resultDigest
+  }
+
+  def normalize(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O]
+
+  def expandBuildInfo(implicit rt: ResultTracker): FunctionCallResultWithProvenance[O]
 
   override def toString: String =
     pCall match {
@@ -300,6 +326,11 @@ abstract class FunctionCallResultWithProvenance[O](
 /**
   * UnknownProvenance represents data with no history.
   *
+  * It is technically a `Call` since it doesn't need data access to resolve,
+  * but resolving it is virtually a no-op.
+  *
+  * See UnknownProvenanceResolved for a thin wrapper which frames this as a `Result`.
+  *
   * @param value  The value with unknown provenance to be added into tracking.
   * @tparam O     The type of hte value
   */
@@ -307,7 +338,7 @@ case class UnknownProvenance[O : Codec](value: O)
   extends Function0CallWithProvenance[O](null)(null) with Serializable {
 
   // NOTE: The `null` version and implVersion parameters prevent a bootstrapping problem.
-  // The version is NoVerison, but that value is itself a value with UnknownProvenance.
+  // The version is NoVersion, but that value is itself a value with UnknownProvenance.
   // The null impl/implVersion prevent manufacturing lots of small lambdas to wrap primitives.
 
   def impl: O = value
@@ -322,10 +353,10 @@ case class UnknownProvenance[O : Codec](value: O)
   private lazy implicit val rt: ResultTracker = ResultTrackerNone()(BuildInfoNone)
 
   @transient
-  private lazy val cachedResult: UnknownProvenanceValue[O] =
-    UnknownProvenanceValue(this, VirtualValue(value).resolveDigest)
+  private lazy val cachedResult: UnknownProvenanceResolved[O] =
+    UnknownProvenanceResolved(this, VirtualValue(value).resolveDigest)
 
-  def newResult(o: VirtualValue[O])(implicit bi: BuildInfo): UnknownProvenanceValue[O] =
+  def newResult(o: VirtualValue[O])(implicit bi: BuildInfo): UnknownProvenanceResolved[O] =
     cachedResult
 
   def duplicate(vv: ValueWithProvenance[Version]): Function0CallWithProvenance[O] =
@@ -340,6 +371,8 @@ case class UnknownProvenance[O : Codec](value: O)
 
   override def unresolve(implicit rt: ResultTracker): UnknownProvenance[O] = this
 
+  override def normalize(implicit rt: ResultTracker): UnknownProvenance[O] = this
+
   override def load(implicit rt: ResultTracker): UnknownProvenance[O] = this
 
   override def loadInputs(implicit rt: ResultTracker): UnknownProvenance[O] = this
@@ -349,32 +382,41 @@ case class UnknownProvenance[O : Codec](value: O)
   override def toString: String = f"raw($value)"
 }
 
-
-case class UnknownProvenanceValue[O : Codec](
+/**
+  * When an UnknownProvenance[T] is resolved, this wrapper represents the data as a result.
+  *
+  * @param call:                  The complimentary Function0CallWithProvenance that made the result.
+  * @param outputAsVirtualValue:  The output, wrapped as a VirtualValue[O] which might be serialized.
+  * @tparam O:                    The type of the output.
+  *
+  */
+case class UnknownProvenanceResolved[O : Codec](
   override val call: UnknownProvenance[O],
   override val outputAsVirtualValue: VirtualValue[O]
 ) extends Function0CallResultWithProvenance[O](call, outputAsVirtualValue)(BuildInfoNone) with Serializable {
 
-  // Note: This class is present to complete the API, but nothing in the system instantiates it.
-  // The newResult method is never called for an UnknownProvenance[T].
-
   override def save(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] =
     FunctionCallResultWithUnknownProvenanceSerializable.save(this).wrap[O]
 
-  override def toString: String =
-    f"raw($outputAsVirtualValue)"
+  override def toString: String = f"raw($outputAsVirtualValue)"
+
+  def normalize(implicit rt: ResultTracker): UnknownProvenanceResolved[O] = this
+
+  def expandBuildInfo(implicit rt: ResultTracker): UnknownProvenanceResolved[O] = this
 }
 
-/*
- * "*Saved" equivalents of the call and result are still functional as ValueWithProvenance[O],
- * but require conversion to instantiate fully.
- *
- * This allows history to extends across software made by disconnected libs,
- * and also lets us save an object graph with small, incrementally appended pieces.
- *
- */
+/**
+  * "*Deflated" equivalents of the call and result are still functional as ValueWithProvenance[O],
+  * but are only partially vivified.  The output type must be available in the application, but
+  * the inputs may be foreign.  Calling the `.load` method converts this into a fully typed object.
+  *
+  * This allows history to extends across software made by disconnected libs,
+  * and also lets us save an object graph with small, incrementally appended pieces.
+  */
 sealed trait ValueWithProvenanceDeflated[O] extends ValueWithProvenance[O] with Serializable {
   def id: Digest
+
+  def normalize(rt: ResultTracker): ValueWithProvenanceDeflated[O] = this
 }
 
 
@@ -391,6 +433,8 @@ case class FunctionCallWithProvenanceDeflated[O](data: FunctionCallWithProvenanc
 
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     load.unresolve(rt)
+
+  override def normalize(rt: ResultTracker): FunctionCallWithProvenanceDeflated[O] = this
 
   def save(implicit rt: ResultTracker): FunctionCallWithProvenanceDeflated[O] =
     this
@@ -421,9 +465,10 @@ case class FunctionCallResultWithProvenanceDeflated[O](data: FunctionCallResultW
   def resolveAsync(implicit rt: ResultTracker, ec: ExecutionContext): Future[FunctionCallResultWithProvenance[O]] =
     load.resolveAsync(rt, ec)
 
-
   def unresolve(implicit rt: ResultTracker): FunctionCallWithProvenance[O] =
     load.unresolve(rt)
+
+  override def normalize(rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] = this
 
   def save(implicit rt: ResultTracker): FunctionCallResultWithProvenanceDeflated[O] =
     this

@@ -4,7 +4,6 @@ import com.cibo.provenance.FunctionCallWithProvenance.TraversableCallExt
 import org.scalatest.{FunSpec, Matchers}
 
 
-
 /**
   * Created by ssmith on 11/07/17.
   */
@@ -260,7 +259,7 @@ class MonadicCallsSpec extends FunSpec with Matchers {
       // the input to that is a constant 200
       val lastInputInputInput: ValueWithProvenance[_] = lastInputInput.resolve.call.inputs.head
       lastInputInputInput.asInstanceOf[ValueWithProvenance[Int]]
-      lastInputInputInput.asInstanceOf[UnknownProvenanceValue[Int]]
+      lastInputInputInput.asInstanceOf[UnknownProvenanceResolved[Int]]
 
       // Be sure everything can reveal its intermediate values
       lastInputInputInput.resolve.output shouldBe 200           // UnknownProvenance(200)
@@ -293,6 +292,26 @@ class MonadicCallsSpec extends FunSpec with Matchers {
 
       val s2p = s1p.map(AppendSuffix)
       s2p.resolve.output.get shouldBe "hello-mysuffix"
+    }
+  }
+
+  describe("Loading parameterized classes") {
+    it("works") {
+      implicit val rt = ResultTrackerNone()
+
+      val list1 = MakeDummyOutputList()
+      val mapCall: com.cibo.provenance.monadics.MapWithProvenance[List, Int, Int]#Call = list1.map(MyIncrement)
+
+      val f1 = com.cibo.provenance.monadics.MapWithProvenance[List, Int, Int]
+      val f2 = Codec.objectFromSerializableName[MapWithProvenance[List, Int, Int]]("com.cibo.provenance.monadics.MapWithProvenance[List, Int, Int]")
+
+      f2.name shouldEqual f1.name
+
+      val o1 = f1(list1, MyIncrement).resolve.output
+      val o2 = f2(list1, MyIncrement).resolve.output
+
+      o2 shouldEqual o1
+
     }
   }
 }
